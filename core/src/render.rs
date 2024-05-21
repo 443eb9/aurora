@@ -39,10 +39,6 @@ pub struct OwnedRenderPassDescriptor<'tex, 'desc> {
     pub occlusion_query_set: Option<&'tex QuerySet>,
 }
 
-pub struct OwnedBindGroups<'a> {
-    pub value: Vec<(&'a BindGroup, Option<Box<[u32]>>)>,
-}
-
 pub struct ComposableShader<'a> {
     main: &'a str,
     main_path: &'a str,

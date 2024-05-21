@@ -3,7 +3,7 @@ use std::{borrow::Cow, f32::consts::FRAC_PI_4};
 use app::Application;
 
 use aurora_core::{
-    builtin_pipeline::{DepthPassPipeline, PbrPipeline},
+    builtin_pipeline::{AuroraPipeline, DepthPassPipeline, PbrPipeline},
     color::SrgbaColor,
     scene::{
         component::{CameraProjection, Mesh, PerspectiveProjection, Transform},
@@ -29,7 +29,7 @@ async fn render_to_image(dim: UVec2) {
     let mut scene = Scene {
         camera: Camera {
             transform: Transform {
-                translation: Vec3::new(0., 0., -10.),
+                translation: Vec3::new(0., 0., -5.),
                 ..Default::default()
             },
             projection: CameraProjection::Perspective(PerspectiveProjection {
@@ -64,11 +64,15 @@ async fn render_to_image(dim: UVec2) {
     gpu_scene.write_scene(renderer.renderer().device(), renderer.renderer().queue());
 
     let device = renderer.renderer().device();
-    let pbr_pipeline = PbrPipeline::new(device, TextureFormat::Rgba8Unorm);
 
-    renderer.draw(Some(&gpu_scene), &pbr_pipeline).await;
-    let depth_pass_pipeline = DepthPassPipeline::new(device, TextureFormat::Rgba8Unorm);
-    renderer.save_result("generated/").await;
+    let mut pbr_pipeline = PbrPipeline::new(device, TextureFormat::Rgba8Unorm);
+    pbr_pipeline.build(device, Default::default());
+    renderer.draw(Some(&gpu_scene), &mut pbr_pipeline).await;
+    renderer.save_result("generated/color.png").await;
+
+    let mut depth_pass_pipeline = DepthPassPipeline::new(device, TextureFormat::Rgba8Unorm);
+    renderer.draw(None, &mut depth_pass_pipeline).await;
+    renderer.save_result("generated/depth.png").await;
 }
 
 async fn realtime_render(dim: UVec2) {
@@ -82,6 +86,6 @@ fn main() {
         .filter_level(aurora_core::log::LevelFilter::Info)
         .init();
 
-    // pollster::block_on(render_to_image(WINDOW_DIM));
-    pollster::block_on(realtime_render(WINDOW_DIM));
+    pollster::block_on(render_to_image(WINDOW_DIM));
+    // pollster::block_on(realtime_render(WINDOW_DIM));
 }

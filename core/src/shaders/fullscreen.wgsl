@@ -8,8 +8,8 @@ struct FullscreenVertexOutput {
 @vertex
 fn vertex(@builtin(vertex_index) vertex_index: u32) -> FullscreenVertexOutput {
     var output: FullscreenVertexOutput;
-    let t = vec2f(f32(vertex_index / 2u), f32(vertex_index % 2u)) * 2.;
-    output.position = vec4f(vec2f(t), 0., 1.);
-    output.uv = t;
+    let t = vec2f(f32(vertex_index / 2u), f32(vertex_index % 2u));
+    output.position = vec4f(vec2f(t * 4. - 1.), 0., 1.);
+    output.uv = t * 2.;
     return output;
 }

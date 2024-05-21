@@ -30,14 +30,18 @@ impl WgpuImageRenderer {
             &renderer.device,
             dim.extend(1),
             TextureFormat::Rgba8Unorm,
-            TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC,
+            TextureUsages::RENDER_ATTACHMENT
+                | TextureUsages::COPY_SRC
+                | TextureUsages::TEXTURE_BINDING,
         );
 
         let (depth_target, depth_target_view) = utils::create_texture(
             &renderer.device,
             dim.extend(1),
             TextureFormat::Depth32Float,
-            TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC,
+            TextureUsages::RENDER_ATTACHMENT
+                | TextureUsages::COPY_SRC
+                | TextureUsages::TEXTURE_BINDING,
         );
 
         Self {
@@ -62,7 +66,7 @@ impl WgpuImageRenderer {
     pub async fn draw<'a>(
         &'a self,
         scene: Option<&'a GpuScene>,
-        pipeline: &'a impl AuroraPipeline<'a>,
+        pipeline: &'a mut impl AuroraPipeline<'a>,
     ) {
         self.internal.render(
             RenderTargets {
@@ -76,20 +80,12 @@ impl WgpuImageRenderer {
 
     pub async fn save_result(&self, path: impl AsRef<Path>) {
         utils::save_color_texture_as_image(
-            path.as_ref().join("color.png"),
+            path,
             &self.target,
             &self.internal.device,
             &self.internal.queue,
         )
         .await;
-
-        // utils::save_depth_texture_as_image(
-        //     path.as_ref().join("depth.png"),
-        //     &self.depth_target,
-        //     &self.internal.device,
-        //     &self.internal.queue,
-        // )
-        // .await;
     }
 }
 
@@ -110,7 +106,9 @@ impl<'r> WgpuSurfaceRenderer<'r> {
             &renderer.device,
             dim.extend(1),
             TextureFormat::Depth32Float,
-            TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC,
+            TextureUsages::RENDER_ATTACHMENT
+                | TextureUsages::COPY_SRC
+                | TextureUsages::TEXTURE_BINDING,
         );
 
         let mut sr = Self {
@@ -130,7 +128,9 @@ impl<'r> WgpuSurfaceRenderer<'r> {
             &self.internal.device,
             dim.extend(1),
             TextureFormat::Depth32Float,
-            TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC,
+            TextureUsages::RENDER_ATTACHMENT
+                | TextureUsages::COPY_SRC
+                | TextureUsages::TEXTURE_BINDING,
         );
 
         self.surface.configure(
@@ -145,7 +145,11 @@ impl<'r> WgpuSurfaceRenderer<'r> {
         );
     }
 
-    pub fn draw<'a>(&'a self, scene: Option<&'a GpuScene>, pipeline: &'a impl AuroraPipeline<'a>) {
+    pub fn draw<'a>(
+        &'a self,
+        scene: Option<&'a GpuScene>,
+        pipeline: &'a mut impl AuroraPipeline<'a>,
+    ) {
         let Ok(frame) = self.surface.get_current_texture() else {
             log::error!("Failed to acquire next swap chain texture.");
             return;
@@ -228,14 +232,16 @@ impl WgpuRenderer {
         &self,
         targets: RenderTargets<'a>,
         scene: Option<&'a GpuScene>,
-        pipeline: &'a impl AuroraPipeline<'a>,
+        pipeline: &'a mut impl AuroraPipeline<'a>,
     ) {
         let mut command_encoder = self
             .device
             .create_command_encoder(&CommandEncoderDescriptor { label: None });
 
+        pipeline.prepare(&self.device, &targets, scene);
+
         {
-            let desc = pipeline.create_pass(targets);
+            let desc = pipeline.create_pass(&targets);
             let mut pass = command_encoder.begin_render_pass(&RenderPassDescriptor {
                 label: desc.label,
                 color_attachments: &desc.color_attachments,
@@ -245,15 +251,7 @@ impl WgpuRenderer {
             });
 
             pass.set_pipeline(pipeline.cache().expect("Pipeline is not built yet."));
-            if let Some(bind_groups) = pipeline.bind(scene) {
-                for (index, (bind_group, offsets)) in bind_groups.value.iter().enumerate() {
-                    if let Some(offsets) = offsets {
-                        pass.set_bind_group(index as u32, *bind_group, &offsets);
-                    } else {
-                        pass.set_bind_group(index as u32, *bind_group, &[]);
-                    }
-                }
-            }
+            pipeline.bind(unsafe { std::mem::transmute(&mut pass) });
             pipeline.draw(&mut pass, scene);
         }
 

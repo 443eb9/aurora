@@ -5,7 +5,7 @@ use std::{
 };
 
 use aurora_core::{
-    builtin_pipeline::{AuroraPipeline, PbrPipeline},
+    builtin_pipeline::{AuroraPipeline, DepthPassPipeline, PbrPipeline},
     color::SrgbaColor,
     scene::{
         component::{CameraProjection, Mesh, PerspectiveProjection, Transform},
@@ -30,6 +30,7 @@ use winit::{
 use crate::scene::{CameraConfig, ControllableCamera};
 
 pub struct Application<'w> {
+    pub screenshot: WgpuImageRenderer,
     pub renderer: WgpuSurfaceRenderer<'w>,
     window: Arc<Window>,
     dim: UVec2,
@@ -37,7 +38,8 @@ pub struct Application<'w> {
     main_camera: Arc<Mutex<ControllableCamera>>,
     scene: Scene,
     gpu_scene: GpuScene,
-    pipeline: PbrPipeline<'w>,
+    pbr_pipeline: PbrPipeline<'w>,
+    depth_pass_pipeline: DepthPassPipeline,
 }
 
 impl<'w> Application<'w> {
@@ -97,17 +99,21 @@ impl<'w> Application<'w> {
         gpu_scene.write_scene(renderer.renderer().device(), renderer.renderer().queue());
 
         let device = renderer.renderer().device();
-        let mut pipeline = PbrPipeline::new(device, TextureFormat::Bgra8UnormSrgb);
-        pipeline.build(device, Default::default());
+        let mut pbr_pipeline = PbrPipeline::new(device, TextureFormat::Bgra8UnormSrgb);
+        pbr_pipeline.build(device, Default::default());
+
+        let depth_pass_pipeline = DepthPassPipeline::new(device, TextureFormat::Bgra8UnormSrgb);
 
         Self {
+            screenshot: WgpuImageRenderer::new(dim).await,
             renderer,
             window,
             dim,
 
             scene,
             gpu_scene,
-            pipeline,
+            pbr_pipeline,
+            depth_pass_pipeline,
 
             main_camera: Arc::new(Mutex::new(main_camera)),
         }
@@ -130,7 +136,7 @@ impl<'w> Application<'w> {
         event_loop.run_app(self).unwrap();
     }
 
-    pub fn handle_keyboard(&self, key: KeyCode, state: ElementState) {
+    pub fn handle_keyboard(&'w mut self, key: KeyCode, state: ElementState) {
         let Ok(mut main_camera) = self.main_camera.lock() else {
             return;
         };
@@ -142,10 +148,11 @@ impl<'w> Application<'w> {
         }
     }
 
-    pub async fn handle_screenshot(&self) {
-        let renderer = WgpuImageRenderer::new(self.dim).await;
-        renderer.draw(Some(&self.gpu_scene), &self.pipeline).await;
-        renderer.save_result("genearated/").await;
+    pub async fn handle_screenshot(&'w mut self) {
+        self.screenshot
+            .draw(Some(&self.gpu_scene), &mut self.pbr_pipeline)
+            .await;
+        self.screenshot.save_result("genearated/").await;
     }
 }
 
@@ -158,28 +165,32 @@ impl<'w> ApplicationHandler for Application<'w> {
         _window_id: WindowId,
         event: WindowEvent,
     ) {
+        let this = unsafe { std::mem::transmute::<_, &'w mut Self>(self) };
+
         match event {
             WindowEvent::RedrawRequested => {
-                let Ok(main_camera) = self.main_camera.lock() else {
+                let Ok(main_camera) = this.main_camera.lock() else {
                     return;
                 };
-                self.scene.camera = main_camera.camera;
-                self.gpu_scene.update_camera(&self.scene);
-                self.gpu_scene.write_scene(
-                    self.renderer.renderer().device(),
-                    self.renderer.renderer().queue(),
+                this.scene.camera = main_camera.camera;
+                this.renderer.update_frame_counter();
+                this.gpu_scene.update_camera(&this.scene);
+                this.gpu_scene.write_scene(
+                    this.renderer.renderer().device(),
+                    this.renderer.renderer().queue(),
                 );
-                self.renderer.draw(Some(&self.gpu_scene), &self.pipeline);
-                self.renderer.update_frame_counter();
+                this.renderer
+                    .draw(Some(&this.gpu_scene), &mut this.pbr_pipeline);
+                this.renderer.draw(None, &mut this.depth_pass_pipeline);
             }
-            WindowEvent::Resized(size) => self.renderer.resize(UVec2::new(size.width, size.height)),
+            WindowEvent::Resized(size) => this.renderer.resize(UVec2::new(size.width, size.height)),
             WindowEvent::CloseRequested => std::process::exit(0),
             WindowEvent::KeyboardInput {
                 device_id: _,
                 event,
                 is_synthetic: _,
             } => match event.physical_key {
-                PhysicalKey::Code(key) => self.handle_keyboard(key, event.state),
+                PhysicalKey::Code(key) => this.handle_keyboard(key, event.state),
                 PhysicalKey::Unidentified(_) => {}
             },
             WindowEvent::MouseInput {
@@ -187,7 +198,7 @@ impl<'w> ApplicationHandler for Application<'w> {
                 state,
                 button,
             } => {
-                let Ok(mut main_camera) = self.main_camera.lock() else {
+                let Ok(mut main_camera) = this.main_camera.lock() else {
                     return;
                 };
                 main_camera.mouse_control(button, &state);
