@@ -1,13 +1,12 @@
 use std::{
-    borrow::Cow,
     f32::consts::FRAC_PI_4,
     sync::{Arc, Mutex},
     thread,
 };
 
 use aurora_core::{
+    builtin_pipeline::{AuroraPipeline, PbrPipeline},
     color::SrgbaColor,
-    render::Vertex,
     scene::{
         component::{CameraProjection, Mesh, PerspectiveProjection, Transform},
         entity::{Camera, DirectionalLight, Light},
@@ -16,7 +15,9 @@ use aurora_core::{
     },
     *,
 };
+
 use glam::{EulerRot, Quat, UVec2, Vec2, Vec3};
+
 use winit::{
     application::ApplicationHandler,
     dpi::{PhysicalSize, Size},
@@ -36,7 +37,7 @@ pub struct Application<'w> {
     main_camera: Arc<Mutex<ControllableCamera>>,
     scene: Scene,
     gpu_scene: GpuScene,
-    pipeline: RenderPipeline,
+    pipeline: PbrPipeline<'w>,
 }
 
 impl<'w> Application<'w> {
@@ -96,45 +97,8 @@ impl<'w> Application<'w> {
         gpu_scene.write_scene(renderer.renderer().device(), renderer.renderer().queue());
 
         let device = renderer.renderer().device();
-        let shader_module = device.create_shader_module(ShaderModuleDescriptor {
-            label: None,
-            source: ShaderSource::Wgsl(Cow::Borrowed(include_str!("../assets/shader.wgsl"))),
-        });
-        let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
-            label: None,
-            bind_group_layouts: &[&gpu_scene.b_camera.layout, &gpu_scene.b_lights.layout],
-            push_constant_ranges: &[],
-        });
-        let pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
-            label: None,
-            layout: Some(&pipeline_layout),
-            vertex: VertexState {
-                module: &shader_module,
-                entry_point: "vertex",
-                compilation_options: PipelineCompilationOptions::default(),
-                buffers: &[VertexBufferLayout {
-                    array_stride: std::mem::size_of::<Vertex>() as BufferAddress,
-                    step_mode: VertexStepMode::Vertex,
-                    attributes: &vertex_attr_array![0 => Float32x3, 1 => Float32x3],
-                }],
-            },
-            fragment: Some(FragmentState {
-                module: &shader_module,
-                entry_point: "fragment",
-                compilation_options: PipelineCompilationOptions::default(),
-                targets: &[Some(TextureFormat::Bgra8UnormSrgb.into())],
-            }),
-            primitive: PrimitiveState::default(),
-            depth_stencil: Some(DepthStencilState {
-                format: TextureFormat::Depth32Float,
-                depth_write_enabled: true,
-                depth_compare: CompareFunction::LessEqual,
-                stencil: StencilState::default(),
-                bias: DepthBiasState::default(),
-            }),
-            multisample: MultisampleState::default(),
-            multiview: None,
-        });
+        let mut pipeline = PbrPipeline::new(device, TextureFormat::Bgra8UnormSrgb);
+        pipeline.build(device, Default::default());
 
         Self {
             renderer,
@@ -180,7 +144,7 @@ impl<'w> Application<'w> {
 
     pub async fn handle_screenshot(&self) {
         let renderer = WgpuImageRenderer::new(self.dim).await;
-        renderer.draw(&self.gpu_scene, &self.pipeline).await;
+        renderer.draw(Some(&self.gpu_scene), &self.pipeline).await;
         renderer.save_result("genearated/").await;
     }
 }
@@ -205,7 +169,7 @@ impl<'w> ApplicationHandler for Application<'w> {
                     self.renderer.renderer().device(),
                     self.renderer.renderer().queue(),
                 );
-                self.renderer.draw(&self.gpu_scene, &self.pipeline);
+                self.renderer.draw(Some(&self.gpu_scene), &self.pipeline);
                 self.renderer.update_frame_counter();
             }
             WindowEvent::Resized(size) => self.renderer.resize(UVec2::new(size.width, size.height)),

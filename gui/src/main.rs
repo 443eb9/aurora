@@ -3,18 +3,15 @@ use std::{borrow::Cow, f32::consts::FRAC_PI_4};
 use app::Application;
 
 use aurora_core::{
+    builtin_pipeline::{DepthPassPipeline, PbrPipeline},
     color::SrgbaColor,
-    render::Vertex,
     scene::{
         component::{CameraProjection, Mesh, PerspectiveProjection, Transform},
         entity::{Camera, DirectionalLight, Light},
         render::GpuScene,
         Scene,
     },
-    vertex_attr_array, BufferAddress, CompareFunction, DepthBiasState, DepthStencilState,
-    FragmentState, MultisampleState, PipelineCompilationOptions, PipelineLayoutDescriptor,
-    PrimitiveState, RenderPipelineDescriptor, ShaderModuleDescriptor, ShaderSource, StencilState,
-    TextureFormat, VertexBufferLayout, VertexState, VertexStepMode, WgpuImageRenderer,
+    TextureFormat, WgpuImageRenderer,
 };
 
 use glam::{EulerRot, Quat, UVec2, Vec3};
@@ -67,47 +64,10 @@ async fn render_to_image(dim: UVec2) {
     gpu_scene.write_scene(renderer.renderer().device(), renderer.renderer().queue());
 
     let device = renderer.renderer().device();
-    let shader_module = device.create_shader_module(ShaderModuleDescriptor {
-        label: None,
-        source: ShaderSource::Wgsl(Cow::Borrowed(include_str!("../assets/shader.wgsl"))),
-    });
-    let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
-        label: None,
-        bind_group_layouts: &[&gpu_scene.b_camera.layout, &gpu_scene.b_lights.layout],
-        push_constant_ranges: &[],
-    });
-    let pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
-        label: None,
-        layout: Some(&pipeline_layout),
-        vertex: VertexState {
-            module: &shader_module,
-            entry_point: "vertex",
-            compilation_options: PipelineCompilationOptions::default(),
-            buffers: &[VertexBufferLayout {
-                array_stride: std::mem::size_of::<Vertex>() as BufferAddress,
-                step_mode: VertexStepMode::Vertex,
-                attributes: &vertex_attr_array![0 => Float32x3, 1 => Float32x3],
-            }],
-        },
-        fragment: Some(FragmentState {
-            module: &shader_module,
-            entry_point: "fragment",
-            compilation_options: PipelineCompilationOptions::default(),
-            targets: &[Some(TextureFormat::Rgba8Unorm.into())],
-        }),
-        primitive: PrimitiveState::default(),
-        depth_stencil: Some(DepthStencilState {
-            format: TextureFormat::Depth32Float,
-            depth_write_enabled: true,
-            depth_compare: CompareFunction::LessEqual,
-            stencil: StencilState::default(),
-            bias: DepthBiasState::default(),
-        }),
-        multisample: MultisampleState::default(),
-        multiview: None,
-    });
+    let pbr_pipeline = PbrPipeline::new(device, TextureFormat::Rgba8Unorm);
 
-    renderer.draw(&gpu_scene, &pipeline).await;
+    renderer.draw(Some(&gpu_scene), &pbr_pipeline).await;
+    let depth_pass_pipeline = DepthPassPipeline::new(device, TextureFormat::Rgba8Unorm);
     renderer.save_result("generated/").await;
 }
 

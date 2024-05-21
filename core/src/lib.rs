@@ -2,12 +2,13 @@ use std::{path::Path, time::Instant};
 
 use glam::UVec2;
 
-pub use wgpu::*;
 pub use log;
+pub use wgpu::*;
 
-use crate::scene::render::GpuScene;
+use crate::{builtin_pipeline::AuroraPipeline, render::RenderTargets, scene::render::GpuScene};
 
 pub mod buffer;
+pub mod builtin_pipeline;
 pub mod color;
 pub mod render;
 pub mod scene;
@@ -17,7 +18,7 @@ pub struct WgpuImageRenderer {
     internal: WgpuRenderer,
     target: Texture,
     target_view: TextureView,
-    depth_target: Texture,
+    _depth_target: Texture,
     depth_target_view: TextureView,
 }
 
@@ -43,7 +44,7 @@ impl WgpuImageRenderer {
             internal: renderer,
             target,
             target_view,
-            depth_target,
+            _depth_target: depth_target,
             depth_target_view,
         }
     }
@@ -58,9 +59,19 @@ impl WgpuImageRenderer {
         &mut self.internal
     }
 
-    pub async fn draw(&self, scene: &GpuScene, pipeline: &RenderPipeline) {
-        self.internal
-            .render(&self.target_view, &self.depth_target_view, scene, pipeline);
+    pub async fn draw<'a>(
+        &'a self,
+        scene: Option<&'a GpuScene>,
+        pipeline: &'a impl AuroraPipeline<'a>,
+    ) {
+        self.internal.render(
+            RenderTargets {
+                color: &self.target_view,
+                depth: Some(&self.depth_target_view),
+            },
+            scene,
+            pipeline,
+        );
     }
 
     pub async fn save_result(&self, path: impl AsRef<Path>) {
@@ -134,14 +145,20 @@ impl<'r> WgpuSurfaceRenderer<'r> {
         );
     }
 
-    pub fn draw(&self, scene: &GpuScene, pipeline: &RenderPipeline) {
+    pub fn draw<'a>(&'a self, scene: Option<&'a GpuScene>, pipeline: &'a impl AuroraPipeline<'a>) {
         let Ok(frame) = self.surface.get_current_texture() else {
             log::error!("Failed to acquire next swap chain texture.");
             return;
         };
         let view = frame.texture.create_view(&TextureViewDescriptor::default());
-        self.internal
-            .render(&view, &self.depth_target_view, scene, pipeline);
+        self.internal.render(
+            RenderTargets {
+                color: unsafe { std::mem::transmute(&view) },
+                depth: Some(&self.depth_target_view),
+            },
+            scene,
+            pipeline,
+        );
         frame.present();
     }
 
@@ -207,54 +224,37 @@ impl WgpuRenderer {
         }
     }
 
-    pub fn render(
+    pub fn render<'a>(
         &self,
-        color_target: &TextureView,
-        depth_target: &TextureView,
-        scene: &GpuScene,
-        pipeline: &RenderPipeline,
+        targets: RenderTargets<'a>,
+        scene: Option<&'a GpuScene>,
+        pipeline: &'a impl AuroraPipeline<'a>,
     ) {
-        let (Some(b_camera), Some(b_lights)) =
-            (&scene.b_camera.bind_group, &scene.b_lights.bind_group)
-        else {
-            log::error!("Scene haven't written yet");
-            return;
-        };
-
         let mut command_encoder = self
             .device
             .create_command_encoder(&CommandEncoderDescriptor { label: None });
 
         {
+            let desc = pipeline.create_pass(targets);
             let mut pass = command_encoder.begin_render_pass(&RenderPassDescriptor {
-                label: None,
-                color_attachments: &[Some(RenderPassColorAttachment {
-                    view: color_target,
-                    resolve_target: None,
-                    ops: Operations {
-                        load: LoadOp::Clear(scene.clear_color.into()),
-                        store: StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
-                    view: depth_target,
-                    depth_ops: Some(Operations {
-                        load: LoadOp::Clear(1.),
-                        store: StoreOp::Discard,
-                    }),
-                    stencil_ops: None,
-                }),
-                ..Default::default()
+                label: desc.label,
+                color_attachments: &desc.color_attachments,
+                depth_stencil_attachment: desc.depth_stencil_attachment,
+                timestamp_writes: desc.timestamp_writes,
+                occlusion_query_set: desc.occlusion_query_set,
             });
 
-            pass.set_pipeline(pipeline);
-            pass.set_bind_group(0, b_camera, &[]);
-            pass.set_bind_group(1, b_lights, &[]);
-
-            for mesh in &scene.meshes {
-                pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
-                pass.draw(0..mesh.vertex_count, 0..1);
+            pass.set_pipeline(pipeline.cache().expect("Pipeline is not built yet."));
+            if let Some(bind_groups) = pipeline.bind(scene) {
+                for (index, (bind_group, offsets)) in bind_groups.value.iter().enumerate() {
+                    if let Some(offsets) = offsets {
+                        pass.set_bind_group(index as u32, *bind_group, &offsets);
+                    } else {
+                        pass.set_bind_group(index as u32, *bind_group, &[]);
+                    }
+                }
             }
+            pipeline.draw(&mut pass, scene);
         }
 
         self.queue.submit(Some(command_encoder.finish()));

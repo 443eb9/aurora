@@ -13,4 +13,4 @@ log = "0.4"
 obj = "0.10.2"
 png = "0.17.13"
 pollster = "0.3"
-wgpu = { version = "0.20", features = ["naga"] }
+wgpu = { version = "0.20", features = ["naga-ir"] }

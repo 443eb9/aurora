@@ -1,9 +1,9 @@
+#define_import_path aurora::fullscreen
+
 struct FullscreenVertexOutput {
     @builtin(position) position: vec4f,
     @location(0) uv: vec2f,
 }
-
-@group(0) @binding(0) depth_texture: 
 
 @vertex
 fn vertex(@builtin(vertex_index) vertex_index: u32) -> FullscreenVertexOutput {
@@ -12,9 +12,4 @@ fn vertex(@builtin(vertex_index) vertex_index: u32) -> FullscreenVertexOutput {
     output.position = vec4f(vec2f(t), 0., 1.);
     output.uv = t;
     return output;
-}
-
-@fragment
-fn fragment(input: FullscreenVertexOutput) -> @location(0) vec4f {
-
 }

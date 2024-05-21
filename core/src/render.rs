@@ -11,10 +11,7 @@ use naga_oil::compose::{
     NagaModuleDescriptor, ShaderDefValue,
 };
 
-use wgpu::{
-    naga::Module, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindingResource,
-    Device,
-};
+use wgpu::{naga::Module, *};
 
 pub trait ShaderData: Sized + Pod {
     #[inline]
@@ -28,13 +25,31 @@ pub trait ShaderData: Sized + Pod {
     }
 }
 
-pub struct ComposedShader<'a> {
+pub struct RenderTargets<'a> {
+    pub color: &'a TextureView,
+    pub depth: Option<&'a TextureView>,
+}
+
+#[derive(Default)]
+pub struct OwnedRenderPassDescriptor<'tex, 'desc> {
+    pub label: Label<'desc>,
+    pub color_attachments: Box<[Option<RenderPassColorAttachment<'tex>>]>,
+    pub depth_stencil_attachment: Option<RenderPassDepthStencilAttachment<'tex>>,
+    pub timestamp_writes: Option<RenderPassTimestampWrites<'desc>>,
+    pub occlusion_query_set: Option<&'tex QuerySet>,
+}
+
+pub struct OwnedBindGroups<'a> {
+    pub value: Vec<(&'a BindGroup, Option<Box<[u32]>>)>,
+}
+
+pub struct ComposableShader<'a> {
     main: &'a str,
     main_path: &'a str,
     composer: Composer,
 }
 
-impl<'a> ComposedShader<'a> {
+impl<'a> ComposableShader<'a> {
     pub fn new(main: &'a str, main_path: &'a str) -> Self {
         Self {
             main,
