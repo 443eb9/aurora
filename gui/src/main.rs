@@ -122,6 +122,6 @@ fn main() {
         .filter_level(aurora_core::log::LevelFilter::Info)
         .init();
 
-    pollster::block_on(render_to_image(WINDOW_DIM));
-    // pollster::block_on(realtime_render(WINDOW_DIM));
+    // pollster::block_on(render_to_image(WINDOW_DIM));
+    pollster::block_on(realtime_render(WINDOW_DIM));
 }

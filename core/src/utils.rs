@@ -1,6 +1,6 @@
 use std::{fs::File, io::Write, path::Path};
 
-use glam::UVec3;
+use glam::{UVec2, UVec3};
 
 use png::ColorType;
 
@@ -43,7 +43,64 @@ pub fn create_texture(
     (target, target_view)
 }
 
-pub async fn save_texture_as_image(
+pub async fn save_depth_texture_as_image(
+    path: impl AsRef<Path>,
+    texture: &Texture,
+    device: &Device,
+    queue: &Queue,
+) {
+    let extent = texture.size();
+    let mut texture_data = Vec::<u8>::with_capacity((extent.width * extent.height * 4) as usize);
+
+    let out_staging_buffer = device.create_buffer(&BufferDescriptor {
+        label: None,
+        size: texture_data.capacity() as u64,
+        usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+
+    let mut command_encoder =
+        device.create_command_encoder(&CommandEncoderDescriptor { label: None });
+    command_encoder.copy_texture_to_buffer(
+        ImageCopyTexture {
+            texture,
+            mip_level: 0,
+            origin: Origin3d::ZERO,
+            aspect: TextureAspect::All,
+        },
+        ImageCopyBuffer {
+            buffer: &out_staging_buffer,
+            layout: ImageDataLayout {
+                offset: 0,
+                bytes_per_row: Some(extent.width as u32 * 4),
+                rows_per_image: Some(extent.height as u32),
+            },
+        },
+        extent,
+    );
+    queue.submit(Some(command_encoder.finish()));
+
+    let buffer_slice = out_staging_buffer.slice(..);
+    let (sender, receiver) = flume::bounded(1);
+
+    buffer_slice.map_async(MapMode::Read, move |r| sender.send(r).unwrap());
+    device.poll(Maintain::wait()).panic_on_timeout();
+    receiver.recv_async().await.unwrap().unwrap();
+
+    {
+        let view = buffer_slice.get_mapped_range();
+        texture_data.extend_from_slice(&view[..]);
+    }
+
+    texture_data.iter().for_each(|b| assert_eq!(*b, 0));
+    dbg!(&texture_data[..20]);
+
+    out_staging_buffer.unmap();
+
+    save_raw_bytes_to_image(UVec2::new(extent.width, extent.height), &texture_data, path);
+}
+
+pub async fn save_color_texture_as_image(
     path: impl AsRef<Path>,
     texture: &Texture,
     device: &Device,
@@ -94,16 +151,16 @@ pub async fn save_texture_as_image(
 
     out_staging_buffer.unmap();
 
-    let mut png_image = Vec::with_capacity(texture_data.len());
-    let mut encoder = png::Encoder::new(
-        std::io::Cursor::new(&mut png_image),
-        extent.width,
-        extent.height,
-    );
+    save_raw_bytes_to_image(UVec2::new(extent.width, extent.height), &texture_data, path);
+}
+
+fn save_raw_bytes_to_image(dim: UVec2, bytes: &[u8], path: impl AsRef<Path>) {
+    let mut png_image = Vec::with_capacity(bytes.len());
+    let mut encoder = png::Encoder::new(std::io::Cursor::new(&mut png_image), dim.x, dim.y);
     encoder.set_color(ColorType::Rgba);
 
     let mut writer = encoder.write_header().unwrap();
-    writer.write_image_data(&texture_data).unwrap();
+    writer.write_image_data(bytes).unwrap();
     writer.finish().unwrap();
 
     File::create(path).unwrap().write_all(&png_image).unwrap();

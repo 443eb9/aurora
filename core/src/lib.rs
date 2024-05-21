@@ -64,13 +64,21 @@ impl WgpuImageRenderer {
     }
 
     pub async fn save_result(&self, path: impl AsRef<Path>) {
-        utils::save_texture_as_image(
+        utils::save_color_texture_as_image(
             path.as_ref().join("color.png"),
             &self.target,
             &self.internal.device,
             &self.internal.queue,
         )
         .await;
+
+        // utils::save_depth_texture_as_image(
+        //     path.as_ref().join("depth.png"),
+        //     &self.depth_target,
+        //     &self.internal.device,
+        //     &self.internal.queue,
+        // )
+        // .await;
     }
 }
 
