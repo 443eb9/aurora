@@ -64,17 +64,20 @@ async fn render_to_image(dim: UVec2) {
     );
     gpu_scene.write_scene(renderer.device(), renderer.queue());
 
-    // renderer.save_result("generated/color.png").await;
-    let pbr_node = PbrNode::new(TextureFormat::Rgba8Unorm);
-    let depth_pass_node = DepthPassNode::new(TextureFormat::Rgba8Unorm);
     let mut flow = AuroraRenderFlow::default();
-    flow.add("pbr".into(), Box::new(pbr_node));
-    flow.add("depth_pass".into(), Box::new(depth_pass_node));
+    flow.add(
+        "pbr".into(),
+        Box::new(PbrNode::new(TextureFormat::Rgba8Unorm)),
+    );
+    flow.add(
+        "depth_pass".into(),
+        Box::new(DepthPassNode::new(TextureFormat::Rgba8Unorm)),
+    );
 
     flow.build(renderer.device(), None);
     flow.prepare(renderer.device(), &renderer.targets(), Some(&gpu_scene));
     renderer.draw(Some(&gpu_scene), &flow).await;
-    renderer.save_result("generated/depth.png").await;
+    renderer.save_result("generated/result.png").await;
 }
 
 async fn realtime_render(dim: UVec2) {

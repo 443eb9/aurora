@@ -7,13 +7,14 @@ use std::{
 use aurora_core::{
     color::SrgbaColor,
     node::{AuroraRenderFlow, DepthPassNode, PbrNode},
+    render::RenderTargets,
     scene::{
         component::{CameraProjection, Mesh, PerspectiveProjection, Transform},
         entity::{Camera, DirectionalLight, Light},
         render::GpuScene,
         Scene,
     },
-    wgpu::TextureFormat,
+    wgpu::{TextureFormat, TextureUsages},
     *,
 };
 
@@ -31,10 +32,9 @@ use winit::{
 use crate::scene::{CameraConfig, ControllableCamera};
 
 pub struct Application<'w> {
-    pub screenshot: WgpuImageRenderer,
-    pub renderer: WgpuSurfaceRenderer<'w>,
+    renderer: WgpuSurfaceRenderer<'w>,
     window: Arc<Window>,
-    _dim: UVec2,
+    dim: UVec2,
 
     main_camera: Arc<Mutex<ControllableCamera>>,
     scene: Scene,
@@ -99,17 +99,20 @@ impl<'w> Application<'w> {
         );
         gpu_scene.write_scene(renderer.device(), renderer.queue());
 
-        let pbr_node = PbrNode::new(TextureFormat::Bgra8UnormSrgb);
-        let depth_pass_node = DepthPassNode::new(TextureFormat::Bgra8UnormSrgb);
         let mut flow = AuroraRenderFlow::default();
-        flow.add("pbr".into(), Box::new(pbr_node));
-        flow.add("depth_pass".into(), Box::new(depth_pass_node));
+        flow.add(
+            "pbr".into(),
+            Box::new(PbrNode::new(TextureFormat::Bgra8UnormSrgb)),
+        );
+        flow.add(
+            "depth_pass".into(),
+            Box::new(DepthPassNode::new(TextureFormat::Bgra8UnormSrgb)),
+        );
 
         Self {
-            screenshot: WgpuImageRenderer::new(dim).await,
             renderer,
             window,
-            _dim: dim,
+            dim,
 
             scene,
             gpu_scene,
@@ -149,8 +152,53 @@ impl<'w> Application<'w> {
     }
 
     pub async fn take_screenshot(&mut self) {
-        self.screenshot.draw(Some(&self.gpu_scene), &self.flow).await;
-        self.screenshot.save_result("genearated/").await;
+        let mut flow = AuroraRenderFlow::default();
+        flow.add(
+            "pbr".into(),
+            Box::new(PbrNode::new(TextureFormat::Rgba8Unorm)),
+        );
+        flow.add(
+            "depth_pass".into(),
+            Box::new(DepthPassNode::new(TextureFormat::Rgba8Unorm)),
+        );
+
+        flow.build(self.renderer.device(), None);
+        flow.prepare(
+            self.renderer.device(),
+            &self.renderer.targets(),
+            Some(&self.gpu_scene),
+        );
+
+        let (screenshot, screenshot_view) = aurora_core::utils::create_texture(
+            self.renderer.device(),
+            self.dim.extend(1),
+            TextureFormat::Rgba8Unorm,
+            TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC,
+        );
+
+        let (_depth, depth_view) = aurora_core::utils::create_texture(
+            self.renderer.device(),
+            self.dim.extend(1),
+            TextureFormat::Depth32Float,
+            TextureUsages::RENDER_ATTACHMENT,
+        );
+
+        self.renderer.renderer().render(
+            &RenderTargets {
+                color: &screenshot_view,
+                depth: Some(&depth_view),
+            },
+            Some(&self.gpu_scene),
+            &flow,
+        );
+
+        aurora_core::utils::save_color_texture_as_image(
+            "generated/screenshot.png",
+            &screenshot,
+            self.renderer.device(),
+            self.renderer.queue(),
+        )
+        .await;
     }
 
     pub fn redraw(&mut self) {
@@ -160,16 +208,18 @@ impl<'w> Application<'w> {
         self.scene.camera = main_camera.camera;
 
         self.gpu_scene.update_camera(&self.scene);
-        self.gpu_scene.write_scene(
-            self.renderer.renderer().device(),
-            self.renderer.renderer().queue(),
-        );
+        self.gpu_scene
+            .write_scene(self.renderer.device(), self.renderer.queue());
 
         self.renderer.update_surface();
-        let targets = &self.renderer.targets();
+
         self.flow.build(self.renderer.device(), None);
-        self.flow
-            .prepare(self.renderer.device(), targets, Some(&self.gpu_scene));
+        self.flow.prepare(
+            self.renderer.device(),
+            &self.renderer.targets(),
+            Some(&self.gpu_scene),
+        );
+
         self.renderer.draw(Some(&self.gpu_scene), &self.flow);
         self.renderer.update_frame_counter();
         self.renderer.present();

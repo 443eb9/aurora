@@ -60,16 +60,6 @@ impl WgpuImageRenderer {
         }
     }
 
-    #[inline]
-    pub fn renderer(&self) -> &WgpuRenderer {
-        &self.internal
-    }
-
-    #[inline]
-    pub fn renderer_mut(&mut self) -> &mut WgpuRenderer {
-        &mut self.internal
-    }
-
     pub fn targets(&self) -> RenderTargets {
         RenderTargets {
             color: &self.target_view,
@@ -89,6 +79,10 @@ impl WgpuImageRenderer {
             &self.internal.queue,
         )
         .await;
+    }
+
+    pub fn renderer(&self) -> &WgpuRenderer {
+        &self.internal
     }
 
     #[inline]
@@ -202,14 +196,8 @@ impl<'r> WgpuSurfaceRenderer<'r> {
         }
     }
 
-    #[inline]
     pub fn renderer(&self) -> &WgpuRenderer {
         &self.internal
-    }
-
-    #[inline]
-    pub fn renderer_mut(&mut self) -> &mut WgpuRenderer {
-        &mut self.internal
     }
 
     #[inline]
@@ -286,15 +274,5 @@ impl WgpuRenderer {
         }
 
         self.queue.submit(Some(encoder.finish()));
-    }
-
-    #[inline]
-    pub fn device(&self) -> &Device {
-        &self.device
-    }
-
-    #[inline]
-    pub fn queue(&self) -> &Queue {
-        &self.queue
     }
 }
