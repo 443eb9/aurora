@@ -8,6 +8,7 @@ aurora_derive = { version = "0.1", path = "../macros" }
 bytemuck = { version = "1.16", features = ["derive"] }
 flume = "0.11"
 glam = { version = "0.27", features = ["bytemuck"] }
+indexmap = "2.2"
 naga_oil = { git = "https://github.com/Elabajaba/naga_oil.git", branch = "wgpu-0.20" }
 log = "0.4"
 obj = "0.10.2"

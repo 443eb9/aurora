@@ -1,17 +1,18 @@
-use std::{borrow::Cow, f32::consts::FRAC_PI_4};
+use std::f32::consts::FRAC_PI_4;
 
 use app::Application;
 
 use aurora_core::{
-    builtin_pipeline::{AuroraPipeline, DepthPassPipeline, PbrPipeline},
     color::SrgbaColor,
+    node::{AuroraRenderFlow, DepthPassNode, PbrNode},
     scene::{
         component::{CameraProjection, Mesh, PerspectiveProjection, Transform},
         entity::{Camera, DirectionalLight, Light},
         render::GpuScene,
         Scene,
     },
-    TextureFormat, WgpuImageRenderer,
+    wgpu::TextureFormat,
+    WgpuImageRenderer,
 };
 
 use glam::{EulerRot, Quat, UVec2, Vec3};
@@ -59,25 +60,26 @@ async fn render_to_image(dim: UVec2) {
             b: 0.,
             a: 0.,
         },
-        renderer.renderer().device(),
+        renderer.device(),
     );
-    gpu_scene.write_scene(renderer.renderer().device(), renderer.renderer().queue());
+    gpu_scene.write_scene(renderer.device(), renderer.queue());
 
-    let device = renderer.renderer().device();
+    // renderer.save_result("generated/color.png").await;
+    let pbr_node = PbrNode::new(TextureFormat::Rgba8Unorm);
+    let depth_pass_node = DepthPassNode::new(TextureFormat::Rgba8Unorm);
+    let mut flow = AuroraRenderFlow::default();
+    flow.add("pbr".into(), Box::new(pbr_node));
+    flow.add("depth_pass".into(), Box::new(depth_pass_node));
 
-    let mut pbr_pipeline = PbrPipeline::new(device, TextureFormat::Rgba8Unorm);
-    pbr_pipeline.build(device, Default::default());
-    renderer.draw(Some(&gpu_scene), &mut pbr_pipeline).await;
-    renderer.save_result("generated/color.png").await;
-
-    let mut depth_pass_pipeline = DepthPassPipeline::new(device, TextureFormat::Rgba8Unorm);
-    renderer.draw(None, &mut depth_pass_pipeline).await;
+    flow.build(renderer.device(), None);
+    flow.prepare(renderer.device(), &renderer.targets(), Some(&gpu_scene));
+    renderer.draw(Some(&gpu_scene), &flow).await;
     renderer.save_result("generated/depth.png").await;
 }
 
 async fn realtime_render(dim: UVec2) {
     let event_loop = EventLoop::new().unwrap();
-    let mut app = Application::new(&event_loop, dim).await;
+    let app = Application::new(&event_loop, dim).await;
     app.run(event_loop);
 }
 
@@ -86,6 +88,6 @@ fn main() {
         .filter_level(aurora_core::log::LevelFilter::Info)
         .init();
 
-    pollster::block_on(render_to_image(WINDOW_DIM));
-    // pollster::block_on(realtime_render(WINDOW_DIM));
+    // pollster::block_on(render_to_image(WINDOW_DIM));
+    pollster::block_on(realtime_render(WINDOW_DIM));
 }

@@ -3,13 +3,20 @@ use std::{path::Path, time::Instant};
 use glam::UVec2;
 
 pub use log;
-pub use wgpu::*;
 
-use crate::{builtin_pipeline::AuroraPipeline, render::RenderTargets, scene::render::GpuScene};
+pub use wgpu;
+use wgpu::*;
+
+use crate::{
+    node::AuroraRenderFlow,
+    render::{OwnedRenderPassDescriptor, RenderTargets},
+    scene::render::GpuScene,
+};
 
 pub mod buffer;
-pub mod builtin_pipeline;
 pub mod color;
+pub mod node;
+pub mod pipeline;
 pub mod render;
 pub mod scene;
 pub mod utils;
@@ -63,19 +70,15 @@ impl WgpuImageRenderer {
         &mut self.internal
     }
 
-    pub async fn draw<'a>(
-        &'a self,
-        scene: Option<&'a GpuScene>,
-        pipeline: &'a mut impl AuroraPipeline<'a>,
-    ) {
-        self.internal.render(
-            RenderTargets {
-                color: &self.target_view,
-                depth: Some(&self.depth_target_view),
-            },
-            scene,
-            pipeline,
-        );
+    pub fn targets(&self) -> RenderTargets {
+        RenderTargets {
+            color: &self.target_view,
+            depth: Some(&self.depth_target_view),
+        }
+    }
+
+    pub async fn draw<'r>(&self, scene: Option<&GpuScene>, flow: &AuroraRenderFlow) {
+        self.internal.render(&self.targets(), scene, flow);
     }
 
     pub async fn save_result(&self, path: impl AsRef<Path>) {
@@ -87,11 +90,23 @@ impl WgpuImageRenderer {
         )
         .await;
     }
+
+    #[inline]
+    pub fn device(&self) -> &Device {
+        &self.internal.device
+    }
+
+    #[inline]
+    pub fn queue(&self) -> &Queue {
+        &self.internal.queue
+    }
 }
 
 pub struct WgpuSurfaceRenderer<'r> {
     internal: WgpuRenderer,
     surface: Surface<'r>,
+    target: Option<SurfaceTexture>,
+    target_view: Option<TextureView>,
     depth_target: Texture,
     depth_target_view: TextureView,
     last_printed_instant: Instant,
@@ -114,6 +129,8 @@ impl<'r> WgpuSurfaceRenderer<'r> {
         let mut sr = Self {
             internal: renderer,
             surface,
+            target: None,
+            target_view: None,
             depth_target,
             depth_target_view,
             last_printed_instant: Instant::now(),
@@ -145,25 +162,29 @@ impl<'r> WgpuSurfaceRenderer<'r> {
         );
     }
 
-    pub fn draw<'a>(
-        &'a self,
-        scene: Option<&'a GpuScene>,
-        pipeline: &'a mut impl AuroraPipeline<'a>,
-    ) {
-        let Ok(frame) = self.surface.get_current_texture() else {
-            log::error!("Failed to acquire next swap chain texture.");
-            return;
-        };
-        let view = frame.texture.create_view(&TextureViewDescriptor::default());
-        self.internal.render(
-            RenderTargets {
-                color: unsafe { std::mem::transmute(&view) },
-                depth: Some(&self.depth_target_view),
-            },
-            scene,
-            pipeline,
-        );
-        frame.present();
+    pub fn update_surface(&mut self) {
+        let frame = self
+            .surface
+            .get_current_texture()
+            .expect("Failed to acquire next swap chain texture.");
+
+        self.target_view = Some(frame.texture.create_view(&TextureViewDescriptor::default()));
+        self.target = Some(frame);
+    }
+
+    pub fn targets(&self) -> RenderTargets {
+        RenderTargets {
+            color: self.target_view.as_ref().unwrap(),
+            depth: Some(&self.depth_target_view),
+        }
+    }
+
+    pub fn present(&mut self) {
+        self.target.take().unwrap().present();
+    }
+
+    pub fn draw(&mut self, scene: Option<&GpuScene>, flow: &AuroraRenderFlow) {
+        self.internal.render(&self.targets(), scene, flow);
     }
 
     pub fn update_frame_counter(&mut self) {
@@ -189,6 +210,16 @@ impl<'r> WgpuSurfaceRenderer<'r> {
     #[inline]
     pub fn renderer_mut(&mut self) -> &mut WgpuRenderer {
         &mut self.internal
+    }
+
+    #[inline]
+    pub fn device(&self) -> &Device {
+        &self.internal.device
+    }
+
+    #[inline]
+    pub fn queue(&self) -> &Queue {
+        &self.internal.queue
     }
 }
 
@@ -218,8 +249,6 @@ impl WgpuRenderer {
             .await
             .unwrap();
 
-        log::info!("Wgpu context set up.");
-
         Self {
             instance,
             adapter,
@@ -229,33 +258,34 @@ impl WgpuRenderer {
     }
 
     pub fn render<'a>(
-        &self,
-        targets: RenderTargets<'a>,
+        &'a self,
+        targets: &'a RenderTargets<'a>,
         scene: Option<&'a GpuScene>,
-        pipeline: &'a mut impl AuroraPipeline<'a>,
+        flow: &'a AuroraRenderFlow,
     ) {
-        let mut command_encoder = self
+        let mut encoder = self
             .device
-            .create_command_encoder(&CommandEncoderDescriptor { label: None });
+            .create_command_encoder(&CommandEncoderDescriptor::default());
 
-        pipeline.prepare(&self.device, &targets, scene);
+        for node in flow.flow.values() {
+            {
+                let mut desc = OwnedRenderPassDescriptor::default();
+                node.describe_pass(targets, &mut desc);
+                let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {
+                    label: desc.label,
+                    color_attachments: &desc.color_attachments,
+                    depth_stencil_attachment: desc.depth_stencil_attachment,
+                    timestamp_writes: desc.timestamp_writes,
+                    occlusion_query_set: desc.occlusion_query_set,
+                });
 
-        {
-            let desc = pipeline.create_pass(&targets);
-            let mut pass = command_encoder.begin_render_pass(&RenderPassDescriptor {
-                label: desc.label,
-                color_attachments: &desc.color_attachments,
-                depth_stencil_attachment: desc.depth_stencil_attachment,
-                timestamp_writes: desc.timestamp_writes,
-                occlusion_query_set: desc.occlusion_query_set,
-            });
-
-            pass.set_pipeline(pipeline.cache().expect("Pipeline is not built yet."));
-            pipeline.bind(unsafe { std::mem::transmute(&mut pass) });
-            pipeline.draw(&mut pass, scene);
+                pass.set_pipeline(node.pipeline().expect("Pipeline is not built yet."));
+                node.bind(&mut pass, scene);
+                node.draw(&mut pass, scene);
+            }
         }
 
-        self.queue.submit(Some(command_encoder.finish()));
+        self.queue.submit(Some(encoder.finish()));
     }
 
     #[inline]

@@ -30,26 +30,22 @@ pub struct RenderTargets<'a> {
     pub depth: Option<&'a TextureView>,
 }
 
-#[derive(Default)]
-pub struct OwnedRenderPassDescriptor<'tex, 'desc> {
+#[derive(Default, Clone)]
+pub struct OwnedRenderPassDescriptor<'desc> {
     pub label: Label<'desc>,
-    pub color_attachments: Box<[Option<RenderPassColorAttachment<'tex>>]>,
-    pub depth_stencil_attachment: Option<RenderPassDepthStencilAttachment<'tex>>,
+    pub color_attachments: Box<[Option<RenderPassColorAttachment<'desc>>]>,
+    pub depth_stencil_attachment: Option<RenderPassDepthStencilAttachment<'desc>>,
     pub timestamp_writes: Option<RenderPassTimestampWrites<'desc>>,
-    pub occlusion_query_set: Option<&'tex QuerySet>,
+    pub occlusion_query_set: Option<&'desc QuerySet>,
 }
 
-pub struct ComposableShader<'a> {
-    main: &'a str,
-    main_path: &'a str,
+pub struct ComposableShader {
     composer: Composer,
 }
 
-impl<'a> ComposableShader<'a> {
-    pub fn new(main: &'a str, main_path: &'a str) -> Self {
+impl ComposableShader {
+    pub fn new() -> Self {
         Self {
-            main,
-            main_path,
             composer: Composer::default(),
         }
     }
@@ -57,23 +53,21 @@ impl<'a> ComposableShader<'a> {
     pub fn add_shader(
         &mut self,
         shader: &str,
-        path: &str,
     ) -> Result<&ComposableModuleDefinition, ComposerError> {
         self.composer
             .add_composable_module(ComposableModuleDescriptor {
                 source: shader,
-                file_path: path,
                 ..Default::default()
             })
     }
 
     pub fn compose(
         &mut self,
+        main: &str,
         shader_defs: HashMap<String, ShaderDefValue>,
     ) -> Result<Module, ComposerError> {
         self.composer.make_naga_module(NagaModuleDescriptor {
-            source: &self.main,
-            file_path: &self.main_path,
+            source: &main,
             shader_defs,
             ..Default::default()
         })

@@ -5,14 +5,15 @@ use std::{
 };
 
 use aurora_core::{
-    builtin_pipeline::{AuroraPipeline, DepthPassPipeline, PbrPipeline},
     color::SrgbaColor,
+    node::{AuroraRenderFlow, DepthPassNode, PbrNode},
     scene::{
         component::{CameraProjection, Mesh, PerspectiveProjection, Transform},
         entity::{Camera, DirectionalLight, Light},
         render::GpuScene,
         Scene,
     },
+    wgpu::TextureFormat,
     *,
 };
 
@@ -33,13 +34,13 @@ pub struct Application<'w> {
     pub screenshot: WgpuImageRenderer,
     pub renderer: WgpuSurfaceRenderer<'w>,
     window: Arc<Window>,
-    dim: UVec2,
+    _dim: UVec2,
 
     main_camera: Arc<Mutex<ControllableCamera>>,
     scene: Scene,
     gpu_scene: GpuScene,
-    pbr_pipeline: PbrPipeline<'w>,
-    depth_pass_pipeline: DepthPassPipeline,
+
+    flow: AuroraRenderFlow,
 }
 
 impl<'w> Application<'w> {
@@ -94,32 +95,31 @@ impl<'w> Application<'w> {
                 b: 0.,
                 a: 0.,
             },
-            renderer.renderer().device(),
+            renderer.device(),
         );
-        gpu_scene.write_scene(renderer.renderer().device(), renderer.renderer().queue());
+        gpu_scene.write_scene(renderer.device(), renderer.queue());
 
-        let device = renderer.renderer().device();
-        let mut pbr_pipeline = PbrPipeline::new(device, TextureFormat::Bgra8UnormSrgb);
-        pbr_pipeline.build(device, Default::default());
-
-        let depth_pass_pipeline = DepthPassPipeline::new(device, TextureFormat::Bgra8UnormSrgb);
+        let pbr_node = PbrNode::new(TextureFormat::Bgra8UnormSrgb);
+        let depth_pass_node = DepthPassNode::new(TextureFormat::Bgra8UnormSrgb);
+        let mut flow = AuroraRenderFlow::default();
+        flow.add("pbr".into(), Box::new(pbr_node));
+        flow.add("depth_pass".into(), Box::new(depth_pass_node));
 
         Self {
             screenshot: WgpuImageRenderer::new(dim).await,
             renderer,
             window,
-            dim,
+            _dim: dim,
 
             scene,
             gpu_scene,
-            pbr_pipeline,
-            depth_pass_pipeline,
+            flow,
 
             main_camera: Arc::new(Mutex::new(main_camera)),
         }
     }
 
-    pub fn run(&mut self, event_loop: EventLoop<()>) {
+    pub fn run(mut self, event_loop: EventLoop<()>) {
         let window = self.window.clone();
         let main_camera = self.main_camera.clone();
         let mut delta = 0.;
@@ -133,26 +133,46 @@ impl<'w> Application<'w> {
             delta = start.elapsed().as_secs_f32();
         });
 
-        event_loop.run_app(self).unwrap();
+        event_loop.run_app(&mut self).unwrap();
     }
 
-    pub fn handle_keyboard(&'w mut self, key: KeyCode, state: ElementState) {
+    pub fn handle_keyboard(&mut self, key: KeyCode, state: ElementState) {
+        match key {
+            KeyCode::F12 => pollster::block_on(self.take_screenshot()),
+            _ => {}
+        }
+
         let Ok(mut main_camera) = self.main_camera.lock() else {
             return;
         };
         main_camera.keyboard_control(key, state);
-
-        match key {
-            KeyCode::F12 => pollster::block_on(self.handle_screenshot()),
-            _ => {}
-        }
     }
 
-    pub async fn handle_screenshot(&'w mut self) {
-        self.screenshot
-            .draw(Some(&self.gpu_scene), &mut self.pbr_pipeline)
-            .await;
+    pub async fn take_screenshot(&mut self) {
+        self.screenshot.draw(Some(&self.gpu_scene), &self.flow).await;
         self.screenshot.save_result("genearated/").await;
+    }
+
+    pub fn redraw(&mut self) {
+        let Ok(main_camera) = self.main_camera.lock() else {
+            return;
+        };
+        self.scene.camera = main_camera.camera;
+
+        self.gpu_scene.update_camera(&self.scene);
+        self.gpu_scene.write_scene(
+            self.renderer.renderer().device(),
+            self.renderer.renderer().queue(),
+        );
+
+        self.renderer.update_surface();
+        let targets = &self.renderer.targets();
+        self.flow.build(self.renderer.device(), None);
+        self.flow
+            .prepare(self.renderer.device(), targets, Some(&self.gpu_scene));
+        self.renderer.draw(Some(&self.gpu_scene), &self.flow);
+        self.renderer.update_frame_counter();
+        self.renderer.present();
     }
 }
 
@@ -165,32 +185,16 @@ impl<'w> ApplicationHandler for Application<'w> {
         _window_id: WindowId,
         event: WindowEvent,
     ) {
-        let this = unsafe { std::mem::transmute::<_, &'w mut Self>(self) };
-
         match event {
-            WindowEvent::RedrawRequested => {
-                let Ok(main_camera) = this.main_camera.lock() else {
-                    return;
-                };
-                this.scene.camera = main_camera.camera;
-                this.renderer.update_frame_counter();
-                this.gpu_scene.update_camera(&this.scene);
-                this.gpu_scene.write_scene(
-                    this.renderer.renderer().device(),
-                    this.renderer.renderer().queue(),
-                );
-                this.renderer
-                    .draw(Some(&this.gpu_scene), &mut this.pbr_pipeline);
-                this.renderer.draw(None, &mut this.depth_pass_pipeline);
-            }
-            WindowEvent::Resized(size) => this.renderer.resize(UVec2::new(size.width, size.height)),
+            WindowEvent::RedrawRequested => self.redraw(),
+            WindowEvent::Resized(size) => self.renderer.resize(UVec2::new(size.width, size.height)),
             WindowEvent::CloseRequested => std::process::exit(0),
             WindowEvent::KeyboardInput {
                 device_id: _,
                 event,
                 is_synthetic: _,
             } => match event.physical_key {
-                PhysicalKey::Code(key) => this.handle_keyboard(key, event.state),
+                PhysicalKey::Code(key) => self.handle_keyboard(key, event.state),
                 PhysicalKey::Unidentified(_) => {}
             },
             WindowEvent::MouseInput {
@@ -198,10 +202,10 @@ impl<'w> ApplicationHandler for Application<'w> {
                 state,
                 button,
             } => {
-                let Ok(mut main_camera) = this.main_camera.lock() else {
+                let Ok(mut main_camera) = self.main_camera.lock() else {
                     return;
                 };
-                main_camera.mouse_control(button, &state);
+                main_camera.mouse_control(button, state);
             }
             _ => {}
         }

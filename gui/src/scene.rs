@@ -61,7 +61,7 @@ impl ControllableCamera {
         }
     }
 
-    pub fn mouse_control(&mut self, button: MouseButton, state: &ElementState) {
+    pub fn mouse_control(&mut self, button: MouseButton, state: ElementState) {
         let t = match state {
             ElementState::Pressed => true,
             ElementState::Released => false,
