@@ -38,7 +38,7 @@ fn fragment(input: VertexOutput) -> @location(0) vec4f {
 
     for (var i_light = 0u; i_light < arrayLength(&dir_lights); i_light += 1u) {
         let light = &dir_lights[i_light];
-        color += (saturate(dot(normalize((*light).pos - input.position_ws), input.normal_ws)) * 0.5 + 0.5) * (*light).col;
+        color += (saturate(dot((*light).dir, input.normal_ws)) * 0.5 + 0.5) * (*light).col;
     }
 
     return vec4f(color, 1.);

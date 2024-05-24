@@ -1,6 +1,6 @@
 use aurora_core::scene::{component::Transform, entity::Camera};
 
-use glam::{Vec2, Vec3};
+use glam::{EulerRot, Quat, Vec2, Vec3};
 
 use winit::{
     event::{ElementState, MouseButton},
@@ -10,15 +10,17 @@ use winit::{
 pub struct CameraConfig {
     pub tranl_sensi: f32,
     pub rot_sensi: Vec2,
-    pub smoothness: f32,
+    pub move_smoothness: f32,
+    pub rot_smoothness: f32,
 }
 
 impl Default for CameraConfig {
     fn default() -> Self {
         Self {
             tranl_sensi: 2.,
-            rot_sensi: Vec2::splat(3.),
-            smoothness: 20.,
+            rot_sensi: Vec2::splat(10.),
+            move_smoothness: 20.,
+            rot_smoothness: 20.,
         }
     }
 }
@@ -28,7 +30,6 @@ pub struct ControllableCamera {
     target_camera: Transform,
     current_vel: Vec3,
     on_rotate: bool,
-    mouse_delta: Vec2,
     pub config: CameraConfig,
 }
 
@@ -39,7 +40,6 @@ impl ControllableCamera {
             camera,
             current_vel: Vec3::ZERO,
             on_rotate: false,
-            mouse_delta: Vec2::ZERO,
             config,
         }
     }
@@ -55,10 +55,28 @@ impl ControllableCamera {
             KeyCode::KeyS => self.current_vel.z = self.config.tranl_sensi * -t,
             KeyCode::KeyA => self.current_vel.x = self.config.tranl_sensi * t,
             KeyCode::KeyD => self.current_vel.x = self.config.tranl_sensi * -t,
-            KeyCode::KeyQ => self.current_vel.y = self.config.tranl_sensi * -t,
-            KeyCode::KeyE => self.current_vel.y = self.config.tranl_sensi * t,
+            KeyCode::KeyQ => self.current_vel.y = self.config.tranl_sensi * t,
+            KeyCode::KeyE => self.current_vel.y = self.config.tranl_sensi * -t,
             _ => {}
         }
+    }
+
+    pub fn update(&mut self, delta: f32) {
+        self.target_camera.translation += self
+            .camera
+            .transform
+            .rotation
+            .inverse()
+            .mul_vec3(self.current_vel * self.config.tranl_sensi * delta);
+
+        self.camera.transform.translation = self.camera.transform.translation.lerp(
+            self.target_camera.translation,
+            self.config.move_smoothness * delta,
+        );
+        self.camera.transform.rotation = self.camera.transform.rotation.lerp(
+            self.target_camera.rotation,
+            self.config.rot_smoothness * delta,
+        );
     }
 
     pub fn mouse_control(&mut self, button: MouseButton, state: ElementState) {
@@ -69,36 +87,20 @@ impl ControllableCamera {
 
         match button {
             MouseButton::Left => {
-                self.mouse_delta = Vec2::ZERO;
                 self.on_rotate = t;
             }
             _ => {}
         }
     }
 
-    pub fn mouse_move(&mut self, delta: Vec2) {
+    pub fn mouse_move(&mut self, offset: Vec2, delta: f32) {
         if self.on_rotate {
-            self.mouse_delta = delta;
-        }
-    }
-
-    pub fn update(&mut self, delta: f32) {
-        self.target_camera
-            .local_move(self.current_vel * self.config.tranl_sensi * delta);
-        self.camera.transform.translation = self.camera.transform.translation.lerp(
-            self.target_camera.translation,
-            self.config.smoothness * delta,
-        );
-
-        if self.on_rotate {
-            self.camera.transform.local_rotate(
-                Vec3::Y,
-                self.mouse_delta.x * delta * self.config.rot_sensi.x,
-            );
-            self.camera.transform.local_rotate(
-                Vec3::X,
-                self.mouse_delta.y * delta * self.config.rot_sensi.y,
-            );
+            let (mut yaw, mut pitch, _) = self.target_camera.rotation.to_euler(EulerRot::YXZ);
+            yaw += (offset.x * delta * self.config.rot_sensi.x).to_radians();
+            pitch += (offset.y * delta * self.config.rot_sensi.y).to_radians();
+            pitch = pitch.clamp(-1.54, 1.54);
+            self.target_camera.rotation =
+                Quat::from_axis_angle(Vec3::Y, yaw) * Quat::from_axis_angle(Vec3::X, pitch);
         }
     }
 }

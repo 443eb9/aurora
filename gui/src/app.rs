@@ -2,6 +2,7 @@ use std::{
     f32::consts::FRAC_PI_4,
     sync::{Arc, Mutex},
     thread,
+    time::Instant,
 };
 
 use aurora_core::{
@@ -41,6 +42,8 @@ pub struct Application<'w> {
     gpu_scene: GpuScene,
 
     flow: AuroraRenderFlow,
+    last_draw: Instant,
+    delta: f32,
 }
 
 impl<'w> Application<'w> {
@@ -80,12 +83,13 @@ impl<'w> Application<'w> {
 
         scene.lights.push(Light::Directional(DirectionalLight {
             transform: Transform {
-                translation: Vec3::new(10., 20., 0.),
-                rotation: Quat::from_euler(EulerRot::XYZ, -1., -1.2, 1.),
+                rotation: Quat::from_euler(EulerRot::XYZ, 1., 1., 1.),
+                ..Default::default()
             },
             ..Default::default()
         }));
-        scene.meshes.push(Mesh::from_obj("assets/icosahedron.obj"));
+        scene.meshes.push(Mesh::from_obj("assets/cube.obj"));
+        // scene.meshes.push(Mesh::from_obj("assets/plane.obj"));
 
         let mut gpu_scene = GpuScene::new(
             &scene,
@@ -104,10 +108,11 @@ impl<'w> Application<'w> {
             "pbr".into(),
             Box::new(PbrNode::new(TextureFormat::Bgra8UnormSrgb)),
         );
-        flow.add(
-            "depth_pass".into(),
-            Box::new(DepthPassNode::new(TextureFormat::Bgra8UnormSrgb)),
-        );
+        // flow.add(
+        //     "depth_pass".into(),
+        //     Box::new(DepthPassNode::new(TextureFormat::Bgra8UnormSrgb)),
+        // );
+        flow.build(renderer.device(), None);
 
         Self {
             renderer,
@@ -119,6 +124,9 @@ impl<'w> Application<'w> {
             flow,
 
             main_camera: Arc::new(Mutex::new(main_camera)),
+
+            delta: 0.,
+            last_draw: Instant::now(),
         }
     }
 
@@ -213,13 +221,14 @@ impl<'w> Application<'w> {
 
         self.renderer.update_surface();
 
-        self.flow.build(self.renderer.device(), None);
         self.flow.prepare(
             self.renderer.device(),
             &self.renderer.targets(),
             Some(&self.gpu_scene),
         );
 
+        self.delta = self.last_draw.elapsed().as_secs_f32();
+        self.last_draw = Instant::now();
         self.renderer.draw(Some(&self.gpu_scene), &self.flow);
         self.renderer.update_frame_counter();
         self.renderer.present();
@@ -272,7 +281,7 @@ impl<'w> ApplicationHandler for Application<'w> {
                 let Ok(mut main_camera) = self.main_camera.lock() else {
                     return;
                 };
-                main_camera.mouse_move(Vec2::new(delta.0 as f32, delta.1 as f32));
+                main_camera.mouse_move(Vec2::new(delta.0 as f32, delta.1 as f32), self.delta);
             }
             _ => {}
         }

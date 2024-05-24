@@ -2,7 +2,7 @@ use aurora_derive::ShaderData;
 
 use bytemuck::{Pod, Zeroable};
 
-use glam::{EulerRot, Mat4, Vec3, Vec4};
+use glam::{Mat4, Vec4};
 
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
@@ -27,7 +27,8 @@ pub struct GpuCamera {
 impl From<Camera> for GpuCamera {
     fn from(value: Camera) -> Self {
         Self {
-            view: value.transform.compute_matrix(),
+            view: Mat4::from_quat(value.transform.rotation)
+                * Mat4::from_translation(value.transform.translation),
             proj: value.projection.compute_matrix(),
         }
     }
@@ -37,7 +38,7 @@ impl From<Camera> for GpuCamera {
 #[repr(C)]
 pub struct GpuDirectionalLight {
     pub position: Vec4,
-    pub rotation: Vec4,
+    pub direction: Vec4,
     pub color: Vec4,
 }
 
@@ -45,7 +46,7 @@ impl From<DirectionalLight> for GpuDirectionalLight {
     fn from(value: DirectionalLight) -> Self {
         Self {
             position: value.transform.translation.extend(0.),
-            rotation: Vec3::from(value.transform.rotation.to_euler(EulerRot::XYZ)).extend(0.),
+            direction: value.transform.local_neg_z().extend(0.),
             color: value.color.to_linear_rgba().into(),
         }
     }

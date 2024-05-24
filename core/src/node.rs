@@ -108,7 +108,11 @@ impl<'n> AuroraRenderNode<'n> for PbrNode {
                 compilation_options: PipelineCompilationOptions::default(),
                 targets: &[Some(self.target.into())],
             }),
-            primitive: PrimitiveState::default(),
+            primitive: PrimitiveState {
+                front_face: FrontFace::Ccw,
+                cull_mode: Some(Face::Back),
+                ..Default::default()
+            },
             depth_stencil: Some(DepthStencilState {
                 format: TextureFormat::Depth32Float,
                 depth_write_enabled: true,
