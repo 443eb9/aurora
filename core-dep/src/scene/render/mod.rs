@@ -1,12 +1,18 @@
+use std::{collections::HashMap, sync::Arc};
+
 use wgpu::{
     BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType, BufferBindingType, Device, Queue,
     ShaderStages,
 };
 
 use crate::{
-    buffer::{StorageBuffer, UniformBuffer},
     color::{LinearRgbaColor, SrgbaColor},
     render::{GpuBinding, ShaderData},
+    resource::{
+        buffer::{SceneBuffers, StorageBuffer, UniformBuffer},
+        material::Material,
+        GpuTexture, ResRef,
+    },
     scene::{
         entity::Light,
         render::entity::{GpuCamera, GpuDirectionalLight, GpuMesh},
@@ -19,22 +25,30 @@ pub mod entity;
 pub struct GpuScene {
     pub clear_color: LinearRgbaColor,
 
-    pub camera: UniformBuffer<GpuCamera>,
-    pub directional_lights: StorageBuffer<GpuDirectionalLight>,
+    pub buffers: SceneBuffers,
 
     pub b_camera: GpuBinding,
     pub b_lights: GpuBinding,
 
     pub meshes: Vec<GpuMesh>,
+    pub textures: HashMap<ResRef, Arc<GpuTexture>>,
+    pub materials: HashMap<ResRef, Arc<dyn Material>>,
 }
 
 impl GpuScene {
-    pub fn new(scene: &Scene, clear_color: SrgbaColor, device: &Device) -> Self {
-        let mut directional_lights = StorageBuffer::<GpuDirectionalLight>::default();
-        scene.lights.iter().for_each(|light| match light {
-            Light::Directional(l) => directional_lights.push(&(*l).into()),
+    pub fn new(scene: &Scene, clear_color: SrgbaColor, device: &Device, queue: &Queue) -> Self {
+        let mut directional_lights = StorageBuffer::default();
+        scene.lights.iter().for_each(|light| {
+            match light {
+                Light::Directional(l) => directional_lights.push(&GpuDirectionalLight::from(*l)),
+            };
         });
 
+        let textures = scene
+            .textures
+            .iter()
+            .map(|(i, t)| (*i, Arc::new(t.clone_to_gpu(device, queue))))
+            .collect();
         let meshes = scene
             .meshes
             .iter()
@@ -42,7 +56,7 @@ impl GpuScene {
             .collect();
 
         let mut camera = UniformBuffer::default();
-        camera.push(&scene.camera.into());
+        camera.push(&GpuCamera::from(scene.camera));
 
         let camera_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
             label: Some("camera_bind_group_layout"),
@@ -75,30 +89,42 @@ impl GpuScene {
             ],
         });
 
+        let mut buffers = SceneBuffers::default();
+        buffers.insert::<GpuDirectionalLight>(directional_lights.into());
+        buffers.insert::<GpuCamera>(camera.into());
+
         Self {
             clear_color: clear_color.to_linear_rgba(),
 
-            camera,
-            directional_lights,
+            buffers,
 
             b_camera: GpuBinding::new(camera_layout),
             b_lights: GpuBinding::new(lights_layout),
 
             meshes,
+            textures,
+            materials: scene.materials.clone(),
         }
     }
 
     pub fn write_scene(&mut self, device: &Device, queue: &Queue) {
-        self.camera.write(device, queue);
-        self.directional_lights.write(device, queue);
+        self.buffers.write(device, queue);
 
-        self.b_camera.bind(device, [self.camera.binding().unwrap()]);
+        let (Some(camera), Some(directional_lights)) = (
+            self.buffers.get_uniform::<GpuCamera>(),
+            self.buffers.get_uniform::<GpuDirectionalLight>(),
+        ) else {
+            return;
+        };
+
+        self.b_camera.bind(device, [camera.binding().unwrap()]);
         self.b_lights
-            .bind(device, [self.directional_lights.binding().unwrap()]);
+            .bind(device, [directional_lights.binding().unwrap()]);
     }
 
     pub fn update_camera(&mut self, scene: &Scene) {
-        self.camera.clear();
-        self.camera.push(&scene.camera.into());
+        let buffer = self.buffers.get_uniform_mut::<GpuCamera>().unwrap();
+        buffer.clear();
+        buffer.push(&GpuCamera::from(scene.camera));
     }
 }

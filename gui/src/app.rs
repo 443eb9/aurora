@@ -1,26 +1,30 @@
 use std::{
+    any::Any,
     f32::consts::FRAC_PI_4,
     sync::{Arc, Mutex},
     thread,
     time::Instant,
 };
 
+use aurora_chest::material::PbrMaterial;
 use aurora_core::{
-    color::SrgbaColor,
-    node::{AuroraRenderFlow, DepthPassNode, PbrNode},
-    render::RenderTargets,
+    render::{flow::RenderFlow, resource::RenderTarget, scene::GpuScene},
     scene::{
-        component::{CameraProjection, Mesh, PerspectiveProjection, Transform},
-        entity::{Camera, DirectionalLight, Light},
-        render::GpuScene,
+        entity::{
+            Camera, CameraProjection, DirectionalLight, Light, PerspectiveProjection, StaticMesh,
+            Transform,
+        },
+        resource::Mesh,
         Scene,
     },
-    wgpu::{TextureFormat, TextureUsages},
-    *,
+    util::{self, TypeIdAsUuid},
+    WgpuRenderer,
 };
+use glam::{EulerRot, Mat3, Mat4, Quat, UVec2, Vec2, Vec3};
 
-use glam::{EulerRot, Quat, UVec2, Vec2, Vec3};
-
+use palette::Srgb;
+use uuid::Uuid;
+use wgpu::{Surface, SurfaceConfiguration, TextureFormat, TextureUsages, TextureViewDescriptor};
 use winit::{
     application::ApplicationHandler,
     dpi::{PhysicalSize, Size},
@@ -30,23 +34,28 @@ use winit::{
     window::{Window, WindowAttributes, WindowId},
 };
 
-use crate::scene::{CameraConfig, ControllableCamera};
+use crate::{
+    render::PbrRenderFlow,
+    scene::{CameraConfig, ControllableCamera},
+};
 
-pub struct Application<'w> {
-    renderer: WgpuSurfaceRenderer<'w>,
+pub struct Application<'a> {
+    renderer: WgpuRenderer,
+    surface: Surface<'a>,
     window: Arc<Window>,
+    targets: RenderTarget,
     dim: UVec2,
 
     main_camera: Arc<Mutex<ControllableCamera>>,
     scene: Scene,
     gpu_scene: GpuScene,
 
-    flow: AuroraRenderFlow,
+    flow: PbrRenderFlow,
     last_draw: Instant,
     delta: f32,
 }
 
-impl<'w> Application<'w> {
+impl<'a> Application<'a> {
     pub async fn new(event_loop: &EventLoop<()>, dim: UVec2) -> Self {
         #[allow(deprecated)]
         let window = Arc::new(
@@ -58,7 +67,30 @@ impl<'w> Application<'w> {
                 .unwrap(),
         );
 
-        let renderer = WgpuSurfaceRenderer::new(window.clone(), dim).await;
+        let renderer = WgpuRenderer::new().await;
+        let surface = renderer.instance.create_surface(window.clone()).unwrap();
+        surface.configure(
+            &renderer.device,
+            &surface
+                .get_default_config(&renderer.adapter, dim.x, dim.y)
+                .unwrap(),
+        );
+        let targets = RenderTarget {
+            color: surface
+                .get_current_texture()
+                .unwrap()
+                .texture
+                .create_view(&TextureViewDescriptor::default()),
+            depth: Some(
+                util::create_texture(
+                    &renderer.device,
+                    dim.extend(1),
+                    TextureFormat::Depth32Float,
+                    TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC,
+                )
+                .create_view(&TextureViewDescriptor::default()),
+            ),
+        };
 
         let main_camera = ControllableCamera::new(
             Camera {
@@ -76,52 +108,54 @@ impl<'w> Application<'w> {
             CameraConfig::default(),
         );
 
-        let mut scene = Scene {
-            camera: main_camera.camera,
-            ..Default::default()
+        let pbr_material = PbrMaterial {
+            base_color: Srgb::new(1., 1., 1.),
+            tex_base_color: None,
+            metallic: 0.,
+            roughness: 1.,
         };
+
+        let mut scene = Scene::default();
+        let material_uuid = scene.insert_object(pbr_material);
+        let meshes = Mesh::from_obj("assets/large_model_sphere.obj")
+            .into_iter()
+            .map(|m| scene.insert_object(m))
+            .collect::<Vec<_>>();
+        let static_meshes = meshes
+            .into_iter()
+            .map(|mesh| StaticMesh {
+                mesh,
+                material: material_uuid,
+            })
+            .collect::<Vec<_>>();
 
         scene.lights.push(Light::Directional(DirectionalLight {
             transform: Transform {
-                rotation: Quat::from_euler(EulerRot::XYZ, 1., 1., 1.),
+                rotation: Quat::from_mat4(&Mat4::look_to_rh(
+                    Vec3::ZERO,
+                    Vec3::new(0., 1., 0.),
+                    Vec3::Y,
+                )),
                 ..Default::default()
             },
             ..Default::default()
         }));
-        scene.meshes.push(Mesh::from_obj("assets/cube.obj"));
-        // scene.meshes.push(Mesh::from_obj("assets/plane.obj"));
+        static_meshes.into_iter().for_each(|sm| {
+            scene.insert_object(sm);
+        });
 
-        let mut gpu_scene = GpuScene::new(
-            &scene,
-            SrgbaColor {
-                r: 0.,
-                g: 0.,
-                b: 0.,
-                a: 0.,
-            },
-            renderer.device(),
-        );
-        gpu_scene.write_scene(renderer.device(), renderer.queue());
-
-        let mut flow = AuroraRenderFlow::default();
-        flow.add(
-            "pbr".into(),
-            Box::new(PbrNode::new(TextureFormat::Bgra8UnormSrgb)),
-        );
-        // flow.add(
-        //     "depth_pass".into(),
-        //     Box::new(DepthPassNode::new(TextureFormat::Bgra8UnormSrgb)),
-        // );
-        flow.build(renderer.device(), None);
+        let gpu_scene = GpuScene::default();
 
         Self {
             renderer,
             window,
+            surface,
+            targets,
             dim,
 
             scene,
             gpu_scene,
-            flow,
+            flow: PbrRenderFlow::new(),
 
             main_camera: Arc::new(Mutex::new(main_camera)),
 
@@ -160,82 +194,77 @@ impl<'w> Application<'w> {
     }
 
     pub async fn take_screenshot(&mut self) {
-        let mut flow = AuroraRenderFlow::default();
-        flow.add(
-            "pbr".into(),
-            Box::new(PbrNode::new(TextureFormat::Rgba8Unorm)),
-        );
-        flow.add(
-            "depth_pass".into(),
-            Box::new(DepthPassNode::new(TextureFormat::Rgba8Unorm)),
-        );
+        // let mut flow = RenderFlow::default();
+        // flow.add(
+        //     "pbr".into(),
+        //     Box::new(PbrNode::new(TextureFormat::Rgba8Unorm)),
+        // );
+        // flow.add(
+        //     "depth_pass".into(),
+        //     Box::new(DepthPassNode::new(TextureFormat::Rgba8Unorm)),
+        // );
 
-        flow.build(self.renderer.device(), None);
-        flow.prepare(
-            self.renderer.device(),
-            &self.renderer.targets(),
-            Some(&self.gpu_scene),
-        );
+        // flow.build(self.renderer.device(), None);
+        // flow.prepare(
+        //     self.renderer.device(),
+        //     &self.renderer.targets(),
+        //     Some(&self.gpu_scene),
+        // );
 
-        let (screenshot, screenshot_view) = aurora_core::utils::create_texture(
-            self.renderer.device(),
-            self.dim.extend(1),
-            TextureFormat::Rgba8Unorm,
-            TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC,
-        );
+        // let (screenshot, screenshot_view) = aurora_core::utils::create_texture(
+        //     self.renderer.device(),
+        //     self.dim.extend(1),
+        //     TextureFormat::Rgba8Unorm,
+        //     TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC,
+        // );
 
-        let (_depth, depth_view) = aurora_core::utils::create_texture(
-            self.renderer.device(),
-            self.dim.extend(1),
-            TextureFormat::Depth32Float,
-            TextureUsages::RENDER_ATTACHMENT,
-        );
+        // let (_depth, depth_view) = aurora_core::utils::create_texture(
+        //     self.renderer.device(),
+        //     self.dim.extend(1),
+        //     TextureFormat::Depth32Float,
+        //     TextureUsages::RENDER_ATTACHMENT,
+        // );
 
-        self.renderer.renderer().render(
-            &RenderTargets {
-                color: &screenshot_view,
-                depth: Some(&depth_view),
-            },
-            Some(&self.gpu_scene),
-            &flow,
-        );
+        // self.renderer.renderer().render(
+        //     &RenderTargets {
+        //         color: &screenshot_view,
+        //         depth: Some(&depth_view),
+        //     },
+        //     Some(&self.gpu_scene),
+        //     &flow,
+        // );
 
-        aurora_core::utils::save_color_texture_as_image(
-            "generated/screenshot.png",
-            &screenshot,
-            self.renderer.device(),
-            self.renderer.queue(),
-        )
-        .await;
+        // aurora_core::utils::save_color_texture_as_image(
+        //     "generated/screenshot.png",
+        //     &screenshot,
+        //     self.renderer.device(),
+        //     self.renderer.queue(),
+        // )
+        // .await;
     }
 
     pub fn redraw(&mut self) {
-        let Ok(main_camera) = self.main_camera.lock() else {
-            return;
-        };
-        self.scene.camera = main_camera.camera;
+        self.gpu_scene.sync(&mut self.scene, &self.renderer);
+        self.flow.inner.build(&self.renderer, &self.gpu_scene, None);
+        self.flow.inner.queue = self.scene.static_meshes.values().cloned().collect();
+        self.flow
+            .inner
+            .run(&self.renderer, &mut self.gpu_scene, &self.targets);
+    }
 
-        self.gpu_scene.update_camera(&self.scene);
-        self.gpu_scene
-            .write_scene(self.renderer.device(), self.renderer.queue());
-
-        self.renderer.update_surface();
-
-        self.flow.prepare(
-            self.renderer.device(),
-            &self.renderer.targets(),
-            Some(&self.gpu_scene),
+    pub fn resize(&mut self, dim: UVec2) {
+        self.dim = dim;
+        self.surface.configure(
+            &self.renderer.device,
+            &self
+                .surface
+                .get_default_config(&self.renderer.adapter, dim.x, dim.y)
+                .unwrap(),
         );
-
-        self.delta = self.last_draw.elapsed().as_secs_f32();
-        self.last_draw = Instant::now();
-        self.renderer.draw(Some(&self.gpu_scene), &self.flow);
-        self.renderer.update_frame_counter();
-        self.renderer.present();
     }
 }
 
-impl<'w> ApplicationHandler for Application<'w> {
+impl<'a> ApplicationHandler for Application<'a> {
     fn resumed(&mut self, _event_loop: &ActiveEventLoop) {}
 
     fn window_event(
@@ -246,7 +275,10 @@ impl<'w> ApplicationHandler for Application<'w> {
     ) {
         match event {
             WindowEvent::RedrawRequested => self.redraw(),
-            WindowEvent::Resized(size) => self.renderer.resize(UVec2::new(size.width, size.height)),
+            WindowEvent::Resized(size) => self.resize(UVec2 {
+                x: size.width,
+                y: size.height,
+            }),
             WindowEvent::CloseRequested => std::process::exit(0),
             WindowEvent::KeyboardInput {
                 device_id: _,

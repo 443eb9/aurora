@@ -1,8 +1,4 @@
-use std::path::Path;
-
 use glam::{Mat4, Quat, Vec3};
-
-use crate::render::Vertex;
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Transform {
@@ -142,43 +138,5 @@ impl OrthographicProjection {
             self.far,
             self.near,
         )
-    }
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct Mesh {
-    pub vertices: Vec<Vertex>,
-}
-
-impl Mesh {
-    pub fn from_obj(path: impl AsRef<Path>) -> Self {
-        let mut source = Vec::new();
-        std::io::Read::read_to_end(&mut std::fs::File::open(path).unwrap(), &mut source).unwrap();
-        let obj = obj::ObjData::load_buf(&source[..]).unwrap();
-
-        let mut vertices = Vec::new();
-        for object in obj.objects {
-            for group in object.groups {
-                vertices.clear();
-                for poly in group.polys {
-                    for end_index in 2..poly.0.len() {
-                        for &index in &[0, end_index - 1, end_index] {
-                            let obj::IndexTuple(position_id, Some(_texture_id), Some(normal_id)) =
-                                poly.0[index]
-                            else {
-                                unreachable!()
-                            };
-
-                            vertices.push(Vertex {
-                                position: obj.position[position_id].into(),
-                                normal: obj.normal[normal_id].into(),
-                            });
-                        }
-                    }
-                }
-            }
-        }
-
-        Self { vertices }
     }
 }

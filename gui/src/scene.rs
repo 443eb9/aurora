@@ -1,4 +1,4 @@
-use aurora_core::scene::{component::Transform, entity::Camera};
+use aurora_core::scene::{entity::Camera, entity::Transform};
 
 use glam::{EulerRot, Quat, Vec2, Vec3};
 

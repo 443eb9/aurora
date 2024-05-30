@@ -20,6 +20,27 @@ impl Default for SrgbaColor {
 }
 
 impl SrgbaColor {
+    pub const TRANSPARENT: Self = Self {
+        r: 0.,
+        g: 0.,
+        b: 0.,
+        a: 0.,
+    };
+
+    pub const BLACK: Self = Self {
+        r: 0.,
+        g: 0.,
+        b: 0.,
+        a: 1.,
+    };
+
+    pub const WHITE: Self = Self {
+        r: 1.,
+        g: 1.,
+        b: 1.,
+        a: 1.,
+    };
+
     pub fn to_linear_rgba(self) -> LinearRgbaColor {
         LinearRgbaColor {
             r: Self::gamma(self.r),
@@ -68,6 +89,27 @@ impl Default for LinearRgbaColor {
 }
 
 impl LinearRgbaColor {
+    pub const TRANSPARENT: Self = Self {
+        r: 0.,
+        g: 0.,
+        b: 0.,
+        a: 0.,
+    };
+
+    pub const BLACK: Self = Self {
+        r: 0.,
+        g: 0.,
+        b: 0.,
+        a: 1.,
+    };
+
+    pub const WHITE: Self = Self {
+        r: 1.,
+        g: 1.,
+        b: 1.,
+        a: 1.,
+    };
+    
     pub fn to_srgba(self) -> SrgbaColor {
         SrgbaColor {
             r: SrgbaColor::gamma_inv(self.r),

@@ -1,5 +1,5 @@
 [workspace]
-members = ["macros", "core", "gui"]
+members = ["macros", "core", "gui", "chest"]
 resolver = "1"
 
 [profile.dev]

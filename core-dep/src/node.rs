@@ -5,7 +5,8 @@ use naga_oil::compose::ShaderDefValue;
 
 use crate::{
     pipeline::{DepthPassPipeline, PbrPipeline},
-    render::{ComposableShader, OwnedRenderPassDescriptor, RenderTargets, Vertex},
+    render::{ComposableShader, OwnedRenderPassDescriptor, RenderTargets},
+    resource::Vertex,
     scene::render::GpuScene,
 };
 
@@ -150,14 +151,6 @@ impl<'n> AuroraRenderNode<'n> for PbrNode {
         });
     }
 
-    fn prepare(
-        &mut self,
-        _device: &Device,
-        _targets: &'n RenderTargets,
-        _scene: Option<&GpuScene>,
-    ) {
-    }
-
     fn bind<'b>(&'b self, pass: &mut RenderPass<'b>, scene: Option<&'b GpuScene>) {
         let scene = scene.unwrap();
         let (Some(b_camera), Some(b_lights)) =
@@ -169,6 +162,14 @@ impl<'n> AuroraRenderNode<'n> for PbrNode {
 
         pass.set_bind_group(0, b_camera, &[]);
         pass.set_bind_group(1, b_lights, &[]);
+    }
+
+    fn prepare(
+        &mut self,
+        _device: &Device,
+        _targets: &'n RenderTargets,
+        _scene: Option<&'n GpuScene>,
+    ) {
     }
 }
 

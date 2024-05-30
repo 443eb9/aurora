@@ -9,6 +9,12 @@ struct DirectionalLight {
     col: vec3f,
 }
 
+struct PbrMaterial {
+    base_color: vec4f,
+    roughness: f32,
+    metallic: f32,
+}
+
 struct VertexInput {
     @location(0) position: vec3f,
     @location(1) normal: vec3f,
@@ -22,6 +28,7 @@ struct VertexOutput {
 
 @group(0) @binding(0) var<uniform> camera: Camera;
 @group(1) @binding(0) var<storage, read> dir_lights: array<DirectionalLight>;
+@group(2) @binding(0) var<uniform> material: PbrMaterial;
 
 @vertex
 fn vertex(input: VertexInput) -> VertexOutput {

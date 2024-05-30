@@ -1,10 +1,6 @@
 use std::{collections::HashMap, num::NonZeroU64};
 
-use aurora_derive::ShaderData;
-
-use bytemuck::{Pod, Zeroable};
-
-use glam::Vec3;
+use bytemuck::Pod;
 
 use naga_oil::compose::{
     ComposableModuleDefinition, ComposableModuleDescriptor, Composer, ComposerError,
@@ -103,11 +99,4 @@ impl GpuBinding {
             }),
         );
     }
-}
-
-#[derive(ShaderData, Debug, Clone, Copy, Pod, Zeroable)]
-#[repr(C)]
-pub struct Vertex {
-    pub position: Vec3,
-    pub normal: Vec3,
 }

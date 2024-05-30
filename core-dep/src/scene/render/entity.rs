@@ -11,10 +11,8 @@ use wgpu::{
 
 use crate::{
     render::ShaderData,
-    scene::{
-        component::Mesh,
-        entity::{Camera, DirectionalLight},
-    },
+    resource::{Mesh, ResRef},
+    scene::entity::{Camera, DirectionalLight},
 };
 
 #[derive(ShaderData, Pod, Zeroable, Debug, Clone, Copy)]
@@ -55,6 +53,7 @@ impl From<DirectionalLight> for GpuDirectionalLight {
 pub struct GpuMesh {
     pub vertex_buffer: Buffer,
     pub vertex_count: u32,
+    pub material: ResRef,
 }
 
 impl Mesh {
@@ -71,6 +70,7 @@ impl Mesh {
                 usage: BufferUsages::VERTEX,
             }),
             vertex_count: self.vertices.len() as u32,
+            material: self.material,
         }
     }
 }
