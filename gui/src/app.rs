@@ -24,7 +24,10 @@ use glam::{EulerRot, Mat3, Mat4, Quat, UVec2, Vec2, Vec3};
 
 use palette::Srgb;
 use uuid::Uuid;
-use wgpu::{Surface, SurfaceConfiguration, TextureFormat, TextureUsages, TextureViewDescriptor};
+use wgpu::{
+    Surface, SurfaceConfiguration, Texture, TextureFormat, TextureUsages, TextureView,
+    TextureViewDescriptor,
+};
 use winit::{
     application::ApplicationHandler,
     dpi::{PhysicalSize, Size},
@@ -35,7 +38,7 @@ use winit::{
 };
 
 use crate::{
-    render::PbrRenderFlow,
+    render::{BasicTriangleRenderFlow, PbrRenderFlow},
     scene::{CameraConfig, ControllableCamera},
 };
 
@@ -43,7 +46,7 @@ pub struct Application<'a> {
     renderer: WgpuRenderer,
     surface: Surface<'a>,
     window: Arc<Window>,
-    targets: RenderTarget,
+    depth_texture: Texture,
     dim: UVec2,
 
     main_camera: Arc<Mutex<ControllableCamera>>,
@@ -75,22 +78,13 @@ impl<'a> Application<'a> {
                 .get_default_config(&renderer.adapter, dim.x, dim.y)
                 .unwrap(),
         );
-        let targets = RenderTarget {
-            color: surface
-                .get_current_texture()
-                .unwrap()
-                .texture
-                .create_view(&TextureViewDescriptor::default()),
-            depth: Some(
-                util::create_texture(
-                    &renderer.device,
-                    dim.extend(1),
-                    TextureFormat::Depth32Float,
-                    TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC,
-                )
-                .create_view(&TextureViewDescriptor::default()),
-            ),
-        };
+
+        let depth_texture = util::create_texture(
+            &renderer.device,
+            dim.extend(1),
+            TextureFormat::Depth32Float,
+            TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC,
+        );
 
         let main_camera = ControllableCamera::new(
             Camera {
@@ -150,12 +144,12 @@ impl<'a> Application<'a> {
             renderer,
             window,
             surface,
-            targets,
+            depth_texture,
             dim,
 
             scene,
             gpu_scene,
-            flow: PbrRenderFlow::new(),
+            flow: Default::default(),
 
             main_camera: Arc::new(Mutex::new(main_camera)),
 
@@ -244,12 +238,24 @@ impl<'a> Application<'a> {
     }
 
     pub fn redraw(&mut self) {
+        let Ok(frame) = self.surface.get_current_texture() else {
+            return;
+        };
+
+        let targets = RenderTarget {
+            color: frame.texture.create_view(&TextureViewDescriptor::default()),
+            depth: Some(
+                self.depth_texture
+                    .create_view(&TextureViewDescriptor::default()),
+            ),
+        };
         self.gpu_scene.sync(&mut self.scene, &self.renderer);
         self.flow.inner.build(&self.renderer, &self.gpu_scene, None);
         self.flow.inner.queue = self.scene.static_meshes.values().cloned().collect();
         self.flow
             .inner
-            .run(&self.renderer, &mut self.gpu_scene, &self.targets);
+            .run(&self.renderer, &mut self.gpu_scene, &targets);
+        frame.present();
     }
 
     pub fn resize(&mut self, dim: UVec2) {

@@ -1,5 +1,6 @@
 use std::{fs::File, path::Path};
 
+use dyn_clone::DynClone;
 use glam::{Mat4, Vec4};
 use png::{Decoder, OutputInfo, Transformations};
 use uuid::Uuid;
@@ -12,7 +13,7 @@ use wgpu::{
 use crate::{
     render::{
         resource::{DynamicGpuBuffer, GpuCamera, GpuDirectionalLight, Vertex},
-        scene::GpuScene,
+        scene::{GpuAssets, GpuScene},
         ShaderData, Transferable,
     },
     scene::{
@@ -157,9 +158,9 @@ impl Transferable for Mesh {
     }
 }
 
-pub trait Material: SceneObject {
+pub trait Material: SceneObject + DynClone {
     fn bind_group_layout(&self, renderer: &WgpuRenderer) -> BindGroupLayout;
     /// The uuid here should be the individual uuid.
-    fn create_bind_group(&self, renderer: &WgpuRenderer, scene: &mut GpuScene, uuid: Uuid);
-    fn prepare(&self, renderer: &WgpuRenderer,scene: &mut GpuScene) -> u32;
+    fn create_bind_group(&self, renderer: &WgpuRenderer, assets: &mut GpuAssets, uuid: Uuid);
+    fn prepare(&self, renderer: &WgpuRenderer, assets: &mut GpuAssets) -> u32;
 }

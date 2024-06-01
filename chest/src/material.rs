@@ -1,7 +1,11 @@
 use std::any::Any;
 
 use aurora_core::{
-    render::{resource::DynamicGpuBuffer, scene::GpuScene, ShaderData, Transferable},
+    render::{
+        resource::DynamicGpuBuffer,
+        scene::{GpuAssets, GpuScene},
+        ShaderData, Transferable,
+    },
     scene::resource::Material,
     util::TypeIdAsUuid,
     WgpuRenderer,
@@ -15,7 +19,7 @@ use wgpu::{
     BindGroupLayoutEntry, BindingType, BufferBindingType, BufferUsages, ShaderStages,
 };
 
-#[derive(MaterialObject)]
+#[derive(MaterialObject, Clone)]
 pub struct PbrMaterial {
     pub base_color: Srgb,
     pub tex_base_color: Option<Uuid>,
@@ -49,14 +53,14 @@ impl Material for PbrMaterial {
             })
     }
 
-    fn create_bind_group(&self, renderer: &WgpuRenderer, scene: &mut GpuScene, uuid: Uuid) {
+    fn create_bind_group(&self, renderer: &WgpuRenderer, assets: &mut GpuAssets, uuid: Uuid) {
         let ty = self.type_id().to_uuid();
-        let Some(buffer) = scene.buffers.get(&ty).and_then(|b| b.binding()) else {
+        let Some(buffer) = assets.buffers.get(&ty).and_then(|b| b.binding()) else {
             return;
         };
-        let layout = scene.layouts.get(&ty).unwrap();
+        let layout = assets.layouts.get(&ty).unwrap();
 
-        scene.bind_groups.insert(
+        assets.bind_groups.insert(
             uuid,
             renderer.device.create_bind_group(&BindGroupDescriptor {
                 label: None,
@@ -69,8 +73,8 @@ impl Material for PbrMaterial {
         );
     }
 
-    fn prepare(&self, renderer: &WgpuRenderer, scene: &mut GpuScene) -> u32 {
-        let buffer = scene
+    fn prepare(&self, renderer: &WgpuRenderer, assets: &mut GpuAssets) -> u32 {
+        let buffer = assets
             .buffers
             .entry(self.type_id().to_uuid())
             .or_insert_with(|| DynamicGpuBuffer::new(BufferUsages::UNIFORM));

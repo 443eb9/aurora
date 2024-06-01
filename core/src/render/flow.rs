@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use indexmap::IndexMap;
 use naga_oil::compose::ShaderDefValue;
@@ -76,10 +76,11 @@ pub trait RenderNode {
     );
 }
 
+/// Prepares camera, lights and materials.
 #[derive(Default)]
-pub struct CameraAndLightNode;
+pub struct GeneralNode;
 
-impl RenderNode for CameraAndLightNode {
+impl RenderNode for GeneralNode {
     fn build(
         &mut self,
         _renderer: &WgpuRenderer,
@@ -89,7 +90,8 @@ impl RenderNode for CameraAndLightNode {
     }
 
     fn prepare(&mut self, renderer: &WgpuRenderer, scene: &mut GpuScene, queue: &[StaticMesh]) {
-        if !scene.layouts.contains_key(&CAMERA_UUID) {
+        let assets = &mut scene.assets;
+        if !assets.layouts.contains_key(&CAMERA_UUID) {
             let l_camera = renderer
                 .device
                 .create_bind_group_layout(&BindGroupLayoutDescriptor {
@@ -106,10 +108,10 @@ impl RenderNode for CameraAndLightNode {
                     }],
                 });
 
-            scene.layouts.insert(CAMERA_UUID, l_camera);
+            assets.layouts.insert(CAMERA_UUID, l_camera);
         }
 
-        if !scene.layouts.contains_key(&LIGHTS_BIND_GROUP_UUID) {
+        if !assets.layouts.contains_key(&LIGHTS_BIND_GROUP_UUID) {
             let l_lights = renderer
                 .device
                 .create_bind_group_layout(&BindGroupLayoutDescriptor {
@@ -126,18 +128,18 @@ impl RenderNode for CameraAndLightNode {
                     }],
                 });
 
-            scene.layouts.insert(LIGHTS_BIND_GROUP_UUID, l_lights);
+            assets.layouts.insert(LIGHTS_BIND_GROUP_UUID, l_lights);
         }
 
         let (Some(bf_camera), Some(bf_dir_lights)) = (
-            scene.buffers[&CAMERA_UUID].binding(),
-            scene.buffers[&DIR_LIGHT_UUID].binding(),
+            assets.buffers[&CAMERA_UUID].binding(),
+            assets.buffers[&DIR_LIGHT_UUID].binding(),
         ) else {
             return;
         };
 
-        let l_camera = scene.layouts.get(&CAMERA_UUID).unwrap();
-        scene.bind_groups.insert(
+        let l_camera = assets.layouts.get(&CAMERA_UUID).unwrap();
+        assets.bind_groups.insert(
             CAMERA_UUID,
             renderer.device.create_bind_group(&BindGroupDescriptor {
                 label: None,
@@ -149,8 +151,8 @@ impl RenderNode for CameraAndLightNode {
             }),
         );
 
-        let l_lights = scene.layouts.get(&LIGHTS_BIND_GROUP_UUID).unwrap();
-        scene.bind_groups.insert(
+        let l_lights = assets.layouts.get(&LIGHTS_BIND_GROUP_UUID).unwrap();
+        assets.bind_groups.insert(
             LIGHTS_BIND_GROUP_UUID,
             renderer.device.create_bind_group(&BindGroupDescriptor {
                 label: None,
@@ -162,7 +164,18 @@ impl RenderNode for CameraAndLightNode {
             }),
         );
 
-        println!("prepared");
+        queue
+            .iter()
+            .map(|m| m.material)
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .for_each(|uuid| {
+                let Some(material) = scene.materials.get(&uuid) else {
+                    return;
+                };
+
+                material.prepare(renderer, assets);
+            });
     }
 
     fn draw(

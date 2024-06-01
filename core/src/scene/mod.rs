@@ -10,6 +10,17 @@ use crate::scene::{
 pub mod entity;
 pub mod resource;
 
+pub enum AssetType {
+    Mesh,
+    Material,
+    StaticMesh,
+}
+
+pub enum AssetEvent {
+    Added(Uuid, AssetType),
+    Removed(Uuid, AssetType),
+}
+
 #[derive(Default)]
 pub struct Scene {
     pub camera: Camera,
@@ -19,12 +30,29 @@ pub struct Scene {
     /// The Uuid as the key represents this specific material,
     /// and the Uuid as the value represents the type of this material.
     pub materials: HashMap<Uuid, (Box<dyn Material>, Uuid)>,
+    pub asset_events: Vec<AssetEvent>,
 }
 
 impl Scene {
     #[inline]
     pub fn insert_object(&mut self, object: impl SceneObject) -> Uuid {
         object.insert_self(self)
+    }
+
+    #[inline]
+    pub fn remove_object(&mut self, object: Uuid, ty: AssetType) {
+        match ty {
+            AssetType::Mesh => {
+                self.meshes.remove(&object);
+            }
+            AssetType::Material => {
+                self.materials.remove(&object);
+            }
+            AssetType::StaticMesh => {
+                self.static_meshes.remove(&object);
+            }
+        }
+        self.asset_events.push(AssetEvent::Removed(object, ty));
     }
 
     #[inline]
@@ -44,6 +72,9 @@ impl SceneObject for Mesh {
     fn insert_self(self, scene: &mut Scene) -> Uuid {
         let uuid = Uuid::new_v4();
         scene.meshes.insert(uuid, self);
+        scene
+            .asset_events
+            .push(AssetEvent::Added(uuid, AssetType::Mesh));
         uuid
     }
 }
@@ -52,6 +83,7 @@ impl SceneObject for StaticMesh {
     fn insert_self(self, scene: &mut Scene) -> Uuid {
         let uuid = Uuid::new_v4();
         scene.static_meshes.insert(uuid, self);
+        scene.asset_events.push(AssetEvent::Added(uuid, AssetType::StaticMesh));
         uuid
     }
 }

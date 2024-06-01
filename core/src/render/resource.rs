@@ -58,7 +58,7 @@ impl DynamicGpuBuffer {
         let cap = self.buffer.as_ref().map(Buffer::size).unwrap_or(0);
         let size = self.raw.len() as u64;
 
-        if self.changed || cap < size {
+        if cap < size || (self.changed && size > 0) {
             self.buffer = Some(device.create_buffer_init(&BufferInitDescriptor {
                 label: None,
                 contents: &self.raw,

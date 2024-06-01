@@ -8,12 +8,12 @@ use crate::{
         resource::{DynamicGpuBuffer, GpuTexture, CAMERA_UUID, DIR_LIGHT_UUID},
         Transferable,
     },
-    scene::{entity::Light, Scene},
+    scene::{entity::Light, resource::Material, AssetEvent, AssetType, Scene},
     WgpuRenderer,
 };
 
 #[derive(Default)]
-pub struct GpuScene {
+pub struct GpuAssets {
     /// For camera and lights storage buffers, uuids are constants.
 
     /// For material uniform buffers, uuids are their type ids.
@@ -28,14 +28,29 @@ pub struct GpuScene {
     pub layouts: HashMap<Uuid, BindGroupLayout>,
 }
 
+#[derive(Default)]
+pub struct GpuScene {
+    pub assets: GpuAssets,
+    pub materials: HashMap<Uuid, Box<dyn Material>>,
+}
+
 impl GpuScene {
     pub fn sync(&mut self, scene: &mut Scene, renderer: &WgpuRenderer) {
-        let mut bf_camera = DynamicGpuBuffer::new(BufferUsages::UNIFORM);
+        let bf_camera = self
+            .assets
+            .buffers
+            .entry(CAMERA_UUID)
+            .or_insert_with(|| DynamicGpuBuffer::new(BufferUsages::UNIFORM));
+        bf_camera.clear();
         bf_camera.push(&scene.camera.transfer(renderer));
         bf_camera.write(&renderer.device, &renderer.queue);
-        self.buffers.insert(CAMERA_UUID, bf_camera);
 
-        let mut bf_dir_lights = DynamicGpuBuffer::new(BufferUsages::STORAGE);
+        let bf_dir_lights = self
+            .assets
+            .buffers
+            .entry(DIR_LIGHT_UUID)
+            .or_insert_with(|| DynamicGpuBuffer::new(BufferUsages::STORAGE));
+        bf_dir_lights.clear();
         for light in &scene.lights {
             match light {
                 Light::Directional(l) => bf_dir_lights.push(&l.transfer(renderer)),
@@ -43,18 +58,40 @@ impl GpuScene {
         }
 
         bf_dir_lights.write(&renderer.device, &renderer.queue);
-        self.buffers.insert(DIR_LIGHT_UUID, bf_dir_lights);
 
-        scene.meshes.drain().for_each(|(uuid, mesh)| {
-            self.buffers.insert(uuid, mesh.transfer(renderer));
+        scene.asset_events.drain(..).for_each(|ae| match ae {
+            AssetEvent::Added(uuid, ty) => match ty {
+                AssetType::Mesh => {
+                    self.assets
+                        .buffers
+                        .insert(uuid, scene.meshes[&uuid].transfer(renderer));
+                }
+                AssetType::Material => {
+                    let (material, ty) = &scene.materials[&uuid];
+                    if !self.assets.layouts.contains_key(&ty) {
+                        self.assets
+                            .layouts
+                            .insert(*ty, material.bind_group_layout(renderer));
+                    }
+                    self.materials
+                        .insert(uuid, dyn_clone::clone_box(material.as_ref()));
+                }
+                // Ignore
+                AssetType::StaticMesh => {}
+            },
+            AssetEvent::Removed(uuid, ty) => match ty {
+                AssetType::Mesh => {
+                    self.assets.buffers.remove(&uuid);
+                }
+                AssetType::Material => {
+                    self.assets.bind_groups.remove(&uuid);
+                    self.materials.remove(&uuid);
+                }
+                // Ignore
+                AssetType::StaticMesh => {}
+            },
         });
 
-        scene.materials.drain().for_each(|(uuid, (material, ty))| {
-            if !self.layouts.contains_key(&ty) {
-                self.layouts
-                    .insert(ty, material.bind_group_layout(renderer));
-            }
-            material.create_bind_group(renderer, self, uuid);
-        });
+        renderer.queue.submit(None);
     }
 }
