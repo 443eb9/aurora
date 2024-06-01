@@ -6,14 +6,13 @@ use png::{Decoder, OutputInfo, Transformations};
 use uuid::Uuid;
 use wgpu::{
     util::{DeviceExt, TextureDataOrder},
-    BindGroupLayout, BufferUsages, Extent3d, TextureDescriptor, TextureDimension, TextureFormat,
-    TextureUsages,
+    BufferUsages, Extent3d, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
 };
 
 use crate::{
     render::{
         resource::{DynamicGpuBuffer, GpuCamera, GpuDirectionalLight, Vertex},
-        scene::{GpuAssets, GpuScene},
+        scene::GpuAssets,
         ShaderData, Transferable,
     },
     scene::{
@@ -159,7 +158,7 @@ impl Transferable for Mesh {
 }
 
 pub trait Material: SceneObject + DynClone {
-    fn bind_group_layout(&self, renderer: &WgpuRenderer) -> BindGroupLayout;
+    fn create_layout(&self, renderer: &WgpuRenderer, assets: &mut GpuAssets);
     /// The uuid here should be the individual uuid.
     fn create_bind_group(&self, renderer: &WgpuRenderer, assets: &mut GpuAssets, uuid: Uuid);
     fn prepare(&self, renderer: &WgpuRenderer, assets: &mut GpuAssets) -> u32;

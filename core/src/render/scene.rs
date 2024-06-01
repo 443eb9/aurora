@@ -69,9 +69,7 @@ impl GpuScene {
                 AssetType::Material => {
                     let (material, ty) = &scene.materials[&uuid];
                     if !self.assets.layouts.contains_key(&ty) {
-                        self.assets
-                            .layouts
-                            .insert(*ty, material.bind_group_layout(renderer));
+                        material.create_layout(renderer, &mut self.assets);
                     }
                     self.materials
                         .insert(uuid, dyn_clone::clone_box(material.as_ref()));

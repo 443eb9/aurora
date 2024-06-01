@@ -1,18 +1,18 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use indexmap::IndexMap;
 use naga_oil::compose::ShaderDefValue;
 use uuid::Uuid;
 use wgpu::{
     BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor, BindGroupLayoutEntry,
-    BindingType, BufferBindingType, BufferUsages, ShaderStages,
+    BindingType, BufferBindingType, ShaderStages,
 };
 
 use crate::{
     render::{
         resource::{
-            DynamicGpuBuffer, GpuCamera, GpuDirectionalLight, RenderTarget, CAMERA_UUID,
-            DIR_LIGHT_UUID, LIGHTS_BIND_GROUP_UUID,
+            GpuCamera, GpuDirectionalLight, RenderMesh, RenderTarget, CAMERA_UUID, DIR_LIGHT_UUID,
+            LIGHTS_BIND_GROUP_UUID,
         },
         scene::GpuScene,
         ShaderData,
@@ -23,16 +23,52 @@ use crate::{
 
 #[derive(Default)]
 pub struct RenderFlow {
-    pub flow: IndexMap<Uuid, Box<dyn RenderNode>>,
-    pub queue: Vec<StaticMesh>,
+    pub flow: IndexMap<Uuid, (Box<dyn RenderNode>, Vec<RenderMesh>)>,
 }
 
 impl RenderFlow {
     #[inline]
     pub fn add<T: RenderNode + Default + 'static>(&mut self) -> Uuid {
         let uuid = Uuid::new_v4();
-        self.flow.insert(uuid, Box::new(T::default()));
+        self.flow.insert(uuid, (Box::new(T::default()), Vec::new()));
         uuid
+    }
+
+    #[inline]
+    pub fn queue_mesh(&mut self, node: Uuid, mesh: StaticMesh) {
+        if let Some((_, queue)) = self.flow.get_mut(&node) {
+            queue.push(RenderMesh { mesh, offset: None });
+        }
+    }
+
+    #[inline]
+    pub fn queue_global(&mut self, mesh: StaticMesh) {
+        self.flow
+            .values_mut()
+            .for_each(|(_, queue)| queue.push(RenderMesh { mesh, offset: None }));
+    }
+
+    #[inline]
+    pub fn set_queue(&mut self, node: Uuid, meshes: Vec<StaticMesh>) {
+        if let Some((_, queue)) = self.flow.get_mut(&node) {
+            *queue = meshes
+                .into_iter()
+                .map(|mesh| RenderMesh { mesh, offset: None })
+                .collect();
+        }
+    }
+
+    #[inline]
+    pub fn set_queue_global(&mut self, meshes: Vec<StaticMesh>) {
+        self.flow.values_mut().for_each(|(_, queue)| {
+            *queue = meshes
+                .iter()
+                .map(|mesh| RenderMesh {
+                    mesh: *mesh,
+                    offset: None,
+                })
+                .collect()
+        });
     }
 
     #[inline]
@@ -42,16 +78,16 @@ impl RenderFlow {
         scene: &GpuScene,
         shader_defs: Option<HashMap<String, ShaderDefValue>>,
     ) {
-        for node in self.flow.values_mut() {
+        for (node, _) in self.flow.values_mut() {
             node.build(renderer, scene, shader_defs.clone());
         }
     }
 
     #[inline]
     pub fn run(&mut self, renderer: &WgpuRenderer, scene: &mut GpuScene, target: &RenderTarget) {
-        for node in self.flow.values_mut() {
-            node.prepare(renderer, scene, &self.queue);
-            node.draw(renderer, scene, &self.queue, target);
+        for (node, queue) in self.flow.values_mut() {
+            node.prepare(renderer, scene, queue);
+            node.draw(renderer, scene, queue, target);
         }
     }
 }
@@ -65,18 +101,18 @@ pub trait RenderNode {
         shader_defs: Option<HashMap<String, ShaderDefValue>>,
     );
     /// Prepare bind groups and other assets for rendering.
-    fn prepare(&mut self, renderer: &WgpuRenderer, scene: &mut GpuScene, queue: &[StaticMesh]);
+    fn prepare(&mut self, renderer: &WgpuRenderer, scene: &mut GpuScene, queue: &mut [RenderMesh]);
     /// Draw meshes.
     fn draw(
         &self,
         renderer: &WgpuRenderer,
         scene: &mut GpuScene,
-        queue: &[StaticMesh],
+        queue: &[RenderMesh],
         target: &RenderTarget,
     );
 }
 
-/// Prepares camera, lights and materials.
+/// Prepares camera and lights.
 #[derive(Default)]
 pub struct GeneralNode;
 
@@ -89,13 +125,18 @@ impl RenderNode for GeneralNode {
     ) {
     }
 
-    fn prepare(&mut self, renderer: &WgpuRenderer, scene: &mut GpuScene, queue: &[StaticMesh]) {
+    fn prepare(
+        &mut self,
+        renderer: &WgpuRenderer,
+        scene: &mut GpuScene,
+        _queue: &mut [RenderMesh],
+    ) {
         let assets = &mut scene.assets;
         if !assets.layouts.contains_key(&CAMERA_UUID) {
             let l_camera = renderer
                 .device
                 .create_bind_group_layout(&BindGroupLayoutDescriptor {
-                    label: None,
+                    label: Some("camera_layout"),
                     entries: &[BindGroupLayoutEntry {
                         binding: 0,
                         visibility: ShaderStages::VERTEX_FRAGMENT,
@@ -115,7 +156,7 @@ impl RenderNode for GeneralNode {
             let l_lights = renderer
                 .device
                 .create_bind_group_layout(&BindGroupLayoutDescriptor {
-                    label: None,
+                    label: Some("lights_layout"),
                     entries: &[BindGroupLayoutEntry {
                         binding: 0,
                         visibility: ShaderStages::FRAGMENT,
@@ -142,7 +183,7 @@ impl RenderNode for GeneralNode {
         assets.bind_groups.insert(
             CAMERA_UUID,
             renderer.device.create_bind_group(&BindGroupDescriptor {
-                label: None,
+                label: Some("camera_bind_group"),
                 layout: &l_camera,
                 entries: &[BindGroupEntry {
                     binding: 0,
@@ -155,7 +196,7 @@ impl RenderNode for GeneralNode {
         assets.bind_groups.insert(
             LIGHTS_BIND_GROUP_UUID,
             renderer.device.create_bind_group(&BindGroupDescriptor {
-                label: None,
+                label: Some("lights_bind_group"),
                 layout: &l_lights,
                 entries: &[BindGroupEntry {
                     binding: 0,
@@ -163,26 +204,13 @@ impl RenderNode for GeneralNode {
                 }],
             }),
         );
-
-        queue
-            .iter()
-            .map(|m| m.material)
-            .collect::<HashSet<_>>()
-            .into_iter()
-            .for_each(|uuid| {
-                let Some(material) = scene.materials.get(&uuid) else {
-                    return;
-                };
-
-                material.prepare(renderer, assets);
-            });
     }
 
     fn draw(
         &self,
         _renderer: &WgpuRenderer,
         _scene: &mut GpuScene,
-        _queue: &[StaticMesh],
+        _queue: &[RenderMesh],
         _target: &RenderTarget,
     ) {
     }

@@ -3,10 +3,10 @@ use glam::{Mat4, Vec3, Vec4};
 use uuid::Uuid;
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
-    BindingResource, Buffer, BufferSlice, BufferUsages, Device, Queue, TextureView,
+    BindingResource, Buffer, BufferUsages, Device, Queue, TextureView,
 };
 
-use crate::render::ShaderData;
+use crate::{render::ShaderData, scene::entity::StaticMesh};
 
 pub const CAMERA_UUID: Uuid = Uuid::from_u128(4514851245144087048541368740532463840);
 pub const LIGHTS_BIND_GROUP_UUID: Uuid = Uuid::from_u128(7897465198640598654089653401853401968);
@@ -82,7 +82,8 @@ impl DynamicGpuBuffer {
         self.buffer.as_ref()
     }
 
-    pub fn len(&self, stride: usize) -> Option<usize> {
+    pub fn len<E>(&self) -> Option<usize> {
+        let stride = std::mem::size_of::<E>();
         if self.raw.len() % stride == 0 {
             Some(self.raw.len() / stride)
         } else {
@@ -97,6 +98,11 @@ pub type GpuTexture = wgpu::Texture;
 pub struct Vertex {
     pub position: Vec3,
     pub normal: Vec3,
+}
+
+pub struct RenderMesh {
+    pub mesh: StaticMesh,
+    pub offset: Option<u32>,
 }
 
 #[derive(ShaderData)]

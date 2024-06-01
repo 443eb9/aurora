@@ -1,11 +1,7 @@
 use std::any::Any;
 
 use aurora_core::{
-    render::{
-        resource::DynamicGpuBuffer,
-        scene::{GpuAssets, GpuScene},
-        ShaderData, Transferable,
-    },
+    render::{scene::GpuAssets, ShaderData, Transferable},
     scene::resource::Material,
     util::TypeIdAsUuid,
     WgpuRenderer,
@@ -15,8 +11,8 @@ use glam::Vec4;
 use palette::Srgb;
 use uuid::Uuid;
 use wgpu::{
-    BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor,
-    BindGroupLayoutEntry, BindingType, BufferBindingType, BufferUsages, ShaderStages,
+    BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor, BindGroupLayoutEntry,
+    BindingType, BufferBindingType, ShaderStages,
 };
 
 #[derive(MaterialObject, Clone)]
@@ -35,22 +31,25 @@ pub struct PbrMaterialUniform {
 }
 
 impl Material for PbrMaterial {
-    fn bind_group_layout(&self, renderer: &WgpuRenderer) -> BindGroupLayout {
-        renderer
-            .device
-            .create_bind_group_layout(&BindGroupLayoutDescriptor {
-                label: None,
-                entries: &[BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: ShaderStages::FRAGMENT,
-                    ty: BindingType::Buffer {
-                        ty: BufferBindingType::Uniform,
-                        has_dynamic_offset: true,
-                        min_binding_size: PbrMaterialUniform::min_binding_size(),
-                    },
-                    count: None,
-                }],
-            })
+    fn create_layout(&self, renderer: &WgpuRenderer, assets: &mut GpuAssets) {
+        assets.layouts.insert(
+            self.type_id().to_uuid(),
+            renderer
+                .device
+                .create_bind_group_layout(&BindGroupLayoutDescriptor {
+                    label: Some("pbr_material_layout"),
+                    entries: &[BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: ShaderStages::FRAGMENT,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Uniform,
+                            has_dynamic_offset: true,
+                            min_binding_size: PbrMaterialUniform::min_binding_size(),
+                        },
+                        count: None,
+                    }],
+                }),
+        );
     }
 
     fn create_bind_group(&self, renderer: &WgpuRenderer, assets: &mut GpuAssets, uuid: Uuid) {
@@ -63,7 +62,7 @@ impl Material for PbrMaterial {
         assets.bind_groups.insert(
             uuid,
             renderer.device.create_bind_group(&BindGroupDescriptor {
-                label: None,
+                label: Some("pbr_material_bind_group"),
                 layout: &layout,
                 entries: &[BindGroupEntry {
                     binding: 0,
@@ -74,10 +73,7 @@ impl Material for PbrMaterial {
     }
 
     fn prepare(&self, renderer: &WgpuRenderer, assets: &mut GpuAssets) -> u32 {
-        let buffer = assets
-            .buffers
-            .entry(self.type_id().to_uuid())
-            .or_insert_with(|| DynamicGpuBuffer::new(BufferUsages::UNIFORM));
+        let buffer = assets.buffers.get_mut(&self.type_id().to_uuid()).unwrap();
         buffer.push(&self.transfer(renderer))
     }
 }

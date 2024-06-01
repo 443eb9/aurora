@@ -1,6 +1,5 @@
 use std::{
-    any::Any,
-    f32::consts::FRAC_PI_4,
+    f32::consts::{FRAC_PI_2, FRAC_PI_3, FRAC_PI_4},
     sync::{Arc, Mutex},
     thread,
     time::Instant,
@@ -8,7 +7,7 @@ use std::{
 
 use aurora_chest::material::PbrMaterial;
 use aurora_core::{
-    render::{flow::RenderFlow, resource::RenderTarget, scene::GpuScene},
+    render::{resource::RenderTarget, scene::GpuScene},
     scene::{
         entity::{
             Camera, CameraProjection, DirectionalLight, Light, PerspectiveProjection, StaticMesh,
@@ -17,17 +16,12 @@ use aurora_core::{
         resource::Mesh,
         Scene,
     },
-    util::{self, TypeIdAsUuid},
+    util::{self},
     WgpuRenderer,
 };
-use glam::{EulerRot, Mat3, Mat4, Quat, UVec2, Vec2, Vec3};
-
+use glam::{EulerRot, Quat, UVec2, Vec2, Vec3};
 use palette::Srgb;
-use uuid::Uuid;
-use wgpu::{
-    Surface, SurfaceConfiguration, Texture, TextureFormat, TextureUsages, TextureView,
-    TextureViewDescriptor,
-};
+use wgpu::{Surface, Texture, TextureFormat, TextureUsages, TextureViewDescriptor};
 use winit::{
     application::ApplicationHandler,
     dpi::{PhysicalSize, Size},
@@ -38,7 +32,7 @@ use winit::{
 };
 
 use crate::{
-    render::{BasicTriangleRenderFlow, PbrRenderFlow},
+    render::PbrRenderFlow,
     scene::{CameraConfig, ControllableCamera},
 };
 
@@ -125,14 +119,10 @@ impl<'a> Application<'a> {
 
         scene.lights.push(Light::Directional(DirectionalLight {
             transform: Transform {
-                rotation: Quat::from_mat4(&Mat4::look_to_rh(
-                    Vec3::ZERO,
-                    Vec3::new(0., 1., 0.),
-                    Vec3::Y,
-                )),
+                rotation: Quat::from_euler(EulerRot::YXZ, FRAC_PI_2 + FRAC_PI_3, FRAC_PI_4, 0.),
                 ..Default::default()
             },
-            ..Default::default()
+            color: Srgb::new(1., 1., 1.),
         }));
         static_meshes.into_iter().for_each(|sm| {
             scene.insert_object(sm);
@@ -153,8 +143,8 @@ impl<'a> Application<'a> {
 
             main_camera: Arc::new(Mutex::new(main_camera)),
 
-            delta: 0.,
             last_draw: Instant::now(),
+            delta: 0.,
         }
     }
 
@@ -238,7 +228,8 @@ impl<'a> Application<'a> {
     }
 
     pub fn redraw(&mut self) {
-        let Ok(frame) = self.surface.get_current_texture() else {
+        let (Ok(frame), Ok(camera)) = (self.surface.get_current_texture(), self.main_camera.lock())
+        else {
             return;
         };
 
@@ -249,12 +240,21 @@ impl<'a> Application<'a> {
                     .create_view(&TextureViewDescriptor::default()),
             ),
         };
+
+        self.scene.camera = camera.camera;
         self.gpu_scene.sync(&mut self.scene, &self.renderer);
         self.flow.inner.build(&self.renderer, &self.gpu_scene, None);
-        self.flow.inner.queue = self.scene.static_meshes.values().cloned().collect();
+        self.flow.inner.set_queue(
+            self.flow.ids[1],
+            self.scene.static_meshes.values().cloned().collect(),
+        );
         self.flow
             .inner
             .run(&self.renderer, &mut self.gpu_scene, &targets);
+
+        self.delta = self.last_draw.elapsed().as_secs_f32();
+        self.last_draw = Instant::now();
+
         frame.present();
     }
 

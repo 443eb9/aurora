@@ -1,24 +1,30 @@
-use std::{any::TypeId, borrow::Cow, collections::HashMap};
+use std::{
+    any::TypeId,
+    borrow::Cow,
+    collections::{hash_map::Entry, HashMap},
+};
 
 use aurora_core::{
     render::{
         flow::RenderNode,
-        resource::{RenderTarget, Vertex, CAMERA_UUID, LIGHTS_BIND_GROUP_UUID},
+        resource::{
+            DynamicGpuBuffer, RenderMesh, RenderTarget, Vertex, CAMERA_UUID, LIGHTS_BIND_GROUP_UUID,
+        },
         scene::GpuScene,
     },
-    scene::entity::StaticMesh,
     util::TypeIdAsUuid,
     WgpuRenderer,
 };
 use naga_oil::compose::{Composer, NagaModuleDescriptor, ShaderDefValue, ShaderType};
+use uuid::Uuid;
 use wgpu::{
-    vertex_attr_array, BufferAddress, Color, ColorTargetState, ColorWrites,
-    CommandEncoderDescriptor, CompareFunction, DepthBiasState, DepthStencilState, FragmentState,
-    LoadOp, MultisampleState, Operations, PipelineCompilationOptions, PipelineLayoutDescriptor,
-    PrimitiveState, RenderPassColorAttachment, RenderPassDepthStencilAttachment,
-    RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, ShaderModuleDescriptor,
-    ShaderSource, StencilState, StoreOp, TextureFormat, VertexBufferLayout, VertexState,
-    VertexStepMode,
+    vertex_attr_array, BufferAddress, BufferUsages, Color, ColorTargetState, ColorWrites,
+    CommandEncoderDescriptor, CompareFunction, DepthBiasState, DepthStencilState, Face,
+    FragmentState, LoadOp, MultisampleState, Operations, PipelineCompilationOptions,
+    PipelineLayoutDescriptor, PrimitiveState, RenderPassColorAttachment,
+    RenderPassDepthStencilAttachment, RenderPassDescriptor, RenderPipeline,
+    RenderPipelineDescriptor, ShaderModuleDescriptor, ShaderSource, StencilState, StoreOp,
+    TextureFormat, VertexBufferLayout, VertexState, VertexStepMode,
 };
 
 use crate::material::PbrMaterial;
@@ -38,7 +44,7 @@ impl RenderNode for BasicTriangleNode {
         let shader_module = renderer
             .device
             .create_shader_module(ShaderModuleDescriptor {
-                label: None,
+                label: Some("basic_triangle_shader"),
                 source: ShaderSource::Wgsl(Cow::Borrowed(include_str!(
                     "shader/basic_triangle.wgsl"
                 ))),
@@ -48,7 +54,7 @@ impl RenderNode for BasicTriangleNode {
             renderer
                 .device
                 .create_render_pipeline(&RenderPipelineDescriptor {
-                    label: None,
+                    label: Some("basic_triagle_pipeline"),
                     layout: None,
                     vertex: VertexState {
                         module: &shader_module,
@@ -74,13 +80,19 @@ impl RenderNode for BasicTriangleNode {
         );
     }
 
-    fn prepare(&mut self, _renderer: &WgpuRenderer, _scene: &mut GpuScene, _queue: &[StaticMesh]) {}
+    fn prepare(
+        &mut self,
+        _renderer: &WgpuRenderer,
+        _scene: &mut GpuScene,
+        _queue: &mut [RenderMesh],
+    ) {
+    }
 
     fn draw(
         &self,
         renderer: &WgpuRenderer,
         _scene: &mut GpuScene,
-        _queue: &[StaticMesh],
+        _queue: &[RenderMesh],
         target: &RenderTarget,
     ) {
         let mut encoder = renderer
@@ -89,7 +101,7 @@ impl RenderNode for BasicTriangleNode {
 
         {
             let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {
-                label: None,
+                label: Some("basic_triangle_pass"),
                 color_attachments: &[Some(RenderPassColorAttachment {
                     view: &target.color,
                     resolve_target: None,
@@ -111,6 +123,7 @@ impl RenderNode for BasicTriangleNode {
 
 #[derive(Default)]
 pub struct PbrNode {
+    mat_uuid: Uuid,
     pipeline: Option<RenderPipeline>,
 }
 
@@ -123,10 +136,12 @@ impl RenderNode for PbrNode {
     ) {
         let assets = &scene.assets;
 
+        self.mat_uuid = TypeId::of::<PbrMaterial>().to_uuid();
+
         let (Some(l_camera), Some(l_lights), Some(l_material)) = (
             assets.layouts.get(&CAMERA_UUID),
             assets.layouts.get(&LIGHTS_BIND_GROUP_UUID),
-            assets.layouts.get(&TypeId::of::<PbrMaterial>().to_uuid()),
+            assets.layouts.get(&self.mat_uuid),
         ) else {
             return;
         };
@@ -145,14 +160,14 @@ impl RenderNode for PbrNode {
         let module = renderer
             .device
             .create_shader_module(ShaderModuleDescriptor {
-                label: None,
+                label: Some("pbr_shader"),
                 source: ShaderSource::Naga(Cow::Owned(shader)),
             });
 
         let layout = renderer
             .device
             .create_pipeline_layout(&PipelineLayoutDescriptor {
-                label: None,
+                label: Some("pbr_pipeline_layout"),
                 bind_group_layouts: &[&l_camera, &l_lights, &l_material],
                 push_constant_ranges: &[],
             });
@@ -161,7 +176,7 @@ impl RenderNode for PbrNode {
             renderer
                 .device
                 .create_render_pipeline(&RenderPipelineDescriptor {
-                    label: None,
+                    label: Some("pbr_pipeline"),
                     layout: Some(&layout),
                     vertex: VertexState {
                         module: &module,
@@ -191,19 +206,44 @@ impl RenderNode for PbrNode {
                         stencil: StencilState::default(),
                         bias: DepthBiasState::default(),
                     }),
-                    primitive: PrimitiveState::default(),
+                    primitive: PrimitiveState {
+                        cull_mode: Some(Face::Back),
+                        ..Default::default()
+                    },
                     multiview: None,
                 }),
         )
     }
 
-    fn prepare(&mut self, renderer: &WgpuRenderer, scene: &mut GpuScene, queue: &[StaticMesh]) {}
+    fn prepare(&mut self, renderer: &WgpuRenderer, scene: &mut GpuScene, queue: &mut [RenderMesh]) {
+        match scene.assets.buffers.entry(self.mat_uuid) {
+            Entry::Occupied(mut e) => e.get_mut().clear(),
+            Entry::Vacant(e) => {
+                e.insert(DynamicGpuBuffer::new(BufferUsages::UNIFORM));
+            }
+        }
+
+        queue
+            .iter_mut()
+            .filter_map(|sm| scene.materials.get(&sm.mesh.material).map(|m| (m, sm)))
+            .for_each(|(material, mesh)| {
+                mesh.offset = Some(material.prepare(renderer, &mut scene.assets));
+                material.create_bind_group(renderer, &mut scene.assets, mesh.mesh.material);
+            });
+
+        scene
+            .assets
+            .buffers
+            .get_mut(&self.mat_uuid)
+            .unwrap()
+            .write(&renderer.device, &renderer.queue);
+    }
 
     fn draw(
         &self,
         renderer: &WgpuRenderer,
         scene: &mut GpuScene,
-        queue: &[StaticMesh],
+        queue: &[RenderMesh],
         target: &RenderTarget,
     ) {
         let assets = &mut scene.assets;
@@ -225,7 +265,7 @@ impl RenderNode for PbrNode {
 
         {
             let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {
-                label: None,
+                label: Some("pbr_pass"),
                 color_attachments: &[Some(RenderPassColorAttachment {
                     view: &target.color,
                     resolve_target: None,
@@ -250,20 +290,20 @@ impl RenderNode for PbrNode {
             pass.set_bind_group(1, b_lights, &[]);
 
             for mesh in queue {
-                let (Some(b_material), Some(mesh)) = (
-                    assets.bind_groups.get(&mesh.material),
-                    assets.buffers.get(&mesh.mesh),
+                let (Some(b_material), Some(vertices)) = (
+                    assets.bind_groups.get(&mesh.mesh.material),
+                    assets.buffers.get(&mesh.mesh.mesh),
                 ) else {
                     continue;
                 };
 
-                pass.set_bind_group(3, b_material, &[]);
-                pass.set_vertex_buffer(0, mesh.buffer().unwrap().slice(..));
-                pass.draw(
-                    0..mesh.len(std::mem::size_of::<Vertex>()).unwrap() as u32,
-                    0..1,
-                );
-                println!("Draw mesh");
+                if let Some(offset) = mesh.offset {
+                    pass.set_bind_group(2, b_material, &[offset]);
+                } else {
+                    pass.set_bind_group(2, b_material, &[]);
+                }
+                pass.set_vertex_buffer(0, vertices.buffer().unwrap().slice(..));
+                pass.draw(0..vertices.len::<Vertex>().unwrap() as u32, 0..1);
             }
         }
 
