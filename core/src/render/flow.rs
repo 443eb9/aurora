@@ -5,14 +5,15 @@ use naga_oil::compose::ShaderDefValue;
 use uuid::Uuid;
 use wgpu::{
     BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor, BindGroupLayoutEntry,
-    BindingType, BufferBindingType, ShaderStages,
+    BindingType, BufferBindingType, SamplerBindingType, ShaderStages, TextureSampleType,
+    TextureViewDimension,
 };
 
 use crate::{
     render::{
         resource::{
             GpuCamera, GpuDirectionalLight, RenderMesh, RenderTarget, CAMERA_UUID, DIR_LIGHT_UUID,
-            LIGHTS_BIND_GROUP_UUID,
+            LIGHTS_BIND_GROUP_UUID, POST_PROCESS_COLOR_LAYOUT_UUID, POST_PROCESS_DEPTH_LAYOUT_UUID,
         },
         scene::GpuScene,
         ShaderData,
@@ -106,13 +107,13 @@ pub trait RenderNode {
     fn draw(
         &self,
         renderer: &WgpuRenderer,
-        scene: &mut GpuScene,
+        scene: &GpuScene,
         queue: &[RenderMesh],
         target: &RenderTarget,
     );
 }
 
-/// Prepares camera and lights.
+/// Prepares camera, lights and post process bind groups.
 #[derive(Default)]
 pub struct GeneralNode;
 
@@ -209,7 +210,97 @@ impl RenderNode for GeneralNode {
     fn draw(
         &self,
         _renderer: &WgpuRenderer,
-        _scene: &mut GpuScene,
+        _scene: &GpuScene,
+        _queue: &[RenderMesh],
+        _target: &RenderTarget,
+    ) {
+    }
+}
+
+/// Added the post process related bing group layouts.
+#[derive(Default)]
+pub struct PostProcessGeneralNode;
+
+impl RenderNode for PostProcessGeneralNode {
+    fn build(
+        &mut self,
+        _renderer: &WgpuRenderer,
+        _scene: &GpuScene,
+        _shader_defs: Option<HashMap<String, ShaderDefValue>>,
+    ) {
+    }
+
+    fn prepare(
+        &mut self,
+        renderer: &WgpuRenderer,
+        scene: &mut GpuScene,
+        _queue: &mut [RenderMesh],
+    ) {
+        let assets = &mut scene.assets;
+
+        if !assets.layouts.contains_key(&POST_PROCESS_COLOR_LAYOUT_UUID) {
+            assets.layouts.insert(
+                POST_PROCESS_COLOR_LAYOUT_UUID,
+                renderer
+                    .device
+                    .create_bind_group_layout(&BindGroupLayoutDescriptor {
+                        label: Some("post_process_color_layout"),
+                        entries: &[
+                            BindGroupLayoutEntry {
+                                binding: 0,
+                                visibility: ShaderStages::FRAGMENT,
+                                ty: BindingType::Texture {
+                                    sample_type: TextureSampleType::Float { filterable: true },
+                                    view_dimension: TextureViewDimension::D2,
+                                    multisampled: false,
+                                },
+                                count: None,
+                            },
+                            BindGroupLayoutEntry {
+                                binding: 1,
+                                visibility: ShaderStages::FRAGMENT,
+                                ty: BindingType::Sampler(SamplerBindingType::Filtering),
+                                count: None,
+                            },
+                        ],
+                    }),
+            );
+        }
+
+        if !assets.layouts.contains_key(&POST_PROCESS_DEPTH_LAYOUT_UUID) {
+            assets.layouts.insert(
+                POST_PROCESS_DEPTH_LAYOUT_UUID,
+                renderer
+                    .device
+                    .create_bind_group_layout(&BindGroupLayoutDescriptor {
+                        label: Some("post_process_depth_layout"),
+                        entries: &[
+                            BindGroupLayoutEntry {
+                                binding: 0,
+                                visibility: ShaderStages::FRAGMENT,
+                                ty: BindingType::Texture {
+                                    sample_type: TextureSampleType::Depth,
+                                    view_dimension: TextureViewDimension::D2,
+                                    multisampled: false,
+                                },
+                                count: None,
+                            },
+                            BindGroupLayoutEntry {
+                                binding: 1,
+                                visibility: ShaderStages::FRAGMENT,
+                                ty: BindingType::Sampler(SamplerBindingType::Filtering),
+                                count: None,
+                            },
+                        ],
+                    }),
+            );
+        }
+    }
+
+    fn draw(
+        &self,
+        _renderer: &WgpuRenderer,
+        _scene: &GpuScene,
         _queue: &[RenderMesh],
         _target: &RenderTarget,
     ) {

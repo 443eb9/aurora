@@ -1,5 +1,5 @@
-use aurora_chest::node::{BasicTriangleNode, PbrNode};
-use aurora_core::render::flow::{GeneralNode, RenderFlow};
+use aurora_chest::node::{BasicTriangleNode, DepthViewNode, PbrNode};
+use aurora_core::render::flow::{GeneralNode, PostProcessGeneralNode, RenderFlow};
 use uuid::Uuid;
 
 pub struct PbrRenderFlow {
@@ -12,7 +12,9 @@ impl Default for PbrRenderFlow {
         let mut ids = Vec::new();
         let mut flow = RenderFlow::default();
         ids.push(flow.add::<GeneralNode>());
+        ids.push(flow.add::<PostProcessGeneralNode>());
         ids.push(flow.add::<PbrNode>());
+        ids.push(flow.add::<DepthViewNode>());
         Self { inner: flow, ids }
     }
 }

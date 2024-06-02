@@ -77,7 +77,9 @@ impl<'a> Application<'a> {
             &renderer.device,
             dim.extend(1),
             TextureFormat::Depth32Float,
-            TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC,
+            TextureUsages::RENDER_ATTACHMENT
+                | TextureUsages::TEXTURE_BINDING
+                | TextureUsages::COPY_SRC,
         );
 
         let main_camera = ControllableCamera::new(
@@ -245,7 +247,7 @@ impl<'a> Application<'a> {
         self.gpu_scene.sync(&mut self.scene, &self.renderer);
         self.flow.inner.build(&self.renderer, &self.gpu_scene, None);
         self.flow.inner.set_queue(
-            self.flow.ids[1],
+            self.flow.ids[2],
             self.scene.static_meshes.values().cloned().collect(),
         );
         self.flow
