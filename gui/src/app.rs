@@ -13,13 +13,13 @@ use aurora_core::{
             Camera, CameraProjection, DirectionalLight, Light, PerspectiveProjection, StaticMesh,
             Transform,
         },
-        resource::Mesh,
+        resource::{Image, Mesh},
         Scene,
     },
-    util::{self},
-    WgpuRenderer,
+    util, WgpuRenderer,
 };
 use glam::{EulerRot, Quat, UVec2, Vec2, Vec3};
+use naga_oil::compose::ShaderDefValue;
 use palette::Srgb;
 use wgpu::{Surface, Texture, TextureFormat, TextureUsages, TextureViewDescriptor};
 use winit::{
@@ -96,16 +96,19 @@ impl<'a> Application<'a> {
             CameraConfig::default(),
         );
 
+        let mut scene = Scene::default();
+
+        let uv_checker =
+            scene.insert_object(Image::from_png_path("assets/uv_checker.png").unwrap());
         let pbr_material = PbrMaterial {
             base_color: Srgb::new(1., 1., 1.),
-            tex_base_color: None,
+            tex_base_color: Some(uv_checker),
             metallic: 0.,
             roughness: 1.,
         };
 
-        let mut scene = Scene::default();
         let material_uuid = scene.insert_object(pbr_material);
-        let meshes = Mesh::from_obj("assets/large_model_sphere.obj")
+        let meshes = Mesh::from_obj("assets/cube.obj")
             .into_iter()
             .map(|m| scene.insert_object(m))
             .collect::<Vec<_>>();
@@ -144,7 +147,7 @@ impl<'a> Application<'a> {
             main_camera: Arc::new(Mutex::new(main_camera)),
 
             last_draw: Instant::now(),
-            delta: 0.,
+            delta: -1.,
         }
     }
 
@@ -154,10 +157,12 @@ impl<'a> Application<'a> {
         let mut delta = 0.;
 
         thread::spawn(move || loop {
-            let start = std::time::Instant::now();
+            let start = Instant::now();
 
             window.request_redraw();
-            main_camera.lock().unwrap().update(delta);
+            if let Ok(mut camera) = main_camera.lock() {
+                camera.update(delta);
+            }
 
             delta = start.elapsed().as_secs_f32();
         });
@@ -178,53 +183,51 @@ impl<'a> Application<'a> {
     }
 
     pub async fn take_screenshot(&mut self) {
-        // let mut flow = RenderFlow::default();
-        // flow.add(
-        //     "pbr".into(),
-        //     Box::new(PbrNode::new(TextureFormat::Rgba8Unorm)),
-        // );
-        // flow.add(
-        //     "depth_pass".into(),
-        //     Box::new(DepthPassNode::new(TextureFormat::Rgba8Unorm)),
-        // );
+        let screenshot = aurora_core::util::create_texture(
+            &self.renderer.device,
+            self.dim.extend(1),
+            TextureFormat::Rgba8Unorm,
+            TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC,
+        );
 
-        // flow.build(self.renderer.device(), None);
-        // flow.prepare(
-        //     self.renderer.device(),
-        //     &self.renderer.targets(),
-        //     Some(&self.gpu_scene),
-        // );
+        let depth = aurora_core::util::create_texture(
+            &self.renderer.device,
+            self.dim.extend(1),
+            TextureFormat::Depth32Float,
+            TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
+        );
 
-        // let (screenshot, screenshot_view) = aurora_core::utils::create_texture(
-        //     self.renderer.device(),
-        //     self.dim.extend(1),
-        //     TextureFormat::Rgba8Unorm,
-        //     TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC,
-        // );
+        let targets = RenderTarget {
+            color_format: TextureFormat::Rgba8Unorm,
+            color: screenshot.create_view(&TextureViewDescriptor::default()),
+            depth_format: Some(TextureFormat::Depth32Float),
+            depth: Some(depth.create_view(&TextureViewDescriptor::default())),
+        };
 
-        // let (_depth, depth_view) = aurora_core::utils::create_texture(
-        //     self.renderer.device(),
-        //     self.dim.extend(1),
-        //     TextureFormat::Depth32Float,
-        //     TextureUsages::RENDER_ATTACHMENT,
-        // );
+        let mut flow = PbrRenderFlow::default();
 
-        // self.renderer.renderer().render(
-        //     &RenderTargets {
-        //         color: &screenshot_view,
-        //         depth: Some(&depth_view),
-        //     },
-        //     Some(&self.gpu_scene),
-        //     &flow,
-        // );
+        self.scene.camera = self.main_camera.lock().unwrap().camera;
+        self.gpu_scene.sync(&mut self.scene, &self.renderer);
+        flow.inner.build(
+            &self.renderer,
+            &mut self.gpu_scene,
+            Some([("TEX_BASE_COLOR".to_string(), ShaderDefValue::Bool(true))].into()),
+            &targets,
+        );
+        flow.inner.set_queue(
+            flow.ids[2],
+            self.scene.static_meshes.values().cloned().collect(),
+        );
+        flow.inner
+            .run(&self.renderer, &mut self.gpu_scene, &targets);
 
-        // aurora_core::utils::save_color_texture_as_image(
-        //     "generated/screenshot.png",
-        //     &screenshot,
-        //     self.renderer.device(),
-        //     self.renderer.queue(),
-        // )
-        // .await;
+        aurora_core::util::save_color_texture_as_image(
+            "generated/screenshot.png",
+            &screenshot,
+            &self.renderer.device,
+            &self.renderer.queue,
+        )
+        .await;
     }
 
     pub fn redraw(&mut self) {
@@ -234,7 +237,9 @@ impl<'a> Application<'a> {
         };
 
         let targets = RenderTarget {
+            color_format: TextureFormat::Bgra8UnormSrgb,
             color: frame.texture.create_view(&TextureViewDescriptor::default()),
+            depth_format: Some(TextureFormat::Depth32Float),
             depth: Some(
                 self.depth_texture
                     .create_view(&TextureViewDescriptor::default()),
@@ -243,11 +248,16 @@ impl<'a> Application<'a> {
 
         self.scene.camera = camera.camera;
         self.gpu_scene.sync(&mut self.scene, &self.renderer);
-        self.flow.inner.build(&self.renderer, &self.gpu_scene, None);
+
+        self.flow
+            .inner
+            .build(&self.renderer, &mut self.gpu_scene, None, &targets);
+
         self.flow.inner.set_queue(
             self.flow.ids[1],
             self.scene.static_meshes.values().cloned().collect(),
         );
+
         self.flow
             .inner
             .run(&self.renderer, &mut self.gpu_scene, &targets);
@@ -280,7 +290,11 @@ impl<'a> ApplicationHandler for Application<'a> {
         event: WindowEvent,
     ) {
         match event {
-            WindowEvent::RedrawRequested => self.redraw(),
+            WindowEvent::RedrawRequested => {
+                // pollster::block_on(self.take_screenshot());
+                // std::process::exit(0);
+                self.redraw();
+            }
             WindowEvent::Resized(size) => self.resize(UVec2 {
                 x: size.width,
                 y: size.height,

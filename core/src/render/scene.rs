@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 
 use uuid::Uuid;
-use wgpu::{BindGroup, BindGroupLayout, BufferUsages};
+use wgpu::{BindGroup, BindGroupLayout, BufferUsages, Texture};
 
 use crate::{
     render::{
-        resource::{DynamicGpuBuffer, GpuTexture, CAMERA_UUID, DIR_LIGHT_UUID},
+        resource::{DynamicGpuBuffer, CAMERA_UUID, DIR_LIGHT_UUID},
         Transferable,
     },
     scene::{entity::Light, resource::Material, AssetEvent, AssetType, Scene},
@@ -19,7 +19,7 @@ pub struct GpuAssets {
     /// For material uniform buffers, uuids are their type ids.
     /// For mesh vertex buffers, uuids are the corresponding mesh ids.
     pub buffers: HashMap<Uuid, DynamicGpuBuffer>,
-    pub textures: HashMap<Uuid, GpuTexture>,
+    pub textures: HashMap<Uuid, Texture>,
 
     /// For material bind groups, uuids are their individual uuids.
     pub bind_groups: HashMap<Uuid, BindGroup>,
@@ -74,6 +74,11 @@ impl GpuScene {
                     self.materials
                         .insert(uuid, dyn_clone::clone_box(material.as_ref()));
                 }
+                AssetType::Image => {
+                    self.assets
+                        .textures
+                        .insert(uuid, scene.images.get(&uuid).unwrap().transfer(renderer));
+                }
                 // Ignore
                 AssetType::StaticMesh => {}
             },
@@ -84,6 +89,9 @@ impl GpuScene {
                 AssetType::Material => {
                     self.assets.bind_groups.remove(&uuid);
                     self.materials.remove(&uuid);
+                }
+                AssetType::Image => {
+                    self.assets.textures.remove(&uuid);
                 }
                 // Ignore
                 AssetType::StaticMesh => {}

@@ -1,9 +1,9 @@
 use aurora_derive::ShaderData;
-use glam::{Mat4, Vec3, Vec4};
+use glam::{Mat4, Vec2, Vec3, Vec4};
 use uuid::Uuid;
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
-    BindingResource, Buffer, BufferUsages, Device, Queue, TextureView,
+    BindingResource, Buffer, BufferUsages, Device, Queue, TextureFormat, TextureView,
 };
 
 use crate::{render::ShaderData, scene::entity::StaticMesh};
@@ -13,7 +13,9 @@ pub const LIGHTS_BIND_GROUP_UUID: Uuid = Uuid::from_u128(78974651986405986540896
 pub const DIR_LIGHT_UUID: Uuid = Uuid::from_u128(50864540865401960354989784651053240851);
 
 pub struct RenderTarget {
+    pub color_format: TextureFormat,
     pub color: TextureView,
+    pub depth_format: Option<TextureFormat>,
     pub depth: Option<TextureView>,
 }
 
@@ -92,12 +94,11 @@ impl DynamicGpuBuffer {
     }
 }
 
-pub type GpuTexture = wgpu::Texture;
-
 #[derive(ShaderData)]
 pub struct Vertex {
     pub position: Vec3,
     pub normal: Vec3,
+    pub uv: Vec3,
 }
 
 pub struct RenderMesh {

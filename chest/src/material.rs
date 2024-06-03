@@ -12,7 +12,8 @@ use palette::Srgb;
 use uuid::Uuid;
 use wgpu::{
     BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor, BindGroupLayoutEntry,
-    BindingType, BufferBindingType, ShaderStages,
+    BindingResource, BindingType, BufferBindingType, SamplerBindingType, SamplerDescriptor,
+    ShaderStages, TextureSampleType, TextureViewDescriptor, TextureViewDimension,
 };
 
 #[derive(MaterialObject, Clone)]
@@ -38,16 +39,34 @@ impl Material for PbrMaterial {
                 .device
                 .create_bind_group_layout(&BindGroupLayoutDescriptor {
                     label: Some("pbr_material_layout"),
-                    entries: &[BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: ShaderStages::FRAGMENT,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Uniform,
-                            has_dynamic_offset: true,
-                            min_binding_size: PbrMaterialUniform::min_binding_size(),
+                    entries: &[
+                        BindGroupLayoutEntry {
+                            binding: 0,
+                            visibility: ShaderStages::FRAGMENT,
+                            ty: BindingType::Buffer {
+                                ty: BufferBindingType::Uniform,
+                                has_dynamic_offset: true,
+                                min_binding_size: PbrMaterialUniform::min_binding_size(),
+                            },
+                            count: None,
                         },
-                        count: None,
-                    }],
+                        BindGroupLayoutEntry {
+                            binding: 1,
+                            visibility: ShaderStages::FRAGMENT,
+                            ty: BindingType::Texture {
+                                sample_type: TextureSampleType::Float { filterable: true },
+                                view_dimension: TextureViewDimension::D2,
+                                multisampled: false,
+                            },
+                            count: None,
+                        },
+                        BindGroupLayoutEntry {
+                            binding: 2,
+                            visibility: ShaderStages::FRAGMENT,
+                            ty: BindingType::Sampler(SamplerBindingType::Filtering),
+                            count: None,
+                        },
+                    ],
                 }),
         );
     }
@@ -64,10 +83,30 @@ impl Material for PbrMaterial {
             renderer.device.create_bind_group(&BindGroupDescriptor {
                 label: Some("pbr_material_bind_group"),
                 layout: &layout,
-                entries: &[BindGroupEntry {
-                    binding: 0,
-                    resource: buffer,
-                }],
+                entries: &[
+                    BindGroupEntry {
+                        binding: 0,
+                        resource: buffer,
+                    },
+                    BindGroupEntry {
+                        binding: 1,
+                        resource: BindingResource::TextureView(
+                            &assets
+                                .textures
+                                .get(&self.tex_base_color.unwrap())
+                                .unwrap()
+                                .create_view(&TextureViewDescriptor::default()),
+                        ),
+                    },
+                    BindGroupEntry {
+                        binding: 2,
+                        resource: BindingResource::Sampler(
+                            &renderer
+                                .device
+                                .create_sampler(&SamplerDescriptor::default()),
+                        ),
+                    },
+                ],
             }),
         );
     }

@@ -13,6 +13,11 @@ impl Default for PbrRenderFlow {
         let mut flow = RenderFlow::default();
         ids.push(flow.add::<GeneralNode>());
         ids.push(flow.add::<PbrNode>());
+<<<<<<< Updated upstream
+=======
+        // ids.push(flow.add::<DepthViewNode>());
+
+>>>>>>> Stashed changes
         Self { inner: flow, ids }
     }
 }

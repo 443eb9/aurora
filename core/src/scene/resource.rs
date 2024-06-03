@@ -6,7 +6,8 @@ use png::{Decoder, OutputInfo, Transformations};
 use uuid::Uuid;
 use wgpu::{
     util::{DeviceExt, TextureDataOrder},
-    BufferUsages, Extent3d, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
+    BufferUsages, Extent3d, Texture, TextureDescriptor, TextureDimension, TextureFormat,
+    TextureUsages,
 };
 
 use crate::{
@@ -48,13 +49,31 @@ impl Transferable for DirectionalLight {
     }
 }
 
-pub struct Texture {
+pub struct Image {
     meta: OutputInfo,
     raw: Vec<u8>,
 }
 
-impl Transferable for Texture {
-    type GpuRepr = wgpu::Texture;
+impl Image {
+    pub fn from_png_path(path: impl AsRef<Path>) -> std::io::Result<Self> {
+        let mut decoder = Decoder::new(File::open(path)?);
+        decoder.set_transformations(Transformations::normalize_to_color8());
+        let mut reader = decoder.read_info()?;
+        let mut raw = vec![0; reader.output_buffer_size()];
+
+        Ok(Self {
+            meta: reader.next_frame(&mut raw)?,
+            raw,
+        })
+    }
+
+    pub fn meta(&self) -> &OutputInfo {
+        &self.meta
+    }
+}
+
+impl Transferable for Image {
+    type GpuRepr = Texture;
 
     fn transfer(&self, renderer: &WgpuRenderer) -> Self::GpuRepr {
         renderer.device.create_texture_with_data(
@@ -79,24 +98,6 @@ impl Transferable for Texture {
     }
 }
 
-impl Texture {
-    pub fn new(image: impl AsRef<Path>) -> std::io::Result<Self> {
-        let mut decoder = Decoder::new(File::open(image)?);
-        decoder.set_transformations(Transformations::normalize_to_color8());
-        let mut reader = decoder.read_info()?;
-        let mut raw = vec![0; reader.output_buffer_size()];
-
-        Ok(Self {
-            meta: reader.next_frame(&mut raw)?,
-            raw,
-        })
-    }
-
-    pub fn meta(&self) -> &OutputInfo {
-        &self.meta
-    }
-}
-
 pub struct Mesh {
     raw: Vec<Vertex>,
 }
@@ -115,7 +116,7 @@ impl Mesh {
                 for poly in group.polys {
                     for end_index in 2..poly.0.len() {
                         for &index in &[0, end_index - 1, end_index] {
-                            let obj::IndexTuple(position_id, Some(_texture_id), Some(normal_id)) =
+                            let obj::IndexTuple(position_id, Some(texture_id), Some(normal_id)) =
                                 poly.0[index]
                             else {
                                 unreachable!()
@@ -124,6 +125,7 @@ impl Mesh {
                             vertices.push(Vertex {
                                 position: obj.position[position_id].into(),
                                 normal: obj.normal[normal_id].into(),
+                                uv: glam::Vec2::from(obj.texture[texture_id]).extend(0.),
                             });
                         }
                     }

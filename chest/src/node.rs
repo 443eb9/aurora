@@ -18,6 +18,7 @@ use aurora_core::{
 use naga_oil::compose::{Composer, NagaModuleDescriptor, ShaderDefValue, ShaderType};
 use uuid::Uuid;
 use wgpu::{
+<<<<<<< Updated upstream
     vertex_attr_array, BufferAddress, BufferUsages, Color, ColorTargetState, ColorWrites,
     CommandEncoderDescriptor, CompareFunction, DepthBiasState, DepthStencilState, Face,
     FragmentState, LoadOp, MultisampleState, Operations, PipelineCompilationOptions,
@@ -25,9 +26,24 @@ use wgpu::{
     RenderPassDepthStencilAttachment, RenderPassDescriptor, RenderPipeline,
     RenderPipelineDescriptor, ShaderModuleDescriptor, ShaderSource, StencilState, StoreOp,
     TextureFormat, VertexBufferLayout, VertexState, VertexStepMode,
+=======
+    vertex_attr_array, BindGroupDescriptor, BindGroupEntry, BindingResource, BufferAddress,
+    BufferUsages, Color, ColorTargetState, ColorWrites, CommandEncoderDescriptor, CompareFunction,
+    DepthBiasState, DepthStencilState, Face, FilterMode, FragmentState, LoadOp, MultisampleState,
+    Operations, PipelineCompilationOptions, PipelineLayoutDescriptor, PrimitiveState,
+    RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor,
+    RenderPipeline, RenderPipelineDescriptor, Sampler, SamplerDescriptor, ShaderModuleDescriptor,
+    ShaderSource, StencilState, StoreOp, VertexBufferLayout, VertexState, VertexStepMode,
+>>>>>>> Stashed changes
 };
 
 use crate::material::PbrMaterial;
+const CLEAR_COLOR: Color = Color {
+    r: 43. / 255.,
+    g: 44. / 255.,
+    b: 47. / 255.,
+    a: 1.,
+};
 
 #[derive(Default)]
 pub struct BasicTriangleNode {
@@ -38,8 +54,9 @@ impl RenderNode for BasicTriangleNode {
     fn build(
         &mut self,
         renderer: &WgpuRenderer,
-        _scene: &GpuScene,
+        _scene: &mut GpuScene,
         _shader_defs: Option<HashMap<String, ShaderDefValue>>,
+        target: &RenderTarget,
     ) {
         let shader_module = renderer
             .device
@@ -67,7 +84,7 @@ impl RenderNode for BasicTriangleNode {
                         entry_point: "fragment",
                         compilation_options: PipelineCompilationOptions::default(),
                         targets: &[Some(ColorTargetState {
-                            format: TextureFormat::Bgra8UnormSrgb,
+                            format: target.color_format,
                             blend: None,
                             write_mask: ColorWrites::ALL,
                         })],
@@ -85,6 +102,7 @@ impl RenderNode for BasicTriangleNode {
         _renderer: &WgpuRenderer,
         _scene: &mut GpuScene,
         _queue: &mut [RenderMesh],
+        _target: &RenderTarget,
     ) {
     }
 
@@ -131,20 +149,19 @@ impl RenderNode for PbrNode {
     fn build(
         &mut self,
         renderer: &WgpuRenderer,
-        scene: &GpuScene,
+        scene: &mut GpuScene,
         shader_defs: Option<HashMap<String, ShaderDefValue>>,
+        target: &RenderTarget,
     ) {
         let assets = &scene.assets;
 
         self.mat_uuid = TypeId::of::<PbrMaterial>().to_uuid();
 
-        let (Some(l_camera), Some(l_lights), Some(l_material)) = (
-            assets.layouts.get(&CAMERA_UUID),
-            assets.layouts.get(&LIGHTS_BIND_GROUP_UUID),
-            assets.layouts.get(&self.mat_uuid),
-        ) else {
-            return;
-        };
+        let (l_camera, l_lights, l_material) = (
+            assets.layouts.get(&CAMERA_UUID).unwrap(),
+            assets.layouts.get(&LIGHTS_BIND_GROUP_UUID).unwrap(),
+            assets.layouts.get(&self.mat_uuid).unwrap(),
+        );
 
         let mut composer = Composer::default();
         let shader = composer
@@ -185,7 +202,14 @@ impl RenderNode for PbrNode {
                         buffers: &[VertexBufferLayout {
                             array_stride: std::mem::size_of::<Vertex>() as BufferAddress,
                             step_mode: VertexStepMode::Vertex,
-                            attributes: &vertex_attr_array![0 => Float32x3, 1 => Float32x3],
+                            attributes: &vertex_attr_array![
+                                // Position
+                                0 => Float32x3,
+                                // Normal
+                                1 => Float32x3,
+                                // UV
+                                2 => Float32x3
+                            ],
                         }],
                     },
                     multisample: MultisampleState::default(),
@@ -194,13 +218,13 @@ impl RenderNode for PbrNode {
                         entry_point: "fragment",
                         compilation_options: PipelineCompilationOptions::default(),
                         targets: &[Some(ColorTargetState {
-                            format: TextureFormat::Bgra8UnormSrgb,
+                            format: target.color_format,
                             blend: None,
                             write_mask: ColorWrites::ALL,
                         })],
                     }),
                     depth_stencil: Some(DepthStencilState {
-                        format: TextureFormat::Depth32Float,
+                        format: target.depth_format.unwrap(),
                         depth_write_enabled: true,
                         depth_compare: CompareFunction::LessEqual,
                         stencil: StencilState::default(),
@@ -215,7 +239,13 @@ impl RenderNode for PbrNode {
         )
     }
 
-    fn prepare(&mut self, renderer: &WgpuRenderer, scene: &mut GpuScene, queue: &mut [RenderMesh]) {
+    fn prepare(
+        &mut self,
+        renderer: &WgpuRenderer,
+        scene: &mut GpuScene,
+        queue: &mut [RenderMesh],
+        _target: &RenderTarget,
+    ) {
         match scene.assets.buffers.entry(self.mat_uuid) {
             Entry::Occupied(mut e) => e.get_mut().clear(),
             Entry::Vacant(e) => {
@@ -228,7 +258,6 @@ impl RenderNode for PbrNode {
             .filter_map(|sm| scene.materials.get(&sm.mesh.material).map(|m| (m, sm)))
             .for_each(|(material, mesh)| {
                 mesh.offset = Some(material.prepare(renderer, &mut scene.assets));
-                material.create_bind_group(renderer, &mut scene.assets, mesh.mesh.material);
             });
 
         scene
@@ -237,6 +266,13 @@ impl RenderNode for PbrNode {
             .get_mut(&self.mat_uuid)
             .unwrap()
             .write(&renderer.device, &renderer.queue);
+
+        queue
+            .iter_mut()
+            .filter_map(|sm| scene.materials.get(&sm.mesh.material).map(|m| (m, sm)))
+            .for_each(|(material, mesh)| {
+                material.create_bind_group(renderer, &mut scene.assets, mesh.mesh.material);
+            });
     }
 
     fn draw(
@@ -270,7 +306,7 @@ impl RenderNode for PbrNode {
                     view: &target.color,
                     resolve_target: None,
                     ops: Operations {
-                        load: LoadOp::Clear(Color::TRANSPARENT),
+                        load: LoadOp::Clear(CLEAR_COLOR),
                         store: StoreOp::Store,
                     },
                 })],
@@ -310,3 +346,180 @@ impl RenderNode for PbrNode {
         renderer.queue.submit(Some(encoder.finish()));
     }
 }
+<<<<<<< Updated upstream
+=======
+
+#[derive(Default)]
+pub struct DepthViewNode {
+    pipeline: Option<RenderPipeline>,
+    sampler: Option<Sampler>,
+}
+
+impl RenderNode for DepthViewNode {
+    fn build(
+        &mut self,
+        renderer: &WgpuRenderer,
+        scene: &mut GpuScene,
+        _shader_defs: Option<HashMap<String, ShaderDefValue>>,
+        target: &RenderTarget,
+    ) {
+        let Some(l_post_process) = scene.assets.layouts.get(&POST_PROCESS_DEPTH_LAYOUT_UUID) else {
+            return;
+        };
+
+        let layout = renderer
+            .device
+            .create_pipeline_layout(&PipelineLayoutDescriptor {
+                label: Some("depth_view_pipeline_layout"),
+                bind_group_layouts: &[l_post_process],
+                push_constant_ranges: &[],
+            });
+
+        let mut composer = Composer::default();
+        composer
+            .add_composable_module(ComposableModuleDescriptor {
+                source: include_str!("shader/fullscreen.wgsl"),
+                file_path: "",
+                language: ShaderLanguage::Wgsl,
+                shader_defs: HashMap::default(),
+                additional_imports: &[],
+                as_name: None,
+            })
+            .unwrap();
+
+        let vert_shader = Composer::default()
+            .make_naga_module(NagaModuleDescriptor {
+                source: include_str!("shader/fullscreen.wgsl"),
+                file_path: "",
+                shader_type: ShaderType::Wgsl,
+                shader_defs: HashMap::default(),
+                additional_imports: &[],
+            })
+            .unwrap();
+        let vert_module = renderer
+            .device
+            .create_shader_module(ShaderModuleDescriptor {
+                label: Some("fullscreen_vertex_shader"),
+                source: ShaderSource::Naga(Cow::Owned(vert_shader)),
+            });
+
+        let frag_shader = composer
+            .make_naga_module(NagaModuleDescriptor {
+                source: include_str!("shader/depth_view.wgsl"),
+                file_path: "",
+                shader_type: ShaderType::Wgsl,
+                shader_defs: HashMap::default(),
+                additional_imports: &[],
+            })
+            .unwrap();
+        let frag_module = renderer
+            .device
+            .create_shader_module(ShaderModuleDescriptor {
+                label: Some("depth_view_shader"),
+                source: ShaderSource::Naga(Cow::Owned(frag_shader)),
+            });
+
+        self.pipeline = Some(
+            renderer
+                .device
+                .create_render_pipeline(&RenderPipelineDescriptor {
+                    label: Some("depth_view_pipeline"),
+                    layout: Some(&layout),
+                    vertex: VertexState {
+                        module: &vert_module,
+                        entry_point: "vertex",
+                        compilation_options: PipelineCompilationOptions::default(),
+                        buffers: &[],
+                    },
+                    fragment: Some(FragmentState {
+                        module: &frag_module,
+                        entry_point: "fragment",
+                        compilation_options: PipelineCompilationOptions::default(),
+                        targets: &[Some(ColorTargetState {
+                            format: target.color_format,
+                            blend: None,
+                            write_mask: ColorWrites::ALL,
+                        })],
+                    }),
+                    primitive: PrimitiveState::default(),
+                    depth_stencil: None,
+                    multisample: MultisampleState::default(),
+                    multiview: None,
+                }),
+        );
+
+        self.sampler = Some(renderer.device.create_sampler(&SamplerDescriptor {
+            mag_filter: FilterMode::Linear,
+            min_filter: FilterMode::Linear,
+            mipmap_filter: FilterMode::Linear,
+            ..Default::default()
+        }));
+    }
+
+    fn prepare(
+        &mut self,
+        _renderer: &WgpuRenderer,
+        _scene: &mut GpuScene,
+        _queue: &mut [RenderMesh],
+        _target: &RenderTarget,
+    ) {
+    }
+
+    fn draw(
+        &self,
+        renderer: &WgpuRenderer,
+        scene: &GpuScene,
+        _queue: &[RenderMesh],
+        target: &RenderTarget,
+    ) {
+        let mut encoder = renderer
+            .device
+            .create_command_encoder(&CommandEncoderDescriptor::default());
+
+        let (Some(pipeline), Some(l_screen), Some(sampler)) = (
+            &self.pipeline,
+            scene.assets.layouts.get(&POST_PROCESS_DEPTH_LAYOUT_UUID),
+            &self.sampler,
+        ) else {
+            return;
+        };
+
+        // As the targets changes every frame, we need to create the bind group for each frame.
+        let b_screen = renderer.device.create_bind_group(&BindGroupDescriptor {
+            label: Some("screen_bind_group"),
+            layout: l_screen,
+            entries: &[
+                BindGroupEntry {
+                    binding: 0,
+                    resource: BindingResource::TextureView(target.depth.as_ref().unwrap()),
+                },
+                BindGroupEntry {
+                    binding: 1,
+                    resource: BindingResource::Sampler(sampler),
+                },
+            ],
+        });
+
+        {
+            let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {
+                label: Some("depth_view_pass"),
+                color_attachments: &[Some(RenderPassColorAttachment {
+                    view: &target.color,
+                    resolve_target: None,
+                    ops: Operations {
+                        load: LoadOp::Clear(Color::TRANSPARENT),
+                        store: StoreOp::Store,
+                    },
+                })],
+                ..Default::default()
+            });
+
+            pass.set_pipeline(pipeline);
+            pass.set_bind_group(0, &b_screen, &[]);
+            pass.draw(0..3, 0..1);
+        }
+
+        renderer.queue.submit(Some(encoder.finish()));
+    }
+}
+>>>>>>> Stashed changes
