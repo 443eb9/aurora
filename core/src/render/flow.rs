@@ -5,14 +5,15 @@ use naga_oil::compose::ShaderDefValue;
 use uuid::Uuid;
 use wgpu::{
     BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor, BindGroupLayoutEntry,
-    BindingType, BufferBindingType, ShaderStages,
+    BindingType, BufferBindingType, SamplerBindingType, ShaderStages, TextureSampleType,
+    TextureViewDimension,
 };
 
 use crate::{
     render::{
         resource::{
             GpuCamera, GpuDirectionalLight, RenderMesh, RenderTarget, CAMERA_UUID, DIR_LIGHT_UUID,
-            LIGHTS_BIND_GROUP_UUID,
+            LIGHTS_BIND_GROUP_UUID, POST_PROCESS_COLOR_LAYOUT_UUID, POST_PROCESS_DEPTH_LAYOUT_UUID,
         },
         scene::GpuScene,
         ShaderData,
@@ -117,13 +118,13 @@ pub trait RenderNode {
     fn draw(
         &self,
         renderer: &WgpuRenderer,
-        scene: &mut GpuScene,
+        scene: &GpuScene,
         queue: &[RenderMesh],
         target: &RenderTarget,
     );
 }
 
-/// Prepares camera and lights.
+/// Prepares camera, lights and post process bind groups.
 #[derive(Default)]
 pub struct GeneralNode;
 

@@ -8,24 +8,29 @@ use aurora_core::{
     render::{
         flow::RenderNode,
         resource::{
-            DynamicGpuBuffer, RenderMesh, RenderTarget, Vertex, CAMERA_UUID, LIGHTS_BIND_GROUP_UUID,
+            DynamicGpuBuffer, RenderMesh, RenderTarget, Vertex, CAMERA_UUID,
+            LIGHTS_BIND_GROUP_UUID, POST_PROCESS_DEPTH_LAYOUT_UUID,
         },
         scene::GpuScene,
     },
     util::TypeIdAsUuid,
     WgpuRenderer,
 };
-use naga_oil::compose::{Composer, NagaModuleDescriptor, ShaderDefValue, ShaderType};
+use naga_oil::compose::{
+    ComposableModuleDescriptor, Composer, NagaModuleDescriptor, ShaderDefValue, ShaderLanguage,
+    ShaderType,
+};
 use uuid::Uuid;
 use wgpu::{
 <<<<<<< Updated upstream
-    vertex_attr_array, BufferAddress, BufferUsages, Color, ColorTargetState, ColorWrites,
-    CommandEncoderDescriptor, CompareFunction, DepthBiasState, DepthStencilState, Face,
-    FragmentState, LoadOp, MultisampleState, Operations, PipelineCompilationOptions,
-    PipelineLayoutDescriptor, PrimitiveState, RenderPassColorAttachment,
-    RenderPassDepthStencilAttachment, RenderPassDescriptor, RenderPipeline,
-    RenderPipelineDescriptor, ShaderModuleDescriptor, ShaderSource, StencilState, StoreOp,
-    TextureFormat, VertexBufferLayout, VertexState, VertexStepMode,
+    vertex_attr_array, BindGroupDescriptor, BindGroupEntry, BindingResource, BufferAddress,
+    BufferUsages, Color, ColorTargetState, ColorWrites, CommandEncoderDescriptor, CompareFunction,
+    DepthBiasState, DepthStencilState, Face, FilterMode, FragmentState, LoadOp, MultisampleState,
+    Operations, PipelineCompilationOptions, PipelineLayoutDescriptor, PrimitiveState,
+    RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor,
+    RenderPipeline, RenderPipelineDescriptor, Sampler, SamplerDescriptor, ShaderModuleDescriptor,
+    ShaderSource, StencilState, StoreOp, TextureFormat, VertexBufferLayout, VertexState,
+    VertexStepMode,
 =======
     vertex_attr_array, BindGroupDescriptor, BindGroupEntry, BindingResource, BufferAddress,
     BufferUsages, Color, ColorTargetState, ColorWrites, CommandEncoderDescriptor, CompareFunction,
@@ -109,7 +114,7 @@ impl RenderNode for BasicTriangleNode {
     fn draw(
         &self,
         renderer: &WgpuRenderer,
-        _scene: &mut GpuScene,
+        _scene: &GpuScene,
         _queue: &[RenderMesh],
         target: &RenderTarget,
     ) {
@@ -278,11 +283,11 @@ impl RenderNode for PbrNode {
     fn draw(
         &self,
         renderer: &WgpuRenderer,
-        scene: &mut GpuScene,
+        scene: &GpuScene,
         queue: &[RenderMesh],
         target: &RenderTarget,
     ) {
-        let assets = &mut scene.assets;
+        let assets = &scene.assets;
 
         let mut encoder = renderer
             .device
