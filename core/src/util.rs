@@ -5,8 +5,8 @@ use png::ColorType;
 use uuid::Uuid;
 use wgpu::{
     BufferDescriptor, BufferUsages, CommandEncoderDescriptor, Device, Extent3d, ImageCopyBuffer,
-    ImageCopyTexture, ImageDataLayout, Maintain, MapMode, Origin3d, Queue, Texture, TextureAspect,
-    TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
+    ImageDataLayout, Maintain, MapMode, Queue, Texture, TextureDescriptor, TextureDimension,
+    TextureFormat, TextureUsages,
 };
 
 pub trait TypeIdAsUuid {
@@ -67,12 +67,7 @@ pub async fn save_color_texture_as_image(
 
     let mut command_encoder = device.create_command_encoder(&CommandEncoderDescriptor::default());
     command_encoder.copy_texture_to_buffer(
-        ImageCopyTexture {
-            texture,
-            mip_level: 0,
-            origin: Origin3d::ZERO,
-            aspect: TextureAspect::All,
-        },
+        texture.as_image_copy(),
         ImageCopyBuffer {
             buffer: &out_staging_buffer,
             layout: ImageDataLayout {

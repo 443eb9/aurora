@@ -77,7 +77,7 @@ impl GpuScene {
                 AssetType::Image => {
                     self.assets
                         .textures
-                        .insert(uuid, scene.images.get(&uuid).unwrap().transfer(renderer));
+                        .insert(uuid, scene.images[&uuid].transfer(renderer));
                 }
                 // Ignore
                 AssetType::StaticMesh => {}

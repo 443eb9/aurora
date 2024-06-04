@@ -110,7 +110,7 @@ impl<'a> Application<'a> {
         };
 
         let material_uuid = scene.insert_object(pbr_material);
-        let meshes = Mesh::from_obj("assets/cube.obj")
+        let meshes = Mesh::from_obj("assets/large_model_sphere.obj")
             .into_iter()
             .map(|m| scene.insert_object(m))
             .collect::<Vec<_>>();

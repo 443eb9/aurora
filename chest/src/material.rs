@@ -91,10 +91,7 @@ impl Material for PbrMaterial {
                     BindGroupEntry {
                         binding: 1,
                         resource: BindingResource::TextureView(
-                            &assets
-                                .textures
-                                .get(&self.tex_base_color.unwrap())
-                                .unwrap()
+                            &assets.textures[&self.tex_base_color.unwrap()]
                                 .create_view(&TextureViewDescriptor::default()),
                         ),
                     },
