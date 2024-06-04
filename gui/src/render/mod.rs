@@ -1,4 +1,4 @@
-use aurora_chest::node::{BasicTriangleNode, DepthViewNode, PbrNode};
+use aurora_chest::node::{BasicTriangleNode, PbrNode};
 use aurora_core::render::flow::{GeneralNode, PostProcessGeneralNode, RenderFlow};
 use uuid::Uuid;
 
@@ -14,11 +14,8 @@ impl Default for PbrRenderFlow {
         ids.push(flow.add::<GeneralNode>());
         ids.push(flow.add::<PostProcessGeneralNode>());
         ids.push(flow.add::<PbrNode>());
-<<<<<<< Updated upstream
-=======
         // ids.push(flow.add::<DepthViewNode>());
 
->>>>>>> Stashed changes
         Self { inner: flow, ids }
     }
 }

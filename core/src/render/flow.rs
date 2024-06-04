@@ -226,9 +226,6 @@ impl RenderNode for GeneralNode {
     fn draw(
         &self,
         _renderer: &WgpuRenderer,
-<<<<<<< Updated upstream
-        _scene: &mut GpuScene,
-=======
         _scene: &GpuScene,
         _queue: &[RenderMesh],
         _target: &RenderTarget,
@@ -328,7 +325,6 @@ impl RenderNode for PostProcessGeneralNode {
         &self,
         _renderer: &WgpuRenderer,
         _scene: &GpuScene,
->>>>>>> Stashed changes
         _queue: &[RenderMesh],
         _target: &RenderTarget,
     ) {

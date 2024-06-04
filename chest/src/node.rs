@@ -22,16 +22,6 @@ use naga_oil::compose::{
 };
 use uuid::Uuid;
 use wgpu::{
-<<<<<<< Updated upstream
-    vertex_attr_array, BindGroupDescriptor, BindGroupEntry, BindingResource, BufferAddress,
-    BufferUsages, Color, ColorTargetState, ColorWrites, CommandEncoderDescriptor, CompareFunction,
-    DepthBiasState, DepthStencilState, Face, FilterMode, FragmentState, LoadOp, MultisampleState,
-    Operations, PipelineCompilationOptions, PipelineLayoutDescriptor, PrimitiveState,
-    RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor,
-    RenderPipeline, RenderPipelineDescriptor, Sampler, SamplerDescriptor, ShaderModuleDescriptor,
-    ShaderSource, StencilState, StoreOp, TextureFormat, VertexBufferLayout, VertexState,
-    VertexStepMode,
-=======
     vertex_attr_array, BindGroupDescriptor, BindGroupEntry, BindingResource, BufferAddress,
     BufferUsages, Color, ColorTargetState, ColorWrites, CommandEncoderDescriptor, CompareFunction,
     DepthBiasState, DepthStencilState, Face, FilterMode, FragmentState, LoadOp, MultisampleState,
@@ -39,7 +29,6 @@ use wgpu::{
     RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor,
     RenderPipeline, RenderPipelineDescriptor, Sampler, SamplerDescriptor, ShaderModuleDescriptor,
     ShaderSource, StencilState, StoreOp, VertexBufferLayout, VertexState, VertexStepMode,
->>>>>>> Stashed changes
 };
 
 use crate::material::PbrMaterial;
@@ -351,8 +340,6 @@ impl RenderNode for PbrNode {
         renderer.queue.submit(Some(encoder.finish()));
     }
 }
-<<<<<<< Updated upstream
-=======
 
 #[derive(Default)]
 pub struct DepthViewNode {
@@ -527,4 +514,3 @@ impl RenderNode for DepthViewNode {
         renderer.queue.submit(Some(encoder.finish()));
     }
 }
->>>>>>> Stashed changes
