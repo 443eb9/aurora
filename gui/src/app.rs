@@ -5,7 +5,7 @@ use std::{
     time::Instant,
 };
 
-use aurora_chest::material::PbrMaterial;
+use aurora_chest::{material::PbrMaterial, shader_defs::StrAsShaderDef};
 use aurora_core::{
     render::{resource::RenderTarget, scene::GpuScene},
     scene::{
@@ -104,7 +104,7 @@ impl<'a> Application<'a> {
             scene.insert_object(Image::from_png_path("assets/uv_checker.png").unwrap());
         let pbr_material = PbrMaterial {
             base_color: Srgb::new(1., 1., 1.),
-            tex_base_color: Some(uv_checker),
+            tex_base_color: None,
             metallic: 0.,
             roughness: 1.,
         };
@@ -213,7 +213,7 @@ impl<'a> Application<'a> {
         flow.inner.build(
             &self.renderer,
             &mut self.gpu_scene,
-            Some([("TEX_BASE_COLOR".to_string(), ShaderDefValue::Bool(true))].into()),
+            Some(["TEX_BASE_COLOR".as_shader_def()].into()),
             &targets,
         );
         flow.inner.set_queue(

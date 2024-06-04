@@ -4,16 +4,18 @@ use indexmap::IndexMap;
 use naga_oil::compose::ShaderDefValue;
 use uuid::Uuid;
 use wgpu::{
+    util::{DeviceExt, TextureDataOrder},
     BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor, BindGroupLayoutEntry,
-    BindingType, BufferBindingType, SamplerBindingType, ShaderStages, TextureSampleType,
-    TextureViewDimension,
+    BindingType, BufferBindingType, Extent3d, SamplerBindingType, ShaderStages, TextureDescriptor,
+    TextureDimension, TextureFormat, TextureSampleType, TextureUsages, TextureViewDimension,
 };
 
 use crate::{
     render::{
         resource::{
             GpuCamera, GpuDirectionalLight, RenderMesh, RenderTarget, CAMERA_UUID, DIR_LIGHT_UUID,
-            LIGHTS_BIND_GROUP_UUID, POST_PROCESS_COLOR_LAYOUT_UUID, POST_PROCESS_DEPTH_LAYOUT_UUID,
+            DUMMY_2D_TEX, LIGHTS_BIND_GROUP_UUID, POST_PROCESS_COLOR_LAYOUT_UUID,
+            POST_PROCESS_DEPTH_LAYOUT_UUID,
         },
         scene::GpuScene,
         ShaderData,
@@ -308,6 +310,62 @@ impl RenderNode for PostProcessGeneralNode {
                             },
                         ],
                     }),
+            );
+        }
+    }
+
+    fn prepare(
+        &mut self,
+        _renderer: &WgpuRenderer,
+        _scene: &mut GpuScene,
+        _queue: &mut [RenderMesh],
+        _target: &RenderTarget,
+    ) {
+    }
+
+    fn draw(
+        &self,
+        _renderer: &WgpuRenderer,
+        _scene: &GpuScene,
+        _queue: &[RenderMesh],
+        _target: &RenderTarget,
+    ) {
+    }
+}
+
+#[derive(Default)]
+pub struct ImageFallbackNode;
+
+impl RenderNode for ImageFallbackNode {
+    fn build(
+        &mut self,
+        renderer: &WgpuRenderer,
+        scene: &mut GpuScene,
+        _shader_defs: Option<HashMap<String, ShaderDefValue>>,
+        _target: &RenderTarget,
+    ) {
+        if !scene.assets.textures.contains_key(&DUMMY_2D_TEX) {
+            scene.assets.textures.insert(
+                DUMMY_2D_TEX,
+                renderer.device.create_texture_with_data(
+                    &renderer.queue,
+                    &TextureDescriptor {
+                        label: Some("dummy_2d"),
+                        size: Extent3d {
+                            width: 1,
+                            height: 1,
+                            depth_or_array_layers: 1,
+                        },
+                        mip_level_count: 1,
+                        sample_count: 1,
+                        dimension: TextureDimension::D2,
+                        format: TextureFormat::Rgba8Unorm,
+                        usage: TextureUsages::TEXTURE_BINDING,
+                        view_formats: &[TextureFormat::Rgba8Unorm],
+                    },
+                    TextureDataOrder::MipMajor,
+                    &[1; 4],
+                ),
             );
         }
     }

@@ -61,6 +61,6 @@ fn fragment(input: VertexOutput) -> @location(0) vec4f {
         light_col += (saturate(dot((*light).dir, input.normal_ws)) * 0.8 + 0.2) * (*light).col;
     }
 
-    let color = material.base_color * light_col * textureSample(tex_base_color, tex_sampler, input.uv).rgb;
+    let color = material.base_color * light_col * tex_col;
     return vec4f(color, 1.);
 }

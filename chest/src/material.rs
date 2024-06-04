@@ -1,7 +1,7 @@
 use std::any::Any;
 
 use aurora_core::{
-    render::{scene::GpuAssets, ShaderData, Transferable},
+    render::{resource::DUMMY_2D_TEX, scene::GpuAssets, ShaderData, Transferable},
     scene::resource::Material,
     util::TypeIdAsUuid,
     WgpuRenderer,
@@ -91,7 +91,7 @@ impl Material for PbrMaterial {
                     BindGroupEntry {
                         binding: 1,
                         resource: BindingResource::TextureView(
-                            &assets.textures[&self.tex_base_color.unwrap()]
+                            &assets.textures[&self.tex_base_color.unwrap_or(DUMMY_2D_TEX)]
                                 .create_view(&TextureViewDescriptor::default()),
                         ),
                     },

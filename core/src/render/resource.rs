@@ -14,6 +14,8 @@ pub const POST_PROCESS_DEPTH_LAYOUT_UUID: Uuid = Uuid::from_u128(887897413248965
 pub const LIGHTS_BIND_GROUP_UUID: Uuid = Uuid::from_u128(7897465198640598654089653401853401968);
 pub const DIR_LIGHT_UUID: Uuid = Uuid::from_u128(50864540865401960354989784651053240851);
 
+pub const DUMMY_2D_TEX: Uuid = Uuid::from_u128(8674167498640649160513219685401);
+
 pub struct RenderTarget {
     pub color_format: TextureFormat,
     pub color: TextureView,
