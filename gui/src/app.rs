@@ -5,9 +5,12 @@ use std::{
     time::Instant,
 };
 
-use aurora_chest::{material::PbrMaterial, shader_defs::StrAsShaderDef};
+use aurora_chest::{
+    material::PbrMaterial,
+    shader_defs::{PbrMaterialVariant, StrAsShaderDef},
+};
 use aurora_core::{
-    render::{resource::RenderTarget, scene::GpuScene},
+    render::{resource::RenderTarget, scene::GpuScene, ShaderDefEnum},
     scene::{
         entity::{
             Camera, CameraProjection, DirectionalLight, Light, PerspectiveProjection, StaticMesh,
@@ -213,7 +216,7 @@ impl<'a> Application<'a> {
         flow.inner.build(
             &self.renderer,
             &mut self.gpu_scene,
-            Some(["TEX_BASE_COLOR".as_shader_def()].into()),
+            Some([PbrMaterialVariant::TexBaseColor.to_def()].into()),
             &targets,
         );
         flow.inner.set_queue(
