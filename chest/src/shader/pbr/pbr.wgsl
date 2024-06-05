@@ -1,44 +1,18 @@
-struct Camera {
-    view: mat4x4f,
-    proj: mat4x4f,
+#define_import_path aurora::pbr::pbr
+#import aurora::{
+    math::PI,
+    pbr::{
+        pbr_binding::{camera, dir_lights, material, tex_base_color, tex_sampler},
+        pbr_function::{construct_surface_lit, construct_surface_unlit},
+        pbr_type::{
+            Camera, DirectionalLight, PbrMaterial, PbrVertexInput, PbrVertexOutput
+        }
+    }
 }
-
-struct DirectionalLight {
-    pos: vec3f,
-    dir: vec3f,
-    col: vec3f,
-}
-
-struct PbrMaterial {
-    base_color: vec3f,
-    roughness: f32,
-    metallic: f32,
-}
-
-struct VertexInput {
-    @location(0) position: vec3f,
-    @location(1) normal: vec3f,
-    @location(2) uv: vec3f,
-}
-
-struct VertexOutput {
-    @builtin(position) position_cs: vec4f,
-    @location(0) position_ws: vec3f,
-    @location(1) normal_ws: vec3f,
-    @location(2) uv: vec2f,
-}
-
-@group(0) @binding(0) var<uniform> camera: Camera;
-
-@group(1) @binding(0) var<storage, read> dir_lights: array<DirectionalLight>;
-
-@group(2) @binding(0) var<uniform> material: PbrMaterial;
-@group(2) @binding(1) var tex_base_color: texture_2d<f32>;
-@group(2) @binding(2) var tex_sampler: sampler;
 
 @vertex
-fn vertex(input: VertexInput) -> VertexOutput {
-    var output: VertexOutput;
+fn vertex(input: PbrVertexInput) -> PbrVertexOutput {
+    var output: PbrVertexOutput;
     output.position_ws = input.position;
     output.position_cs = camera.proj * camera.view * vec4f(input.position, 1.);
     output.normal_ws = input.normal;
@@ -47,20 +21,39 @@ fn vertex(input: VertexInput) -> VertexOutput {
 }
 
 @fragment
-fn fragment(input: VertexOutput) -> @location(0) vec4f {
-#ifdef TEX_BASE_COLOR
-    var tex_col = textureSample(tex_base_color, tex_sampler, input.uv).rgb;
-#else
-    var tex_col = vec3f(1.);
-#endif
+fn fragment(input: PbrVertexOutput) -> @location(0) vec4f {
+    let unlit = construct_surface_unlit(input, material, input.uv);
 
-    var light_col = vec3f(0.);
+    var color = vec3f(0.);
 
     for (var i_light = 0u; i_light < arrayLength(&dir_lights); i_light += 1u) {
         let light = &dir_lights[i_light];
-        light_col += (saturate(dot((*light).dir, input.normal_ws)) * 0.8 + 0.2) * (*light).col;
+        let lit = construct_surface_lit((*light).dir, unlit);
+
+#ifdef GGX
+        let D = aurora::pbr::pbr_function::D_GGX(unlit.roughness, lit.NdotH);
+        let G = aurora::pbr::pbr_function::G2_HeightCorrelated(unlit.roughness, lit.NdotL, unlit.NdotV);
+#else
+        let D = 0.;
+        let G = 0.;
+#endif
+
+#ifdef LAMBERT
+        let f_diff = aurora::pbr::pbr_function::FD_Lambert(unlit.base_color) * PI;
+#else
+        let f_diff = vec3f(0.);
+#endif
+
+#ifdef SCHLICK
+        let F = aurora::pbr::pbr_function::F_Schlick(lit.HdotL, unlit.f_normal);
+#else
+        let F = 0.;
+#endif
+
+        let f_spec = D * G * F * PI;
+
+        color += lit.NdotL * (f_spec) * (*light).col;
     }
 
-    let color = material.base_color * light_col * tex_col;
-    return vec4f(color, 1.);
+    return vec4f(color * unlit.base_color, 1.);
 }

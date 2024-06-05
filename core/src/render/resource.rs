@@ -1,12 +1,12 @@
-use aurora_derive::ShaderData;
-use glam::{Mat4, Vec3, Vec4};
+use encase::{internal::WriteInto, DynamicStorageBuffer, ShaderType};
+use glam::{Mat4, Vec3};
 use uuid::Uuid;
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
     BindingResource, Buffer, BufferUsages, Device, Queue, TextureFormat, TextureView,
 };
 
-use crate::{render::ShaderData, scene::entity::StaticMesh};
+use crate::scene::entity::StaticMesh;
 
 pub const CAMERA_UUID: Uuid = Uuid::from_u128(4514851245144087048541368740532463840);
 pub const POST_PROCESS_COLOR_LAYOUT_UUID: Uuid = Uuid::from_u128(374318654136541653489410561064);
@@ -24,7 +24,7 @@ pub struct RenderTarget {
 }
 
 pub struct DynamicGpuBuffer {
-    raw: Vec<u8>,
+    raw: DynamicStorageBuffer<Vec<u8>>,
     buffer: Option<Buffer>,
     changed: bool,
     usage: BufferUsages,
@@ -33,23 +33,20 @@ pub struct DynamicGpuBuffer {
 impl DynamicGpuBuffer {
     pub fn new(usage: BufferUsages) -> Self {
         Self {
-            raw: Vec::new(),
+            raw: DynamicStorageBuffer::new(Vec::new()),
             buffer: None,
             changed: true,
-            usage,
+            usage: usage | BufferUsages::COPY_DST,
         }
     }
 
     pub fn set(&mut self, data: Vec<u8>) {
-        self.raw = data;
+        self.raw = DynamicStorageBuffer::new(data);
         self.changed = true;
     }
 
-    pub fn push(&mut self, data: &impl ShaderData) -> u32 {
-        let offset = self.raw.len() as u32;
-        self.raw.extend_from_slice(data.as_bytes());
-        self.changed = true;
-        offset
+    pub fn push<E: ShaderType + WriteInto>(&mut self, data: &E) -> u32 {
+        self.raw.write(data).unwrap() as u32
     }
 
     pub fn usage(&self) -> &BufferUsages {
@@ -57,27 +54,26 @@ impl DynamicGpuBuffer {
     }
 
     pub fn usage_mut(&mut self) -> &mut BufferUsages {
+        self.changed = true;
         &mut self.usage
     }
 
     pub fn write(&mut self, device: &Device, queue: &Queue) {
-        let cap = self.buffer.as_ref().map(Buffer::size).unwrap_or(0);
-        let size = self.raw.len() as u64;
-
-        if cap < size || (self.changed && size > 0) {
+        if self.changed && self.buffer.is_none() {
             self.buffer = Some(device.create_buffer_init(&BufferInitDescriptor {
                 label: None,
-                contents: &self.raw,
+                contents: self.raw.as_ref(),
                 usage: self.usage,
             }));
             self.changed = false;
         } else if let Some(buffer) = &self.buffer {
-            queue.write_buffer(&buffer, 0, &self.raw);
+            queue.write_buffer(&buffer, 0, self.raw.as_ref());
         }
     }
 
     pub fn clear(&mut self) {
-        self.raw.clear();
+        self.raw.as_mut().clear();
+        self.raw.set_offset(0);
     }
 
     pub fn binding(&self) -> Option<BindingResource> {
@@ -90,15 +86,16 @@ impl DynamicGpuBuffer {
 
     pub fn len<E>(&self) -> Option<usize> {
         let stride = std::mem::size_of::<E>();
-        if self.raw.len() % stride == 0 {
-            Some(self.raw.len() / stride)
+        let b = self.raw.as_ref();
+        if b.len() % stride == 0 {
+            Some(b.len() / stride)
         } else {
             None
         }
     }
 }
 
-#[derive(ShaderData)]
+#[derive(ShaderType)]
 pub struct Vertex {
     pub position: Vec3,
     pub normal: Vec3,
@@ -110,15 +107,16 @@ pub struct RenderMesh {
     pub offset: Option<u32>,
 }
 
-#[derive(ShaderData)]
+#[derive(ShaderType)]
 pub struct GpuCamera {
     pub view: Mat4,
     pub proj: Mat4,
+    pub position_ws: Vec3,
 }
 
-#[derive(ShaderData)]
+#[derive(ShaderType)]
 pub struct GpuDirectionalLight {
-    pub position: Vec4,
-    pub direction: Vec4,
-    pub color: Vec4,
+    pub position: Vec3,
+    pub direction: Vec3,
+    pub color: Vec3,
 }

@@ -6,12 +6,12 @@ edition = "2021"
 [dependencies]
 aurora_chest = { version = "0.1", path = "../chest" }
 aurora_core = { version = "0.1", path = "../core" }
-env_logger = "0.11"
-glam = "0.27"
-log = "0.4"
-naga_oil = { git = "https://github.com/Elabajaba/naga_oil.git", branch = "wgpu-0.20" }
-palette = "0.7"
-pollster = "0.3"
-uuid = { version = "1.8", features = ["v4"] }
-wgpu = { version = "0.20" }
-winit = "0.30"
+env_logger.workspace = true
+glam.workspace = true
+log.workspace = true
+naga_oil.workspace = true
+palette.workspace = true
+pollster.workspace = true
+uuid.workspace = true
+wgpu.workspace = true
+winit.workspace = true

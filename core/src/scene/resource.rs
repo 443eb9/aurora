@@ -1,7 +1,7 @@
 use std::{fs::File, path::Path};
 
 use dyn_clone::DynClone;
-use glam::{Mat4, Vec4};
+use glam::Mat4;
 use png::{Decoder, OutputInfo, Transformations};
 use uuid::Uuid;
 use wgpu::{
@@ -14,12 +14,13 @@ use crate::{
     render::{
         resource::{DynamicGpuBuffer, GpuCamera, GpuDirectionalLight, Vertex},
         scene::GpuAssets,
-        ShaderData, Transferable,
+        Transferable,
     },
     scene::{
         entity::{Camera, DirectionalLight},
         SceneObject,
     },
+    util::{self, ext::RgbToVec3},
     WgpuRenderer,
 };
 
@@ -28,6 +29,7 @@ impl Transferable for Camera {
 
     fn transfer(&self, _renderer: &WgpuRenderer) -> Self::GpuRepr {
         Self::GpuRepr {
+            position_ws: self.transform.translation,
             view: Mat4::from_quat(self.transform.rotation)
                 * Mat4::from_translation(self.transform.translation),
             proj: self.projection.compute_matrix(),
@@ -39,12 +41,10 @@ impl Transferable for DirectionalLight {
     type GpuRepr = GpuDirectionalLight;
 
     fn transfer(&self, _renderer: &WgpuRenderer) -> Self::GpuRepr {
-        let linear_color = self.color.into_linear();
-
         Self::GpuRepr {
-            position: self.transform.translation.extend(0.),
-            direction: self.transform.local_neg_z().extend(0.),
-            color: Vec4::new(linear_color.red, linear_color.green, linear_color.blue, 1.),
+            position: self.transform.translation,
+            direction: self.transform.local_neg_z(),
+            color: self.color.into_linear().to_vec3(),
         }
     }
 }
@@ -150,7 +150,7 @@ impl Transferable for Mesh {
         b.set(
             self.raw
                 .iter()
-                .flat_map(|v| v.as_bytes())
+                .flat_map(|v| util::struct_to_bytes(v))
                 .map(|b| *b)
                 .collect(),
         );

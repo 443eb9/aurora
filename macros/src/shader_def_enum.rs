@@ -1,4 +1,4 @@
-const DEF_NAME: &str = "DEF_NAME";
+const DEF_NAME: &str = "def_name";
 
 pub fn expand_shader_def_enum(input: syn::DeriveInput) -> proc_macro::TokenStream {
     let ty = &input.ident;
@@ -11,24 +11,26 @@ pub fn expand_shader_def_enum(input: syn::DeriveInput) -> proc_macro::TokenStrea
 
     for var in &defs.variants {
         let ident = &var.ident;
-        let def = {
-            if let Some(name) = var
-                .attrs
-                .iter()
-                .find(|attr| attr.path().get_ident().unwrap() == DEF_NAME)
-            {
-                match &name.meta {
-                    syn::Meta::NameValue(name) => format!("{:?}", name.value),
-                    _ => panic!(),
+        if let Some(name) = var
+            .attrs
+            .iter()
+            .find(|attr| attr.path().get_ident().unwrap() == DEF_NAME)
+        {
+            match &name.meta {
+                syn::Meta::NameValue(name) => {
+                    let def = &name.value;
+                    arms.push(quote::quote! {
+                        Self::#ident => #def.to_string(),
+                    });
                 }
-            } else {
-                variant_to_def(var.ident.to_string())
+                _ => panic!(),
             }
-        };
-
-        arms.push(quote::quote! {
-            Self::#ident => #def.to_string(),
-        });
+        } else {
+            let def = variant_to_def(var.ident.to_string());
+            arms.push(quote::quote! {
+                Self::#ident => #def.to_string(),
+            });
+        }
     }
 
     quote::quote! {

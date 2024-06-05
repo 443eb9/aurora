@@ -13,7 +13,7 @@ use aurora_core::{
         },
         scene::GpuScene,
     },
-    util::TypeIdAsUuid,
+    util::ext::TypeIdAsUuid,
     WgpuRenderer,
 };
 use naga_oil::compose::{
@@ -31,7 +31,7 @@ use wgpu::{
     ShaderSource, StencilState, StoreOp, VertexBufferLayout, VertexState, VertexStepMode,
 };
 
-use crate::material::PbrMaterial;
+use crate::{material::PbrMaterial, util};
 const CLEAR_COLOR: Color = Color {
     r: 43. / 255.,
     g: 44. / 255.,
@@ -158,13 +158,37 @@ impl RenderNode for PbrNode {
         );
 
         let mut composer = Composer::default();
+        util::add_shader_module(
+            &mut composer,
+            include_str!("shader/math.wgsl"),
+            shader_defs.clone(),
+        );
+        util::add_shader_module(
+            &mut composer,
+            include_str!("shader/pbr/pbr_type.wgsl"),
+            shader_defs.clone(),
+        );
+        util::add_shader_module(
+            &mut composer,
+            include_str!("shader/pbr/pbr_binding.wgsl"),
+            shader_defs.clone(),
+        );
+        util::add_shader_module(
+            &mut composer,
+            include_str!("shader/pbr/pbr_function.wgsl"),
+            shader_defs.clone(),
+        );
+        util::add_shader_module(
+            &mut composer,
+            include_str!("shader/pbr/pbr.wgsl"),
+            shader_defs.clone(),
+        );
+
         let shader = composer
             .make_naga_module(NagaModuleDescriptor {
                 source: include_str!("shader/pbr/pbr.wgsl"),
-                file_path: "",
-                shader_type: ShaderType::Wgsl,
                 shader_defs: shader_defs.unwrap_or_default(),
-                additional_imports: &[],
+                ..Default::default()
             })
             .unwrap();
 

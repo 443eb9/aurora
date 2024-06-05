@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use encase::ShaderType;
 use indexmap::IndexMap;
 use naga_oil::compose::ShaderDefValue;
 use uuid::Uuid;
@@ -18,7 +19,6 @@ use crate::{
             POST_PROCESS_DEPTH_LAYOUT_UUID,
         },
         scene::GpuScene,
-        ShaderData,
     },
     scene::entity::StaticMesh,
     WgpuRenderer,
@@ -149,7 +149,7 @@ impl RenderNode for GeneralNode {
                         ty: BindingType::Buffer {
                             ty: BufferBindingType::Uniform,
                             has_dynamic_offset: false,
-                            min_binding_size: GpuCamera::min_binding_size(),
+                            min_binding_size: Some(GpuCamera::min_size()),
                         },
                         count: None,
                     }],
@@ -169,7 +169,7 @@ impl RenderNode for GeneralNode {
                         ty: BindingType::Buffer {
                             ty: BufferBindingType::Storage { read_only: true },
                             has_dynamic_offset: false,
-                            min_binding_size: GpuDirectionalLight::min_binding_size(),
+                            min_binding_size: Some(GpuDirectionalLight::min_size()),
                         },
                         count: None,
                     }],
@@ -364,7 +364,7 @@ impl RenderNode for ImageFallbackNode {
                         view_formats: &[TextureFormat::Rgba8Unorm],
                     },
                     TextureDataOrder::MipMajor,
-                    &[1; 4],
+                    &[255; 4],
                 ),
             );
         }

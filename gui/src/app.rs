@@ -7,7 +7,7 @@ use std::{
 
 use aurora_chest::{
     material::PbrMaterial,
-    shader_defs::{PbrMaterialVariant, StrAsShaderDef},
+    shader_defs::{FresnelApprox, PbrDiffuse, PbrSpecular},
 };
 use aurora_core::{
     render::{resource::RenderTarget, scene::GpuScene, ShaderDefEnum},
@@ -22,7 +22,6 @@ use aurora_core::{
     util, WgpuRenderer,
 };
 use glam::{EulerRot, Quat, UVec2, Vec2, Vec3};
-use naga_oil::compose::ShaderDefValue;
 use palette::Srgb;
 use wgpu::{Surface, Texture, TextureFormat, TextureUsages, TextureViewDescriptor};
 use winit::{
@@ -106,10 +105,9 @@ impl<'a> Application<'a> {
         let uv_checker =
             scene.insert_object(Image::from_png_path("assets/uv_checker.png").unwrap());
         let pbr_material = PbrMaterial {
-            base_color: Srgb::new(1., 1., 1.),
             tex_base_color: None,
-            metallic: 0.,
-            roughness: 1.,
+            roughness: 0.,
+            ..Default::default()
         };
 
         let material_uuid = scene.insert_object(pbr_material);
@@ -213,12 +211,8 @@ impl<'a> Application<'a> {
 
         self.scene.camera = self.main_camera.lock().unwrap().camera;
         self.gpu_scene.sync(&mut self.scene, &self.renderer);
-        flow.inner.build(
-            &self.renderer,
-            &mut self.gpu_scene,
-            Some([PbrMaterialVariant::TexBaseColor.to_def()].into()),
-            &targets,
-        );
+        flow.inner
+            .build(&self.renderer, &mut self.gpu_scene, None, &targets);
         flow.inner.set_queue(
             flow.ids[2],
             self.scene.static_meshes.values().cloned().collect(),
@@ -254,9 +248,21 @@ impl<'a> Application<'a> {
         self.scene.camera = camera.camera;
         self.gpu_scene.sync(&mut self.scene, &self.renderer);
 
-        self.flow
-            .inner
-            .build(&self.renderer, &mut self.gpu_scene, None, &targets);
+        if self.delta < 0. {
+            self.flow.inner.build(
+                &self.renderer,
+                &mut self.gpu_scene,
+                Some(
+                    [
+                        PbrSpecular::GGX.to_def(),
+                        PbrDiffuse::Lambert.to_def(),
+                        FresnelApprox::Schlick.to_def(),
+                    ]
+                    .into(),
+                ),
+                &targets,
+            );
+        }
 
         self.flow.inner.set_queue(
             self.flow.ids[2],

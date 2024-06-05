@@ -5,15 +5,16 @@ edition = "2021"
 
 [dependencies]
 aurora_derive = { version = "0.1", path = "../macros" }
-dyn-clone = "1.0"
-flume = "0.11"
-glam = { version = "0.27", features = ["bytemuck"] }
-indexmap = "2.2"
-naga_oil = { git = "https://github.com/Elabajaba/naga_oil.git", branch = "wgpu-0.20" }
-log = "0.4"
-obj = "0.10"
-palette = "0.7"
-png = "0.17"
-pollster = "0.3"
-uuid = { version = "1.8", features = ["v4"] }
-wgpu = { version = "0.20", features = ["naga-ir"] }
+dyn-clone.workspace = true
+encase.workspace = true
+flume.workspace = true
+glam.workspace = true
+indexmap.workspace = true
+naga_oil.workspace = true
+log.workspace = true
+obj.workspace = true
+palette.workspace = true
+png.workspace = true
+pollster.workspace = true
+uuid.workspace = true
+wgpu.workspace = true

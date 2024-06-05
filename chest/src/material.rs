@@ -1,13 +1,14 @@
 use std::any::Any;
 
 use aurora_core::{
-    render::{resource::DUMMY_2D_TEX, scene::GpuAssets, ShaderData, Transferable},
+    render::{resource::DUMMY_2D_TEX, scene::GpuAssets, Transferable},
     scene::resource::Material,
-    util::TypeIdAsUuid,
+    util::ext::{RgbToVec3, TypeIdAsUuid},
     WgpuRenderer,
 };
-use aurora_derive::{MaterialObject, ShaderData};
-use glam::Vec4;
+use aurora_derive::MaterialObject;
+use encase::ShaderType;
+use glam::Vec3;
 use palette::Srgb;
 use uuid::Uuid;
 use wgpu::{
@@ -22,13 +23,32 @@ pub struct PbrMaterial {
     pub tex_base_color: Option<Uuid>,
     pub roughness: f32,
     pub metallic: f32,
+    /// Color when looking from normal direction.
+    pub f0: Srgb,
+    /// Color when looking at a glance angle.
+    pub f90: Srgb,
 }
 
-#[derive(ShaderData)]
+impl Default for PbrMaterial {
+    fn default() -> Self {
+        Self {
+            base_color: Srgb::new(1., 1., 1.),
+            tex_base_color: Default::default(),
+            roughness: 1.,
+            metallic: 0.,
+            f0: Srgb::new(1., 1., 1.),
+            f90: Srgb::new(1., 1., 1.),
+        }
+    }
+}
+
+#[derive(ShaderType)]
 pub struct PbrMaterialUniform {
-    pub base_color: Vec4,
+    pub base_color: Vec3,
     pub roughness: f32,
     pub metallic: f32,
+    pub f0: Vec3,
+    pub f90: Vec3,
 }
 
 impl Material for PbrMaterial {
@@ -46,7 +66,7 @@ impl Material for PbrMaterial {
                             ty: BindingType::Buffer {
                                 ty: BufferBindingType::Uniform,
                                 has_dynamic_offset: true,
-                                min_binding_size: PbrMaterialUniform::min_binding_size(),
+                                min_binding_size: Some(PbrMaterialUniform::min_size()),
                             },
                             count: None,
                         },
@@ -118,11 +138,12 @@ impl Transferable for PbrMaterial {
     type GpuRepr = PbrMaterialUniform;
 
     fn transfer(&self, _renderer: &WgpuRenderer) -> Self::GpuRepr {
-        let col = self.base_color.into_linear();
         PbrMaterialUniform {
-            base_color: Vec4::new(col.red, col.green, col.blue, 1.),
+            base_color: self.base_color.into_linear().to_vec3(),
             roughness: self.roughness,
             metallic: self.metallic,
+            f0: self.f0.into_linear().to_vec3(),
+            f90: self.f90.into_linear().to_vec3(),
         }
     }
 }

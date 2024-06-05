@@ -18,7 +18,7 @@ impl Default for CameraConfig {
     fn default() -> Self {
         Self {
             tranl_sensi: 2.,
-            rot_sensi: Vec2::splat(10.),
+            rot_sensi: Vec2::splat(20.),
             move_smoothness: 20.,
             rot_smoothness: 20.,
         }

@@ -1,23 +1,14 @@
-use std::{any::TypeId, fs::File, io::Write, path::Path};
+use std::{fs::File, io::Write, path::Path};
 
 use glam::{UVec2, UVec3};
 use png::ColorType;
-use uuid::Uuid;
 use wgpu::{
     BufferDescriptor, BufferUsages, CommandEncoderDescriptor, Device, Extent3d, ImageCopyBuffer,
     ImageDataLayout, Maintain, MapMode, Queue, Texture, TextureDescriptor, TextureDimension,
     TextureFormat, TextureUsages,
 };
 
-pub trait TypeIdAsUuid {
-    fn to_uuid(self) -> Uuid;
-}
-
-impl TypeIdAsUuid for TypeId {
-    fn to_uuid(self) -> Uuid {
-        unsafe { std::mem::transmute(self) }
-    }
-}
+pub mod ext;
 
 pub fn create_texture(
     device: &Device,
@@ -107,4 +98,8 @@ fn save_raw_bytes_to_image(dim: UVec2, bytes: &[u8], path: impl AsRef<Path>) {
     writer.finish().unwrap();
 
     File::create(path).unwrap().write_all(&png_image).unwrap();
+}
+
+pub fn struct_to_bytes<T>(s: &T) -> &[u8] {
+    unsafe { core::slice::from_raw_parts(s as *const T as *const u8, core::mem::size_of::<T>()) }
 }
