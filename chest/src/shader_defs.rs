@@ -8,21 +8,11 @@ pub enum PbrSpecular {
     GGX,
     #[def_name = "GTR"]
     GTR,
+    Anisotropic,
 }
 
 #[derive(ShaderDefEnum)]
 pub enum PbrDiffuse {
     Lambert,
-}
-
-#[derive(ShaderDefEnum)]
-pub enum FresnelApprox {
-    Schlick,
-}
-
-#[derive(ShaderDefEnum)]
-pub enum PbrBrdf {
-    Diffuse,
-    Specular,
-    MultiBounce,
+    Burley,
 }

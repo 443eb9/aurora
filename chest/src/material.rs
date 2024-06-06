@@ -23,10 +23,8 @@ pub struct PbrMaterial {
     pub tex_base_color: Option<Uuid>,
     pub roughness: f32,
     pub metallic: f32,
-    /// Color when looking from normal direction.
-    pub f0: Srgb,
-    /// Color when looking at a glance angle.
-    pub f90: Srgb,
+    pub ior: f32,
+    pub anisotropic: f32,
 }
 
 impl Default for PbrMaterial {
@@ -36,8 +34,8 @@ impl Default for PbrMaterial {
             tex_base_color: Default::default(),
             roughness: 1.,
             metallic: 0.,
-            f0: Srgb::new(1., 1., 1.),
-            f90: Srgb::new(1., 1., 1.),
+            ior: 2.,
+            anisotropic: 1.,
         }
     }
 }
@@ -47,8 +45,7 @@ pub struct PbrMaterialUniform {
     pub base_color: Vec3,
     pub roughness: f32,
     pub metallic: f32,
-    pub f0: Vec3,
-    pub f90: Vec3,
+    pub ior: f32,
 }
 
 impl Material for PbrMaterial {
@@ -142,8 +139,7 @@ impl Transferable for PbrMaterial {
             base_color: self.base_color.into_linear().to_vec3(),
             roughness: self.roughness,
             metallic: self.metallic,
-            f0: self.f0.into_linear().to_vec3(),
-            f90: self.f90.into_linear().to_vec3(),
+            ior: self.ior,
         }
     }
 }

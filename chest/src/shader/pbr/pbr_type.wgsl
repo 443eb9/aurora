@@ -16,8 +16,7 @@ struct PbrMaterial {
     base_color: vec3f,
     roughness: f32,
     metallic: f32,
-    f_normal: vec3f,
-    f_glance: vec3f,
+    ior: f32,
 }
 
 struct PbrVertexInput {
@@ -37,12 +36,12 @@ struct BrdfSurfaceUnlit {
     base_color: vec3f,
     roughness: f32,
     metallic: f32,
+    anisotropic: f32,
 
     normal: vec3f,
     view: vec3f,
 
-    f_normal: vec3f,
-    f_glance: vec3f,
+    f_normal: f32,
 
     NdotV: f32,
 }

@@ -7,7 +7,7 @@ use std::{
 
 use aurora_chest::{
     material::PbrMaterial,
-    shader_defs::{FresnelApprox, PbrDiffuse, PbrSpecular},
+    shader_defs::{PbrDiffuse, PbrSpecular},
 };
 use aurora_core::{
     render::{resource::RenderTarget, scene::GpuScene, ShaderDefEnum},
@@ -106,12 +106,12 @@ impl<'a> Application<'a> {
             scene.insert_object(Image::from_png_path("assets/uv_checker.png").unwrap());
         let pbr_material = PbrMaterial {
             tex_base_color: None,
-            roughness: 0.,
+            roughness: 0.1,
             ..Default::default()
         };
 
         let material_uuid = scene.insert_object(pbr_material);
-        let meshes = Mesh::from_obj("assets/large_model_sphere.obj")
+        let meshes = Mesh::from_obj("assets/large_sphere.obj")
             .into_iter()
             .map(|m| scene.insert_object(m))
             .collect::<Vec<_>>();
@@ -255,8 +255,8 @@ impl<'a> Application<'a> {
                 Some(
                     [
                         PbrSpecular::GGX.to_def(),
-                        PbrDiffuse::Lambert.to_def(),
-                        FresnelApprox::Schlick.to_def(),
+                        PbrSpecular::Anisotropic.to_def(),
+                        PbrDiffuse::Burley.to_def(),
                     ]
                     .into(),
                 ),

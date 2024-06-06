@@ -31,7 +31,11 @@ fn fragment(input: PbrVertexOutput) -> @location(0) vec4f {
         let lit = construct_surface_lit((*light).dir, unlit);
 
 #ifdef GGX
+#ifdef ANISOTROPIC
         let D = aurora::pbr::pbr_function::D_GGX(unlit.roughness, lit.NdotH);
+#else
+        let D = aurora::pbr::pbr_function::D_ANISO_GGX(unlit.roughness, light.NdotH, unlit.anisotropic);
+#endif
         let G = aurora::pbr::pbr_function::G2_HeightCorrelated(unlit.roughness, lit.NdotL, unlit.NdotV);
 #else
         let D = 0.;
@@ -39,20 +43,18 @@ fn fragment(input: PbrVertexOutput) -> @location(0) vec4f {
 #endif
 
 #ifdef LAMBERT
-        let f_diff = aurora::pbr::pbr_function::FD_Lambert(unlit.base_color) * PI;
+        let f_diff = aurora::pbr::pbr_function::FD_Lambert(lit.HdotL, unlit.f_normal);
+#else ifdef BURLEY
+        let f_diff = aurora::pbr::pbr_function::FD_Burley(unlit.roughness, lit.NdotL, unlit.NdotV, lit.HdotL);
 #else
         let f_diff = vec3f(0.);
 #endif
 
-#ifdef SCHLICK
         let F = aurora::pbr::pbr_function::F_Schlick(lit.HdotL, unlit.f_normal);
-#else
-        let F = 0.;
-#endif
 
-        let f_spec = D * G * F * PI;
+        let f_spec = D * G * F;
 
-        color += lit.NdotL * (f_spec) * (*light).col;
+        color += lit.NdotL * PI * PI * (f_spec + f_diff) * unlit.base_color * (*light).col;
     }
 
     return vec4f(color * unlit.base_color, 1.);

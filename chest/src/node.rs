@@ -244,7 +244,7 @@ impl RenderNode for PbrNode {
                     depth_stencil: Some(DepthStencilState {
                         format: target.depth_format.unwrap(),
                         depth_write_enabled: true,
-                        depth_compare: CompareFunction::LessEqual,
+                        depth_compare: CompareFunction::GreaterEqual,
                         stencil: StencilState::default(),
                         bias: DepthBiasState::default(),
                     }),
@@ -331,7 +331,7 @@ impl RenderNode for PbrNode {
                 depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
                     view: target.depth.as_ref().unwrap(),
                     depth_ops: Some(Operations {
-                        load: LoadOp::Clear(1.),
+                        load: LoadOp::Clear(0.),
                         store: StoreOp::Store,
                     }),
                     stencil_ops: None,

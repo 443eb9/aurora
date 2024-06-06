@@ -14,12 +14,13 @@ fn construct_surface_unlit(vert: PbrVertexOutput, material: PbrMaterial, uv: vec
     surface.base_color = material.base_color * textureSample(tex_base_color, tex_sampler, uv).rgb;
     surface.roughness = material.roughness * material.roughness;
     surface.metallic = material.metallic;
+    surface.anisotropic = material.anisotropic;
 
     surface.normal = vert.normal_ws;
-    surface.view = normalize(camera.position_ws - vert.position_ws);
+    surface.view = normalize(vert.position_ws - camera.position_ws);
 
-    surface.f_normal = material.f_normal;
-    surface.f_glance = material.f_glance;
+    let f = (material.ior - 1.) / (material.ior + 1.);
+    surface.f_normal = f * f;
 
     surface.NdotV = abs(dot(surface.normal, surface.view)) + 1e-5;
 
@@ -47,10 +48,14 @@ fn D_GGX(roughness: f32, NdotH: f32) -> f32 {
     return r2 / (PI * den * den);
 }
 
+fn D_ANISO_GGX(roughness: f32, NdotH: f32, aniso: f32) -> f32 {
+    
+}
+
 // Fresnel Reflectance
 // Schlick approximation
-fn F_Schlick(HdotL: f32, f_normal: vec3f) -> vec3f {
-    return f_normal + (vec3f(1.) - f_normal) * vec3f(pow(1. - HdotL, 5.));
+fn F_Schlick(HdotL: f32, f_normal: f32) -> f32 {
+    return f_normal + (1. - f_normal) * pow(1. - HdotL, 5.);
 }
 
 // Simplified by Lagarde
@@ -62,6 +67,13 @@ fn G2_HeightCorrelated(roughness: f32, NdotL: f32, NdotV: f32) -> f32 {
     return 0.5 / (l + v);
 }
 
-fn FD_Lambert(rho_ss: vec3f) -> vec3f {
-    return rho_ss / PI;
+fn FD_Lambert(HdotL: f32, f_normal: f32) -> f32 {
+    return (1. - F_Schlick(HdotL, f_normal)) / PI;
+}
+
+fn FD_Burley(roughness: f32, NdotL: f32, NdotV: f32, HdotL: f32) -> f32 {
+    let f = 0.5 + 2. * roughness * HdotL * HdotL;
+    let l = F_Schlick(NdotL, f);
+    let v = F_Schlick(NdotV, f);
+    return l * v / PI;
 }

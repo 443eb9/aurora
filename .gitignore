@@ -1,4 +1,4 @@
 /target
 /Cargo.lock
 /**/generated
-/**/large_model_*
+/**/large_*
