@@ -31,11 +31,7 @@ fn fragment(input: PbrVertexOutput) -> @location(0) vec4f {
         let lit = construct_surface_lit((*light).dir, unlit);
 
 #ifdef GGX
-#ifdef ANISOTROPIC
         let D = aurora::pbr::pbr_function::D_GGX(unlit.roughness, lit.NdotH);
-#else
-        let D = aurora::pbr::pbr_function::D_ANISO_GGX(unlit.roughness, light.NdotH, unlit.anisotropic);
-#endif
         let G = aurora::pbr::pbr_function::G2_HeightCorrelated(unlit.roughness, lit.NdotL, unlit.NdotV);
 #else
         let D = 0.;

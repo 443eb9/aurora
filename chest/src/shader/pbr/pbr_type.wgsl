@@ -36,7 +36,6 @@ struct BrdfSurfaceUnlit {
     base_color: vec3f,
     roughness: f32,
     metallic: f32,
-    anisotropic: f32,
 
     normal: vec3f,
     view: vec3f,

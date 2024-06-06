@@ -24,7 +24,6 @@ pub struct PbrMaterial {
     pub roughness: f32,
     pub metallic: f32,
     pub ior: f32,
-    pub anisotropic: f32,
 }
 
 impl Default for PbrMaterial {
@@ -35,7 +34,6 @@ impl Default for PbrMaterial {
             roughness: 1.,
             metallic: 0.,
             ior: 2.,
-            anisotropic: 1.,
         }
     }
 }

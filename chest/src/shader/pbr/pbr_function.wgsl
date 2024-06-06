@@ -14,8 +14,7 @@ fn construct_surface_unlit(vert: PbrVertexOutput, material: PbrMaterial, uv: vec
     surface.base_color = material.base_color * textureSample(tex_base_color, tex_sampler, uv).rgb;
     surface.roughness = material.roughness * material.roughness;
     surface.metallic = material.metallic;
-    surface.anisotropic = material.anisotropic;
-
+    
     surface.normal = vert.normal_ws;
     surface.view = normalize(vert.position_ws - camera.position_ws);
 
@@ -46,10 +45,6 @@ fn D_GGX(roughness: f32, NdotH: f32) -> f32 {
     let r2 = roughness * roughness;
     let den = 1. + NdotH * NdotH * (r2 - 1.);
     return r2 / (PI * den * den);
-}
-
-fn D_ANISO_GGX(roughness: f32, NdotH: f32, aniso: f32) -> f32 {
-    
 }
 
 // Fresnel Reflectance
