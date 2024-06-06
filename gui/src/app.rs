@@ -109,17 +109,19 @@ impl<'a> Application<'a> {
             roughness: 0.1,
             ..Default::default()
         };
-
-        let material_uuid = scene.insert_object(pbr_material);
-        let meshes = Mesh::from_obj("assets/large_sphere.obj")
+        let meshes = Mesh::from_obj("assets/large_sphere_array_5.obj")
             .into_iter()
             .map(|m| scene.insert_object(m))
             .collect::<Vec<_>>();
         let static_meshes = meshes
             .into_iter()
-            .map(|mesh| StaticMesh {
+            .enumerate()
+            .map(|(index, mesh)| StaticMesh {
                 mesh,
-                material: material_uuid,
+                material: scene.insert_object(PbrMaterial {
+                    roughness: 0.1 * (index + 1) as f32,
+                    ..pbr_material
+                }),
             })
             .collect::<Vec<_>>();
 

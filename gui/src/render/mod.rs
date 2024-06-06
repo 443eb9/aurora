@@ -14,7 +14,8 @@ impl Default for PbrRenderFlow {
         ids.push(flow.add::<GeneralNode>());
         ids.push(flow.add::<ImageFallbackNode>());
         ids.push(flow.add::<PbrNode>());
-        // ids.push(flow.add::<DepthViewNode>());
+        // ids.push(flow.add::<aurora_core::render::flow::PostProcessGeneralNode>());
+        // ids.push(flow.add::<aurora_chest::node::DepthViewNode>());
 
         Self { inner: flow, ids }
     }

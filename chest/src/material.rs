@@ -88,7 +88,11 @@ impl Material for PbrMaterial {
 
     fn create_bind_group(&self, renderer: &WgpuRenderer, assets: &mut GpuAssets, uuid: Uuid) {
         let ty = self.type_id().to_uuid();
-        let Some(buffer) = assets.buffers.get(&ty).and_then(|b| b.binding()) else {
+        let Some(buffer) = assets
+            .buffers
+            .get(&ty)
+            .and_then(|b| b.binding::<PbrMaterialUniform>())
+        else {
             return;
         };
         let layout = assets.layouts.get(&ty).unwrap();

@@ -3,7 +3,8 @@ use glam::{Mat4, Vec3};
 use uuid::Uuid;
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
-    BindingResource, Buffer, BufferUsages, Device, Queue, TextureFormat, TextureView,
+    BindingResource, Buffer, BufferBinding, BufferUsages, Device, Queue, TextureFormat,
+    TextureView,
 };
 
 use crate::scene::entity::StaticMesh;
@@ -76,12 +77,20 @@ impl DynamicGpuBuffer {
         self.raw.set_offset(0);
     }
 
-    pub fn binding(&self) -> Option<BindingResource> {
-        self.buffer.as_ref().map(|b| b.as_entire_binding())
+    pub fn binding<E: ShaderType>(&self) -> Option<BindingResource> {
+        Some(BindingResource::Buffer(BufferBinding {
+            buffer: self.buffer()?,
+            offset: 0,
+            size: Some(E::min_size()),
+        }))
     }
 
     pub fn buffer(&self) -> Option<&Buffer> {
         self.buffer.as_ref()
+    }
+
+    pub fn len_bytes(&self) -> usize {
+        self.raw.as_ref().len()
     }
 
     pub fn len<E>(&self) -> Option<usize> {

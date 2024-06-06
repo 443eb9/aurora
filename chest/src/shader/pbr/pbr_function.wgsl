@@ -21,7 +21,7 @@ fn construct_surface_unlit(vert: PbrVertexOutput, material: PbrMaterial, uv: vec
     let f = (material.ior - 1.) / (material.ior + 1.);
     surface.f_normal = f * f;
 
-    surface.NdotV = abs(dot(surface.normal, surface.view)) + 1e-5;
+    surface.NdotV = saturate(dot(surface.normal, surface.view));
 
     return surface;
 }

@@ -39,18 +39,21 @@ fn fragment(input: PbrVertexOutput) -> @location(0) vec4f {
 #endif
 
 #ifdef LAMBERT
-        let f_diff = aurora::pbr::pbr_function::FD_Lambert(lit.HdotL, unlit.f_normal);
+        let FD = aurora::pbr::pbr_function::FD_Lambert(lit.HdotL, unlit.f_normal);
 #else ifdef BURLEY
-        let f_diff = aurora::pbr::pbr_function::FD_Burley(unlit.roughness, lit.NdotL, unlit.NdotV, lit.HdotL);
+        let FD = aurora::pbr::pbr_function::FD_Burley(unlit.roughness, lit.NdotL, unlit.NdotV, lit.HdotL);
 #else
-        let f_diff = vec3f(0.);
+        let FD = vec3f(0.);
 #endif
 
         let F = aurora::pbr::pbr_function::F_Schlick(lit.HdotL, unlit.f_normal);
 
-        let f_spec = D * G * F;
+        let f_spec = D * G * F * PI;
+        let f_diff = FD * PI;
 
-        color += lit.NdotL * PI * PI * (f_spec + f_diff) * unlit.base_color * (*light).col;
+        // color += lit.NdotL * (f_spec + f_diff) * unlit.base_color * (*light).col;
+        // color = vec3f(unlit.NdotV);
+        color = input.position_ws;
     }
 
     return vec4f(color * unlit.base_color, 1.);

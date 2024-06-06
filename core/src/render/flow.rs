@@ -192,8 +192,8 @@ impl RenderNode for GeneralNode {
         let assets = &mut scene.assets;
 
         let (Some(bf_camera), Some(bf_dir_lights)) = (
-            assets.buffers[&CAMERA_UUID].binding(),
-            assets.buffers[&DIR_LIGHT_UUID].binding(),
+            assets.buffers[&CAMERA_UUID].binding::<GpuCamera>(),
+            assets.buffers[&DIR_LIGHT_UUID].binding::<GpuDirectionalLight>(),
         ) else {
             return;
         };
