@@ -21,7 +21,7 @@ use aurora_core::{
     },
     util, WgpuRenderer,
 };
-use glam::{EulerRot, Quat, UVec2, Vec2, Vec3};
+use glam::{EulerRot, Mat4, Quat, UVec2, Vec2, Vec3};
 use palette::Srgb;
 use wgpu::{Surface, Texture, TextureFormat, TextureUsages, TextureViewDescriptor};
 use winit::{
@@ -87,7 +87,7 @@ impl<'a> Application<'a> {
         let main_camera = ControllableCamera::new(
             Camera {
                 transform: Transform {
-                    translation: Vec3::new(0., 0., -10.),
+                    translation: Vec3::new(0., 0., 10.),
                     ..Default::default()
                 },
                 projection: CameraProjection::Perspective(PerspectiveProjection {
@@ -119,7 +119,7 @@ impl<'a> Application<'a> {
             .map(|(index, mesh)| StaticMesh {
                 mesh,
                 material: scene.insert_object(PbrMaterial {
-                    roughness: 0.1 * (index + 1) as f32,
+                    roughness: 0.2 * (index + 1) as f32,
                     ..pbr_material
                 }),
             })
@@ -127,7 +127,7 @@ impl<'a> Application<'a> {
 
         scene.lights.push(Light::Directional(DirectionalLight {
             transform: Transform {
-                rotation: Quat::from_euler(EulerRot::YXZ, FRAC_PI_2 + FRAC_PI_3, FRAC_PI_4, 0.),
+                rotation: Quat::from_mat4(&Mat4::look_at_lh(Vec3::ZERO, Vec3::NEG_ONE, Vec3::Y)),
                 ..Default::default()
             },
             color: Srgb::new(1., 1., 1.),

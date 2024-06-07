@@ -66,7 +66,7 @@ impl Transform {
 
     #[inline]
     pub fn local_move(&mut self, delta: Vec3) {
-        self.translation += self.rotation.mul_vec3(delta);
+        self.translation += self.rotation.inverse().mul_vec3(delta);
     }
 
     #[inline]
@@ -137,6 +137,7 @@ impl PerspectiveProjection {
     #[inline]
     pub fn compute_matrix(&self) -> Mat4 {
         Mat4::perspective_rh(self.fov, self.aspect_ratio, self.near, self.far)
+        // Mat4::perspective_infinite_reverse_rh(self.fov, self.aspect_ratio, self.near)
     }
 }
 

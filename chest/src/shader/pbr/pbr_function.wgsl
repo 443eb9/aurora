@@ -16,21 +16,21 @@ fn construct_surface_unlit(vert: PbrVertexOutput, material: PbrMaterial, uv: vec
     surface.metallic = material.metallic;
     
     surface.normal = vert.normal_ws;
-    surface.view = normalize(vert.position_ws - camera.position_ws);
+    surface.view = normalize(camera.position_ws - vert.position_ws);
 
     let f = (material.ior - 1.) / (material.ior + 1.);
     surface.f_normal = f * f;
 
-    surface.NdotV = saturate(dot(surface.normal, surface.view));
+    surface.NdotV = saturate(dot(surface.normal, surface.view)) + 1e-5;
 
     return surface;
 }
 
 // Construct a BrdfSurface WITH light related info.
-fn construct_surface_lit(light: vec3f, unlit: BrdfSurfaceUnlit) -> BrdfSurfaceLit {
+fn construct_surface_lit(position_ws: vec3f, light: vec3f, unlit: BrdfSurfaceUnlit) -> BrdfSurfaceLit {
     var surface: BrdfSurfaceLit;
 
-    surface.light = light;
+    surface.light = normalize(light - position_ws);
     surface.half = normalize(surface.light + unlit.view);
     
     surface.NdotL = saturate(dot(unlit.normal, surface.light));

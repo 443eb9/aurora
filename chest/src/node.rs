@@ -24,7 +24,7 @@ use uuid::Uuid;
 use wgpu::{
     vertex_attr_array, BindGroupDescriptor, BindGroupEntry, BindingResource, BufferAddress,
     BufferUsages, Color, ColorTargetState, ColorWrites, CommandEncoderDescriptor, CompareFunction,
-    DepthBiasState, DepthStencilState, Face, FilterMode, FragmentState, LoadOp, MultisampleState,
+    DepthBiasState, DepthStencilState, FilterMode, FragmentState, LoadOp, MultisampleState,
     Operations, PipelineCompilationOptions, PipelineLayoutDescriptor, PrimitiveState,
     RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor,
     RenderPipeline, RenderPipelineDescriptor, Sampler, SamplerDescriptor, ShaderModuleDescriptor,
@@ -249,7 +249,7 @@ impl RenderNode for PbrNode {
                         bias: DepthBiasState::default(),
                     }),
                     primitive: PrimitiveState {
-                        cull_mode: Some(Face::Back),
+                        cull_mode: None,
                         ..Default::default()
                     },
                     multiview: None,

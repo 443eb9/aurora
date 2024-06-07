@@ -1,7 +1,6 @@
 use std::{fs::File, path::Path};
 
 use dyn_clone::DynClone;
-use glam::Mat4;
 use png::{Decoder, OutputInfo, Transformations};
 use uuid::Uuid;
 use wgpu::{
@@ -30,8 +29,7 @@ impl Transferable for Camera {
     fn transfer(&self, _renderer: &WgpuRenderer) -> Self::GpuRepr {
         Self::GpuRepr {
             position_ws: self.transform.translation,
-            view: Mat4::from_quat(self.transform.rotation)
-                * Mat4::from_translation(self.transform.translation),
+            view: self.transform.compute_matrix().inverse(),
             proj: self.projection.compute_matrix(),
         }
     }

@@ -51,12 +51,12 @@ impl ControllableCamera {
         };
 
         match key {
-            KeyCode::KeyW => self.current_vel.z = self.config.tranl_sensi * t,
-            KeyCode::KeyS => self.current_vel.z = self.config.tranl_sensi * -t,
-            KeyCode::KeyA => self.current_vel.x = self.config.tranl_sensi * t,
-            KeyCode::KeyD => self.current_vel.x = self.config.tranl_sensi * -t,
-            KeyCode::KeyQ => self.current_vel.y = self.config.tranl_sensi * t,
-            KeyCode::KeyE => self.current_vel.y = self.config.tranl_sensi * -t,
+            KeyCode::KeyW => self.current_vel.z = self.config.tranl_sensi * -t,
+            KeyCode::KeyS => self.current_vel.z = self.config.tranl_sensi * t,
+            KeyCode::KeyA => self.current_vel.x = self.config.tranl_sensi * -t,
+            KeyCode::KeyD => self.current_vel.x = self.config.tranl_sensi * t,
+            KeyCode::KeyQ => self.current_vel.y = self.config.tranl_sensi * -t,
+            KeyCode::KeyE => self.current_vel.y = self.config.tranl_sensi * t,
             _ => {}
         }
     }
@@ -66,7 +66,6 @@ impl ControllableCamera {
             .camera
             .transform
             .rotation
-            .inverse()
             .mul_vec3(self.current_vel * self.config.tranl_sensi * delta);
 
         self.camera.transform.translation = self.camera.transform.translation.lerp(
@@ -96,8 +95,8 @@ impl ControllableCamera {
     pub fn mouse_move(&mut self, offset: Vec2, delta: f32) {
         if self.on_rotate {
             let (mut yaw, mut pitch, _) = self.target_camera.rotation.to_euler(EulerRot::YXZ);
-            yaw += (offset.x * delta * self.config.rot_sensi.x).to_radians();
-            pitch += (offset.y * delta * self.config.rot_sensi.y).to_radians();
+            yaw -= (offset.x * delta * self.config.rot_sensi.x).to_radians();
+            pitch -= (offset.y * delta * self.config.rot_sensi.y).to_radians();
             pitch = pitch.clamp(-1.54, 1.54);
             self.target_camera.rotation =
                 Quat::from_axis_angle(Vec3::Y, yaw) * Quat::from_axis_angle(Vec3::X, pitch);

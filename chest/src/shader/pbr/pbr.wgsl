@@ -28,7 +28,7 @@ fn fragment(input: PbrVertexOutput) -> @location(0) vec4f {
 
     for (var i_light = 0u; i_light < arrayLength(&dir_lights); i_light += 1u) {
         let light = &dir_lights[i_light];
-        let lit = construct_surface_lit((*light).dir, unlit);
+        let lit = construct_surface_lit(vec3f(0.), (*light).dir, unlit);
 
 #ifdef GGX
         let D = aurora::pbr::pbr_function::D_GGX(unlit.roughness, lit.NdotH);
@@ -51,9 +51,9 @@ fn fragment(input: PbrVertexOutput) -> @location(0) vec4f {
         let f_spec = D * G * F * PI;
         let f_diff = FD * PI;
 
-        // color += lit.NdotL * (f_spec + f_diff) * unlit.base_color * (*light).col;
+        color += lit.NdotL * (f_spec + f_diff) * unlit.base_color * (*light).col;
         // color = vec3f(unlit.NdotV);
-        color = input.position_ws;
+        // color = input.position_ws;
     }
 
     return vec4f(color * unlit.base_color, 1.);
