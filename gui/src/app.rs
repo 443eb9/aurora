@@ -12,7 +12,7 @@ use aurora_core::{
     render::{resource::RenderTarget, scene::GpuScene, ShaderDefEnum},
     scene::{
         entity::{
-            Camera, CameraProjection, DirectionalLight, Light, OrthographicProjection,
+            Camera, CameraProjection, DirectionalLight, Exposure, Light, OrthographicProjection,
             PerspectiveProjection, StaticMesh, Transform,
         },
         resource::{Image, Mesh},
@@ -98,6 +98,7 @@ impl<'a> Application<'a> {
                 // projection: CameraProjection::Orthographic(OrthographicProjection::symmetric(
                 //     8., 4.5, -1000., 1000.,
                 // )),
+                exposure: Exposure { ev100: 9.7 },
             },
             CameraConfig::default(),
         );
@@ -132,7 +133,7 @@ impl<'a> Application<'a> {
                 ..Default::default()
             },
             color: Srgb::new(1., 1., 1.),
-            illuminance: 1000.,
+            intensity: 2000.,
         }));
         static_meshes.into_iter().for_each(|sm| {
             scene.insert_object(sm);

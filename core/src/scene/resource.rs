@@ -31,6 +31,7 @@ impl Transferable for Camera {
             position_ws: self.transform.translation,
             view: self.transform.compute_matrix().inverse(),
             proj: self.projection.compute_matrix(),
+            exposure: self.exposure.ev100,
         }
     }
 }
@@ -43,7 +44,7 @@ impl Transferable for DirectionalLight {
             position: self.transform.translation,
             direction: self.transform.local_neg_z(),
             color: self.color.into_linear().to_vec3(),
-            illuminance: self.illuminance,
+            intensity: self.intensity,
         }
     }
 }

@@ -121,6 +121,7 @@ pub struct GpuCamera {
     pub view: Mat4,
     pub proj: Mat4,
     pub position_ws: Vec3,
+    pub exposure: f32,
 }
 
 #[derive(ShaderType)]
@@ -128,5 +129,5 @@ pub struct GpuDirectionalLight {
     pub position: Vec3,
     pub direction: Vec3,
     pub color: Vec3,
-    pub illuminance: f32,
+    pub intensity: f32,
 }

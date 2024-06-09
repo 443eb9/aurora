@@ -6,6 +6,8 @@ use uuid::Uuid;
 pub struct Camera {
     pub transform: Transform,
     pub projection: CameraProjection,
+    /// Camera exposure in EV100
+    pub exposure: Exposure,
 }
 
 pub enum Light {
@@ -16,8 +18,13 @@ pub enum Light {
 pub struct DirectionalLight {
     pub transform: Transform,
     pub color: Srgb,
-    /// In lx.
-    pub illuminance: f32,
+    pub intensity: f32,
+}
+
+pub struct PointLight {
+    pub transform : Transform,
+    pub color: Srgb,
+    pub intensity: f32,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -174,5 +181,24 @@ impl OrthographicProjection {
             self.near,
             self.far,
         )
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct Exposure {
+    pub ev100: f32,
+}
+
+impl Default for Exposure {
+    fn default() -> Self {
+        Self { ev100: 9.7 }
+    }
+}
+
+impl Exposure {
+    pub fn from_physical(aperture: f32, shutter_speed: f32, sensitivity: f32) -> Self {
+        Self {
+            ev100: (aperture * aperture * 100. / shutter_speed / sensitivity).log2(),
+        }
     }
 }

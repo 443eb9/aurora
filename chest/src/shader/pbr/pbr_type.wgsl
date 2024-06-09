@@ -4,13 +4,14 @@ struct Camera {
     view: mat4x4f,
     proj: mat4x4f,
     position_ws: vec3f,
+    exposure: f32,
 }
 
 struct DirectionalLight {
-    pos: vec3f,
-    dir: vec3f,
-    col: vec3f,
-    ill: f32,
+    positioin_ws: vec3f,
+    direction: vec3f,
+    color: vec3f,
+    intensity: f32,
 }
 
 struct PbrMaterial {
