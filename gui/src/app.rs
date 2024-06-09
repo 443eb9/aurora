@@ -13,7 +13,7 @@ use aurora_core::{
     scene::{
         entity::{
             Camera, CameraProjection, DirectionalLight, Exposure, Light, OrthographicProjection,
-            PerspectiveProjection, StaticMesh, Transform,
+            PerspectiveProjection, PointLight, StaticMesh, Transform,
         },
         resource::{Image, Mesh},
         Scene,
@@ -83,6 +83,54 @@ impl<'a> Application<'a> {
                 | TextureUsages::COPY_SRC,
         );
 
+        let mut scene = Scene::default();
+
+        let uv_checker =
+            scene.insert_object(Image::from_path("gui/assets/uv_checker.png").unwrap());
+        let pbr_material = PbrMaterial {
+            tex_base_color: Some(uv_checker),
+            ..Default::default()
+        };
+        let meshes = Mesh::from_obj("gui/assets/large_sphere_array_5_with_plane.obj")
+            .into_iter()
+            .map(|m| scene.insert_object(m))
+            .collect::<Vec<_>>();
+        let static_meshes = meshes
+            .into_iter()
+            .enumerate()
+            .map(|(index, mesh)| StaticMesh {
+                mesh,
+                material: scene.insert_object(PbrMaterial {
+                    roughness: 0.2 * (index + 1) as f32,
+                    ..pbr_material
+                }),
+            })
+            .collect::<Vec<_>>();
+        static_meshes.into_iter().for_each(|sm| {
+            scene.insert_object(sm);
+        });
+
+        scene.lights.push(Light::Directional(DirectionalLight {
+            transform: Transform {
+                rotation: Quat::from_mat4(&Mat4::look_at_lh(Vec3::ZERO, Vec3::NEG_ONE, Vec3::Y)),
+                ..Default::default()
+            },
+            color: Srgb::new(1., 1., 1.),
+            intensity: 2000.,
+        }));
+        scene.lights.push(Light::Point(PointLight {
+            transform: Transform {
+                translation: Vec3 {
+                    x: 0.,
+                    y: 2.,
+                    z: 0.,
+                },
+                ..Default::default()
+            },
+            color: Srgb::new(1., 0., 0.),
+            intensity: 100000.,
+        }));
+
         let main_camera = ControllableCamera::new(
             Camera {
                 transform: Transform {
@@ -102,42 +150,6 @@ impl<'a> Application<'a> {
             },
             CameraConfig::default(),
         );
-
-        let mut scene = Scene::default();
-
-        let uv_checker =
-            scene.insert_object(Image::from_path("gui/assets/uv_checker.png").unwrap());
-        let pbr_material = PbrMaterial {
-            tex_base_color: Some(uv_checker),
-            ..Default::default()
-        };
-        let meshes = Mesh::from_obj("gui/assets/large_sphere_array_5.obj")
-            .into_iter()
-            .map(|m| scene.insert_object(m))
-            .collect::<Vec<_>>();
-        let static_meshes = meshes
-            .into_iter()
-            .enumerate()
-            .map(|(index, mesh)| StaticMesh {
-                mesh,
-                material: scene.insert_object(PbrMaterial {
-                    roughness: 0.2 * (index + 1) as f32,
-                    ..pbr_material
-                }),
-            })
-            .collect::<Vec<_>>();
-
-        scene.lights.push(Light::Directional(DirectionalLight {
-            transform: Transform {
-                rotation: Quat::from_mat4(&Mat4::look_at_lh(Vec3::ZERO, Vec3::NEG_ONE, Vec3::Y)),
-                ..Default::default()
-            },
-            color: Srgb::new(1., 1., 1.),
-            intensity: 2000.,
-        }));
-        static_meshes.into_iter().for_each(|sm| {
-            scene.insert_object(sm);
-        });
 
         let gpu_scene = GpuScene::default();
 

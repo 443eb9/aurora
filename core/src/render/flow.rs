@@ -14,9 +14,9 @@ use wgpu::{
 use crate::{
     render::{
         resource::{
-            GpuCamera, GpuDirectionalLight, RenderMesh, RenderTarget, CAMERA_UUID, DIR_LIGHT_UUID,
-            DUMMY_2D_TEX, LIGHTS_BIND_GROUP_UUID, POST_PROCESS_COLOR_LAYOUT_UUID,
-            POST_PROCESS_DEPTH_LAYOUT_UUID,
+            GpuCamera, GpuDirectionalLight, GpuPointLight, RenderMesh, RenderTarget, CAMERA_UUID,
+            DIR_LIGHT_UUID, DUMMY_2D_TEX, LIGHTS_BIND_GROUP_UUID, POINT_LIGHT_UUID,
+            POST_PROCESS_COLOR_LAYOUT_UUID, POST_PROCESS_DEPTH_LAYOUT_UUID,
         },
         scene::GpuScene,
     },
@@ -163,16 +163,30 @@ impl RenderNode for GeneralNode {
                 .device
                 .create_bind_group_layout(&BindGroupLayoutDescriptor {
                     label: Some("lights_layout"),
-                    entries: &[BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: ShaderStages::FRAGMENT,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Storage { read_only: true },
-                            has_dynamic_offset: false,
-                            min_binding_size: Some(GpuDirectionalLight::min_size()),
+                    entries: &[
+                        // Directional
+                        BindGroupLayoutEntry {
+                            binding: 0,
+                            visibility: ShaderStages::FRAGMENT,
+                            ty: BindingType::Buffer {
+                                ty: BufferBindingType::Storage { read_only: true },
+                                has_dynamic_offset: false,
+                                min_binding_size: Some(GpuDirectionalLight::min_size()),
+                            },
+                            count: None,
                         },
-                        count: None,
-                    }],
+                        // Point
+                        BindGroupLayoutEntry {
+                            binding: 1,
+                            visibility: ShaderStages::FRAGMENT,
+                            ty: BindingType::Buffer {
+                                ty: BufferBindingType::Storage { read_only: true },
+                                has_dynamic_offset: false,
+                                min_binding_size: Some(GpuPointLight::min_size()),
+                            },
+                            count: None,
+                        },
+                    ],
                 });
 
             scene
@@ -191,14 +205,15 @@ impl RenderNode for GeneralNode {
     ) {
         let assets = &mut scene.assets;
 
-        let (Some(bf_camera), Some(bf_dir_lights)) = (
-            assets.buffers[&CAMERA_UUID].binding::<GpuCamera>(),
-            assets.buffers[&DIR_LIGHT_UUID].binding::<GpuDirectionalLight>(),
+        let (Some(bf_camera), Some(bf_dir_lights), Some(bf_point_lights)) = (
+            assets.buffers[&CAMERA_UUID].entire_binding(),
+            assets.buffers[&DIR_LIGHT_UUID].entire_binding(),
+            assets.buffers[&POINT_LIGHT_UUID].entire_binding(),
         ) else {
             return;
         };
 
-        let l_camera = assets.layouts.get(&CAMERA_UUID).unwrap();
+        let l_camera = &assets.layouts[&CAMERA_UUID];
         assets.bind_groups.insert(
             CAMERA_UUID,
             renderer.device.create_bind_group(&BindGroupDescriptor {
@@ -211,16 +226,22 @@ impl RenderNode for GeneralNode {
             }),
         );
 
-        let l_lights = assets.layouts.get(&LIGHTS_BIND_GROUP_UUID).unwrap();
+        let l_lights = &assets.layouts[&LIGHTS_BIND_GROUP_UUID];
         assets.bind_groups.insert(
             LIGHTS_BIND_GROUP_UUID,
             renderer.device.create_bind_group(&BindGroupDescriptor {
                 label: Some("lights_bind_group"),
                 layout: &l_lights,
-                entries: &[BindGroupEntry {
-                    binding: 0,
-                    resource: bf_dir_lights,
-                }],
+                entries: &[
+                    BindGroupEntry {
+                        binding: 0,
+                        resource: bf_dir_lights,
+                    },
+                    BindGroupEntry {
+                        binding: 1,
+                        resource: bf_point_lights,
+                    },
+                ],
             }),
         );
     }

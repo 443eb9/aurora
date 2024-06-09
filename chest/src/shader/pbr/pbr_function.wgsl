@@ -16,25 +16,25 @@ fn construct_surface_unlit(vert: PbrVertexOutput, material: PbrMaterial, uv: vec
     surface.metallic = material.metallic;
     
     surface.normal = vert.normal_ws;
-    surface.view = normalize(camera.position_ws - vert.position_ws);
+    surface.view = normalize(camera.position - vert.position_ws);
 
     let f = (material.ior - 1.) / (material.ior + 1.);
     surface.f_normal = f * f;
 
-    surface.NdotV = saturate(dot(surface.normal, surface.view)) + 1e-5;
+    surface.NdotV = saturate(dot(surface.normal, surface.view));
 
     return surface;
 }
 
 // Construct a BrdfSurface WITH light related info.
-fn construct_surface_lit(position_ws: vec3f, light: vec3f, unlit: BrdfSurfaceUnlit) -> BrdfSurfaceLit {
+fn construct_surface_lit(light: vec3f, unlit: ptr<function, BrdfSurfaceUnlit>) -> BrdfSurfaceLit {
     var surface: BrdfSurfaceLit;
 
-    surface.light = normalize(light - position_ws);
-    surface.half = normalize(surface.light + unlit.view);
+    surface.light = light;
+    surface.half = normalize(surface.light + (*unlit).view);
     
-    surface.NdotL = saturate(dot(unlit.normal, surface.light));
-    surface.NdotH = saturate(dot(unlit.normal, surface.half));
+    surface.NdotL = saturate(dot((*unlit).normal, surface.light));
+    surface.NdotH = saturate(dot((*unlit).normal, surface.half));
     surface.HdotL = saturate(dot(surface.half, surface.light));
 
     return surface;
@@ -77,4 +77,36 @@ fn FD_Burley(unlit: ptr<function, BrdfSurfaceUnlit>, lit: ptr<function, BrdfSurf
 
 fn apply_exposure(scene: vec3f) -> vec3f {
     return scene / (pow(2., camera.exposure) * 1.2);
+}
+
+fn apply_lighting(
+    direction: vec3f,
+    intensity: f32,
+    color: vec3f,
+    unlit: ptr<function, BrdfSurfaceUnlit>
+) -> vec3f {
+    var lit = construct_surface_lit(direction, unlit);
+
+#ifdef GGX
+    let D = D_GGX(unlit, &lit);
+    let G = G2_HeightCorrelated(unlit, &lit);
+#else
+    let D = 0.;
+    let G = 0.;
+#endif
+
+#ifdef LAMBERT
+    let FD = FD_Lambert(unlit, &lit);
+#else ifdef BURLEY
+    let FD = FD_Burley(unlit, &lit);
+#else
+    let FD = vec3f(0.);
+#endif
+
+    let F = F_Schlick(lit.HdotL, (*unlit).f_normal);
+
+    let f_spec = D * G * F * PI;
+    let f_diff = FD * PI;
+
+    return lit.NdotL * intensity * (f_spec + f_diff) * color;
 }

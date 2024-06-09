@@ -14,6 +14,7 @@ pub const POST_PROCESS_COLOR_LAYOUT_UUID: Uuid = Uuid::from_u128(374318654136541
 pub const POST_PROCESS_DEPTH_LAYOUT_UUID: Uuid = Uuid::from_u128(887897413248965416140604016399654);
 pub const LIGHTS_BIND_GROUP_UUID: Uuid = Uuid::from_u128(7897465198640598654089653401853401968);
 pub const DIR_LIGHT_UUID: Uuid = Uuid::from_u128(50864540865401960354989784651053240851);
+pub const POINT_LIGHT_UUID: Uuid = Uuid::from_u128(7901283699454486410056310);
 
 pub const DUMMY_2D_TEX: Uuid = Uuid::from_u128(8674167498640649160513219685401);
 
@@ -85,6 +86,10 @@ impl DynamicGpuBuffer {
         }))
     }
 
+    pub fn entire_binding(&self) -> Option<BindingResource> {
+        self.buffer.as_ref().map(|b| b.as_entire_binding())
+    }
+
     pub fn buffer(&self) -> Option<&Buffer> {
         self.buffer.as_ref()
     }
@@ -126,8 +131,14 @@ pub struct GpuCamera {
 
 #[derive(ShaderType)]
 pub struct GpuDirectionalLight {
-    pub position: Vec3,
     pub direction: Vec3,
+    pub color: Vec3,
+    pub intensity: f32,
+}
+
+#[derive(ShaderType)]
+pub struct GpuPointLight {
+    pub position: Vec3,
     pub color: Vec3,
     pub intensity: f32,
 }

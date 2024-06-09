@@ -5,7 +5,7 @@ use wgpu::{BindGroup, BindGroupLayout, BufferUsages, Texture};
 
 use crate::{
     render::{
-        resource::{DynamicGpuBuffer, CAMERA_UUID, DIR_LIGHT_UUID},
+        resource::{DynamicGpuBuffer, CAMERA_UUID, DIR_LIGHT_UUID, POINT_LIGHT_UUID},
         Transferable,
     },
     scene::{entity::Light, resource::Material, AssetEvent, AssetType, Scene},
@@ -36,28 +36,25 @@ pub struct GpuScene {
 
 impl GpuScene {
     pub fn sync(&mut self, scene: &mut Scene, renderer: &WgpuRenderer) {
-        let bf_camera = self
-            .assets
-            .buffers
-            .entry(CAMERA_UUID)
-            .or_insert_with(|| DynamicGpuBuffer::new(BufferUsages::UNIFORM));
-        bf_camera.clear();
+        let mut bf_camera = DynamicGpuBuffer::new(BufferUsages::UNIFORM);
         bf_camera.push(&scene.camera.transfer(renderer));
         bf_camera.write(&renderer.device, &renderer.queue);
+        self.assets.buffers.insert(CAMERA_UUID, bf_camera);
 
-        let bf_dir_lights = self
-            .assets
-            .buffers
-            .entry(DIR_LIGHT_UUID)
-            .or_insert_with(|| DynamicGpuBuffer::new(BufferUsages::STORAGE));
-        bf_dir_lights.clear();
+        let mut bf_dir_lights = DynamicGpuBuffer::new(BufferUsages::STORAGE);
+        let mut bf_point_lights = DynamicGpuBuffer::new(BufferUsages::STORAGE);
         for light in &scene.lights {
             match light {
                 Light::Directional(l) => bf_dir_lights.push(&l.transfer(renderer)),
+                Light::Point(l) => bf_point_lights.push(&l.transfer(renderer)),
             };
         }
 
         bf_dir_lights.write(&renderer.device, &renderer.queue);
+        bf_point_lights.write(&renderer.device, &renderer.queue);
+
+        self.assets.buffers.insert(DIR_LIGHT_UUID, bf_dir_lights);
+        self.assets.buffers.insert(POINT_LIGHT_UUID, bf_point_lights);
 
         scene.asset_events.drain(..).for_each(|ae| match ae {
             AssetEvent::Added(uuid, ty) => match ty {

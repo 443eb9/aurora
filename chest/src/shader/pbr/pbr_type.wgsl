@@ -3,13 +3,18 @@
 struct Camera {
     view: mat4x4f,
     proj: mat4x4f,
-    position_ws: vec3f,
+    position: vec3f,
     exposure: f32,
 }
 
 struct DirectionalLight {
-    positioin_ws: vec3f,
     direction: vec3f,
+    color: vec3f,
+    intensity: f32,
+}
+
+struct PointLight {
+    position: vec3f,
     color: vec3f,
     intensity: f32,
 }

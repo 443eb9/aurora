@@ -2,9 +2,8 @@
 #import aurora::{
     math::PI,
     pbr::{
-        pbr_binding::{camera, dir_lights, material, tex_base_color, tex_sampler},
-        pbr_function,
-        pbr_function::{construct_surface_lit, construct_surface_unlit, apply_exposure},
+        pbr_binding::{camera, dir_lights, material, point_lights, tex_base_color, tex_sampler},
+        pbr_function::{apply_exposure, apply_lighting, construct_surface_unlit},
         pbr_type::{
             Camera, DirectionalLight, PbrMaterial, PbrVertexInput, PbrVertexOutput
         }
@@ -30,32 +29,15 @@ fn fragment(input: PbrVertexOutput) -> @location(0) vec4f {
 
     for (var i_light = 0u; i_light < arrayLength(&dir_lights); i_light += 1u) {
         let light = &dir_lights[i_light];
-        var lit = construct_surface_lit(vec3f(0.), (*light).direction, unlit);
+        color += apply_lighting((*light).direction, (*light).intensity, (*light).color, &unlit);
+    }
 
-#ifdef GGX
-        let D = pbr_function::D_GGX(&unlit, &lit);
-        let G = pbr_function::G2_HeightCorrelated(&unlit, &lit);
-#else
-        let D = 0.;
-        let G = 0.;
-#endif
-
-#ifdef LAMBERT
-        let FD = pbr_function::FD_Lambert(&unlit, &lit);
-#else ifdef BURLEY
-        let FD = pbr_function::FD_Burley(&unlit, &lit);
-#else
-        let FD = vec3f(0.);
-#endif
-
-        let F = aurora::pbr::pbr_function::F_Schlick(lit.HdotL, unlit.f_normal);
-
-        let f_spec = D * G * F * PI;
-        let f_diff = FD * PI;
-
-        color += lit.NdotL * (*light).intensity * (f_spec + f_diff) * (*light).color;
-        // color = vec3f(unlit.NdotV);
-        // color = input.position_ws;
+    for (var i_light = 0u; i_light < arrayLength(&point_lights); i_light += 1u) {
+        let light = &point_lights[i_light];
+        let position_rel = (*light).position - input.position_ws;
+        let direction = normalize(position_rel);
+        let intensity = (*light).intensity / dot(position_rel, position_rel);
+        color += apply_lighting(direction, intensity, (*light).color, &unlit);
     }
 
     color = apply_exposure(color * unlit.base_color);
