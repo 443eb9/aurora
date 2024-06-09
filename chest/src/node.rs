@@ -24,14 +24,14 @@ use uuid::Uuid;
 use wgpu::{
     vertex_attr_array, BindGroupDescriptor, BindGroupEntry, BindingResource, BufferAddress,
     BufferUsages, Color, ColorTargetState, ColorWrites, CommandEncoderDescriptor, CompareFunction,
-    DepthBiasState, DepthStencilState, FilterMode, FragmentState, LoadOp, MultisampleState,
+    DepthBiasState, DepthStencilState, Face, FilterMode, FragmentState, LoadOp, MultisampleState,
     Operations, PipelineCompilationOptions, PipelineLayoutDescriptor, PrimitiveState,
     RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor,
     RenderPipeline, RenderPipelineDescriptor, Sampler, SamplerDescriptor, ShaderModuleDescriptor,
     ShaderSource, StencilState, StoreOp, VertexBufferLayout, VertexState, VertexStepMode,
 };
 
-use crate::{material::PbrMaterial, util};
+use crate::{material::PbrMaterial, texture, util};
 const CLEAR_COLOR: Color = Color {
     r: 43. / 255.,
     g: 44. / 255.,
@@ -133,6 +133,8 @@ impl RenderNode for BasicTriangleNode {
     }
 }
 
+pub const TONY_MC_MAPFACE_LUT: Uuid = Uuid::from_u128(7949841653150346834163056985041356);
+
 #[derive(Default)]
 pub struct PbrNode {
     mat_uuid: Uuid,
@@ -147,14 +149,17 @@ impl RenderNode for PbrNode {
         shader_defs: Option<HashMap<String, ShaderDefValue>>,
         target: &RenderTarget,
     ) {
-        let assets = &scene.assets;
+        scene.assets.textures.insert(
+            TONY_MC_MAPFACE_LUT,
+            texture::load_dds_texture(renderer, "chest/assets/luts/tony_mc_mapface.dds"),
+        );
 
         self.mat_uuid = TypeId::of::<PbrMaterial>().to_uuid();
 
         let (l_camera, l_lights, l_material) = (
-            assets.layouts.get(&CAMERA_UUID).unwrap(),
-            assets.layouts.get(&LIGHTS_BIND_GROUP_UUID).unwrap(),
-            assets.layouts.get(&self.mat_uuid).unwrap(),
+            &scene.assets.layouts[&CAMERA_UUID],
+            &scene.assets.layouts[&LIGHTS_BIND_GROUP_UUID],
+            &scene.assets.layouts[&self.mat_uuid],
         );
 
         let mut composer = Composer::default();
@@ -176,6 +181,11 @@ impl RenderNode for PbrNode {
         util::add_shader_module(
             &mut composer,
             include_str!("shader/pbr/pbr_function.wgsl"),
+            shader_defs.clone(),
+        );
+        util::add_shader_module(
+            &mut composer,
+            include_str!("shader/tonemapping.wgsl"),
             shader_defs.clone(),
         );
         util::add_shader_module(
@@ -249,7 +259,7 @@ impl RenderNode for PbrNode {
                         bias: DepthBiasState::default(),
                     }),
                     primitive: PrimitiveState {
-                        cull_mode: None,
+                        cull_mode: Some(Face::Back),
                         ..Default::default()
                     },
                     multiview: None,

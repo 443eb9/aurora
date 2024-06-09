@@ -16,6 +16,8 @@ pub enum Light {
 pub struct DirectionalLight {
     pub transform: Transform,
     pub color: Srgb,
+    /// In lx.
+    pub illuminance: f32,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -137,7 +139,6 @@ impl PerspectiveProjection {
     #[inline]
     pub fn compute_matrix(&self) -> Mat4 {
         Mat4::perspective_rh(self.fov, self.aspect_ratio, self.near, self.far)
-        // Mat4::perspective_infinite_reverse_rh(self.fov, self.aspect_ratio, self.near)
     }
 }
 
@@ -152,6 +153,17 @@ pub struct OrthographicProjection {
 }
 
 impl OrthographicProjection {
+    pub fn symmetric(width: f32, height: f32, near: f32, far: f32) -> Self {
+        Self {
+            left: -width,
+            right: width,
+            bottom: -height,
+            top: height,
+            near,
+            far,
+        }
+    }
+
     #[inline]
     pub fn compute_matrix(&self) -> Mat4 {
         Mat4::orthographic_rh(
@@ -159,9 +171,8 @@ impl OrthographicProjection {
             self.right,
             self.bottom,
             self.top,
-            // Swap to reverse depth
-            self.far,
             self.near,
+            self.far,
         )
     }
 }

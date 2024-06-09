@@ -8,6 +8,7 @@
             Camera, DirectionalLight, PbrMaterial, PbrVertexInput, PbrVertexOutput
         }
     }
+    tonemapping,
 }
 
 @vertex
@@ -51,10 +52,10 @@ fn fragment(input: PbrVertexOutput) -> @location(0) vec4f {
         let f_spec = D * G * F * PI;
         let f_diff = FD * PI;
 
-        color += lit.NdotL * (f_spec + f_diff) * unlit.base_color * (*light).col;
+        color += lit.NdotL * (*light).ill * (f_spec + f_diff) * (*light).col;
         // color = vec3f(unlit.NdotV);
         // color = input.position_ws;
     }
 
-    return vec4f(color * unlit.base_color, 1.);
+    return vec4f(tonemapping::tonemapping_tony_mc_mapface(color * unlit.base_color), 1.);
 }

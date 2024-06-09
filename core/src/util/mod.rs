@@ -1,7 +1,7 @@
-use std::{fs::File, io::Write, path::Path};
+use std::path::Path;
 
-use glam::{UVec2, UVec3};
-use png::ColorType;
+use glam::UVec3;
+use image::RgbaImage;
 use wgpu::{
     BufferDescriptor, BufferUsages, CommandEncoderDescriptor, Device, Extent3d, ImageCopyBuffer,
     ImageDataLayout, Maintain, MapMode, Queue, Texture, TextureDescriptor, TextureDimension,
@@ -85,19 +85,10 @@ pub async fn save_color_texture_as_image(
 
     out_staging_buffer.unmap();
 
-    save_raw_bytes_to_image(UVec2::new(extent.width, extent.height), &texture_data, path);
-}
-
-fn save_raw_bytes_to_image(dim: UVec2, bytes: &[u8], path: impl AsRef<Path>) {
-    let mut png_image = Vec::with_capacity(bytes.len());
-    let mut encoder = png::Encoder::new(std::io::Cursor::new(&mut png_image), dim.x, dim.y);
-    encoder.set_color(ColorType::Rgba);
-
-    let mut writer = encoder.write_header().unwrap();
-    writer.write_image_data(bytes).unwrap();
-    writer.finish().unwrap();
-
-    File::create(path).unwrap().write_all(&png_image).unwrap();
+    RgbaImage::from_raw(extent.width, extent.height, texture_data)
+        .unwrap()
+        .save(path)
+        .unwrap();
 }
 
 pub fn struct_to_bytes<T>(s: &T) -> &[u8] {

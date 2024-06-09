@@ -1,5 +1,4 @@
 use std::{
-    f32::consts::{FRAC_PI_2, FRAC_PI_3, FRAC_PI_4},
     sync::{Arc, Mutex},
     thread,
     time::Instant,
@@ -13,15 +12,15 @@ use aurora_core::{
     render::{resource::RenderTarget, scene::GpuScene, ShaderDefEnum},
     scene::{
         entity::{
-            Camera, CameraProjection, DirectionalLight, Light, PerspectiveProjection, StaticMesh,
-            Transform,
+            Camera, CameraProjection, DirectionalLight, Light, OrthographicProjection,
+            PerspectiveProjection, StaticMesh, Transform,
         },
         resource::{Image, Mesh},
         Scene,
     },
     util, WgpuRenderer,
 };
-use glam::{EulerRot, Mat4, Quat, UVec2, Vec2, Vec3};
+use glam::{Mat4, Quat, UVec2, Vec2, Vec3};
 use palette::Srgb;
 use wgpu::{Surface, Texture, TextureFormat, TextureUsages, TextureViewDescriptor};
 use winit::{
@@ -92,10 +91,13 @@ impl<'a> Application<'a> {
                 },
                 projection: CameraProjection::Perspective(PerspectiveProjection {
                     aspect_ratio: dim.x as f32 / dim.y as f32,
-                    fov: FRAC_PI_4,
+                    fov: std::f32::consts::FRAC_PI_4,
                     near: 0.1,
                     far: 1000.,
                 }),
+                // projection: CameraProjection::Orthographic(OrthographicProjection::symmetric(
+                //     8., 4.5, -1000., 1000.,
+                // )),
             },
             CameraConfig::default(),
         );
@@ -103,13 +105,12 @@ impl<'a> Application<'a> {
         let mut scene = Scene::default();
 
         let uv_checker =
-            scene.insert_object(Image::from_png_path("assets/uv_checker.png").unwrap());
+            scene.insert_object(Image::from_path("gui/assets/uv_checker.png").unwrap());
         let pbr_material = PbrMaterial {
-            tex_base_color: None,
-            roughness: 0.1,
+            tex_base_color: Some(uv_checker),
             ..Default::default()
         };
-        let meshes = Mesh::from_obj("assets/large_sphere_array_5.obj")
+        let meshes = Mesh::from_obj("gui/assets/large_sphere_array_5.obj")
             .into_iter()
             .map(|m| scene.insert_object(m))
             .collect::<Vec<_>>();
@@ -131,6 +132,7 @@ impl<'a> Application<'a> {
                 ..Default::default()
             },
             color: Srgb::new(1., 1., 1.),
+            illuminance: 1000.,
         }));
         static_meshes.into_iter().for_each(|sm| {
             scene.insert_object(sm);
@@ -254,14 +256,7 @@ impl<'a> Application<'a> {
             self.flow.inner.build(
                 &self.renderer,
                 &mut self.gpu_scene,
-                Some(
-                    [
-                        PbrSpecular::GGX.to_def(),
-                        PbrSpecular::Anisotropic.to_def(),
-                        PbrDiffuse::Burley.to_def(),
-                    ]
-                    .into(),
-                ),
+                Some([PbrSpecular::GGX.to_def(), PbrDiffuse::Lambert.to_def()].into()),
                 &targets,
             );
         }

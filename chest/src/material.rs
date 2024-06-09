@@ -13,9 +13,12 @@ use palette::Srgb;
 use uuid::Uuid;
 use wgpu::{
     BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor, BindGroupLayoutEntry,
-    BindingResource, BindingType, BufferBindingType, SamplerBindingType, SamplerDescriptor,
-    ShaderStages, TextureSampleType, TextureViewDescriptor, TextureViewDimension,
+    BindingResource, BindingType, BufferBindingType, FilterMode, SamplerBindingType,
+    SamplerDescriptor, ShaderStages, TextureSampleType, TextureViewDescriptor,
+    TextureViewDimension,
 };
+
+use crate::node::TONY_MC_MAPFACE_LUT;
 
 #[derive(MaterialObject, Clone)]
 pub struct PbrMaterial {
@@ -55,6 +58,7 @@ impl Material for PbrMaterial {
                 .create_bind_group_layout(&BindGroupLayoutDescriptor {
                     label: Some("pbr_material_layout"),
                     entries: &[
+                        // Material Uniform
                         BindGroupLayoutEntry {
                             binding: 0,
                             visibility: ShaderStages::FRAGMENT,
@@ -65,6 +69,7 @@ impl Material for PbrMaterial {
                             },
                             count: None,
                         },
+                        // tex_base_color
                         BindGroupLayoutEntry {
                             binding: 1,
                             visibility: ShaderStages::FRAGMENT,
@@ -75,8 +80,27 @@ impl Material for PbrMaterial {
                             },
                             count: None,
                         },
+                        // Sampler
                         BindGroupLayoutEntry {
                             binding: 2,
+                            visibility: ShaderStages::FRAGMENT,
+                            ty: BindingType::Sampler(SamplerBindingType::Filtering),
+                            count: None,
+                        },
+                        // LUT
+                        BindGroupLayoutEntry {
+                            binding: 3,
+                            visibility: ShaderStages::FRAGMENT,
+                            ty: BindingType::Texture {
+                                sample_type: TextureSampleType::Float { filterable: true },
+                                view_dimension: TextureViewDimension::D3,
+                                multisampled: false,
+                            },
+                            count: None,
+                        },
+                        // LUT Sampler
+                        BindGroupLayoutEntry {
+                            binding: 4,
                             visibility: ShaderStages::FRAGMENT,
                             ty: BindingType::Sampler(SamplerBindingType::Filtering),
                             count: None,
@@ -121,6 +145,24 @@ impl Material for PbrMaterial {
                                 .device
                                 .create_sampler(&SamplerDescriptor::default()),
                         ),
+                    },
+                    BindGroupEntry {
+                        binding: 3,
+                        resource: BindingResource::TextureView(
+                            &assets.textures[&TONY_MC_MAPFACE_LUT]
+                                .create_view(&TextureViewDescriptor::default()),
+                        ),
+                    },
+                    BindGroupEntry {
+                        binding: 4,
+                        resource: BindingResource::Sampler(&renderer.device.create_sampler(
+                            &SamplerDescriptor {
+                                mag_filter: FilterMode::Linear,
+                                min_filter: FilterMode::Linear,
+                                mipmap_filter: FilterMode::Linear,
+                                ..Default::default()
+                            },
+                        )),
                     },
                 ],
             }),

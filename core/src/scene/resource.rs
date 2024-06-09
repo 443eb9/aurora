@@ -1,7 +1,7 @@
-use std::{fs::File, path::Path};
+use std::path::Path;
 
 use dyn_clone::DynClone;
-use png::{Decoder, OutputInfo, Transformations};
+use image::ImageResult;
 use uuid::Uuid;
 use wgpu::{
     util::{DeviceExt, TextureDataOrder},
@@ -43,30 +43,42 @@ impl Transferable for DirectionalLight {
             position: self.transform.translation,
             direction: self.transform.local_neg_z(),
             color: self.color.into_linear().to_vec3(),
+            illuminance: self.illuminance,
         }
     }
 }
 
 pub struct Image {
-    meta: OutputInfo,
+    width: u32,
+    height: u32,
     raw: Vec<u8>,
 }
 
 impl Image {
-    pub fn from_png_path(path: impl AsRef<Path>) -> std::io::Result<Self> {
-        let mut decoder = Decoder::new(File::open(path)?);
-        decoder.set_transformations(Transformations::normalize_to_color8());
-        let mut reader = decoder.read_info()?;
-        let mut raw = vec![0; reader.output_buffer_size()];
+    pub fn from_path(path: impl AsRef<Path>) -> ImageResult<Self> {
+        let img = image::open(path)?;
 
         Ok(Self {
-            meta: reader.next_frame(&mut raw)?,
-            raw,
+            width: img.width(),
+            height: img.height(),
+            raw: img.into_bytes(),
         })
     }
 
-    pub fn meta(&self) -> &OutputInfo {
-        &self.meta
+    pub fn from_raw(data: Vec<u8>, width: u32, height: u32) -> Self {
+        Self {
+            width,
+            height,
+            raw: data,
+        }
+    }
+
+    pub fn width(&self) -> u32 {
+        self.width
+    }
+
+    pub fn height(&self) -> u32 {
+        self.height
     }
 }
 
@@ -79,8 +91,8 @@ impl Transferable for Image {
             &TextureDescriptor {
                 label: None,
                 size: Extent3d {
-                    width: self.meta.width,
-                    height: self.meta.height,
+                    width: self.width,
+                    height: self.height,
                     depth_or_array_layers: 1,
                 },
                 mip_level_count: 1,

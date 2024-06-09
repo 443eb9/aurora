@@ -10,6 +10,7 @@ struct DirectionalLight {
     pos: vec3f,
     dir: vec3f,
     col: vec3f,
+    ill: f32,
 }
 
 struct PbrMaterial {

@@ -8,7 +8,6 @@ pub enum PbrSpecular {
     GGX,
     #[def_name = "GTR"]
     GTR,
-    Anisotropic,
 }
 
 #[derive(ShaderDefEnum)]
