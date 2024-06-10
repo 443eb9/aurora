@@ -15,6 +15,7 @@ pub const POST_PROCESS_DEPTH_LAYOUT_UUID: Uuid = Uuid::from_u128(887897413248965
 pub const LIGHTS_BIND_GROUP_UUID: Uuid = Uuid::from_u128(7897465198640598654089653401853401968);
 pub const DIR_LIGHT_UUID: Uuid = Uuid::from_u128(50864540865401960354989784651053240851);
 pub const POINT_LIGHT_UUID: Uuid = Uuid::from_u128(7901283699454486410056310);
+pub const SPOT_LIGHT_UUID: Uuid = Uuid::from_u128(123941018541520225801649306164979476413);
 
 pub const DUMMY_2D_TEX: Uuid = Uuid::from_u128(8674167498640649160513219685401);
 
@@ -71,6 +72,18 @@ impl DynamicGpuBuffer {
         } else if let Some(buffer) = &self.buffer {
             queue.write_buffer(&buffer, 0, self.raw.as_ref());
         }
+    }
+
+    /// Extend the buffer with dummy data then write it.
+    ///
+    /// This prevents from binding 0-sized buffer, which is not allowed.
+    /// But it will increase the array length by 1, so make sure to subtract
+    /// that in shader.
+    pub fn safe_write<T: ShaderType>(&mut self, device: &Device, queue: &Queue) {
+        self.raw
+            .as_mut()
+            .extend_from_slice(&vec![0; T::min_size().get() as usize]);
+        self.write(device, queue);
     }
 
     pub fn clear(&mut self) {
@@ -141,4 +154,14 @@ pub struct GpuPointLight {
     pub position: Vec3,
     pub color: Vec3,
     pub intensity: f32,
+}
+
+#[derive(ShaderType)]
+pub struct GpuSpotLight {
+    pub position: Vec3,
+    pub direction: Vec3,
+    pub color: Vec3,
+    pub intensity: f32,
+    pub inner_angle: f32,
+    pub outer_angle: f32,
 }

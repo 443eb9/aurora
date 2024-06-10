@@ -5,7 +5,10 @@ use wgpu::{BindGroup, BindGroupLayout, BufferUsages, Texture};
 
 use crate::{
     render::{
-        resource::{DynamicGpuBuffer, CAMERA_UUID, DIR_LIGHT_UUID, POINT_LIGHT_UUID},
+        resource::{
+            DynamicGpuBuffer, GpuDirectionalLight, GpuPointLight, GpuSpotLight, CAMERA_UUID,
+            DIR_LIGHT_UUID, POINT_LIGHT_UUID, SPOT_LIGHT_UUID,
+        },
         Transferable,
     },
     scene::{entity::Light, resource::Material, AssetEvent, AssetType, Scene},
@@ -43,18 +46,25 @@ impl GpuScene {
 
         let mut bf_dir_lights = DynamicGpuBuffer::new(BufferUsages::STORAGE);
         let mut bf_point_lights = DynamicGpuBuffer::new(BufferUsages::STORAGE);
+        let mut bf_spot_lights = DynamicGpuBuffer::new(BufferUsages::STORAGE);
+
         for light in &scene.lights {
             match light {
                 Light::Directional(l) => bf_dir_lights.push(&l.transfer(renderer)),
                 Light::Point(l) => bf_point_lights.push(&l.transfer(renderer)),
+                Light::Spot(l) => bf_spot_lights.push(&l.transfer(renderer)),
             };
         }
 
-        bf_dir_lights.write(&renderer.device, &renderer.queue);
-        bf_point_lights.write(&renderer.device, &renderer.queue);
+        bf_dir_lights.safe_write::<GpuDirectionalLight>(&renderer.device, &renderer.queue);
+        bf_point_lights.safe_write::<GpuPointLight>(&renderer.device, &renderer.queue);
+        bf_spot_lights.safe_write::<GpuSpotLight>(&renderer.device, &renderer.queue);
 
         self.assets.buffers.insert(DIR_LIGHT_UUID, bf_dir_lights);
-        self.assets.buffers.insert(POINT_LIGHT_UUID, bf_point_lights);
+        self.assets
+            .buffers
+            .insert(POINT_LIGHT_UUID, bf_point_lights);
+        self.assets.buffers.insert(SPOT_LIGHT_UUID, bf_spot_lights);
 
         scene.asset_events.drain(..).for_each(|ae| match ae {
             AssetEvent::Added(uuid, ty) => match ty {

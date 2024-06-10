@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     sync::{Arc, Mutex},
     thread,
     time::Instant,
@@ -12,8 +13,8 @@ use aurora_core::{
     render::{resource::RenderTarget, scene::GpuScene, ShaderDefEnum},
     scene::{
         entity::{
-            Camera, CameraProjection, DirectionalLight, Exposure, Light, OrthographicProjection,
-            PerspectiveProjection, PointLight, StaticMesh, Transform,
+            Camera, CameraProjection, DirectionalLight, Exposure, Light, PointLight, SpotLight,
+            StaticMesh, Transform,
         },
         resource::{Image, Mesh},
         Scene,
@@ -21,6 +22,7 @@ use aurora_core::{
     util, WgpuRenderer,
 };
 use glam::{Mat4, Quat, UVec2, Vec2, Vec3};
+use naga_oil::compose::ShaderDefValue;
 use palette::Srgb;
 use wgpu::{Surface, Texture, TextureFormat, TextureUsages, TextureViewDescriptor};
 use winit::{
@@ -47,6 +49,7 @@ pub struct Application<'a> {
     main_camera: Arc<Mutex<ControllableCamera>>,
     scene: Scene,
     gpu_scene: GpuScene,
+    shader_defs: HashMap<String, ShaderDefValue>,
 
     flow: PbrRenderFlow,
     last_draw: Instant,
@@ -89,19 +92,24 @@ impl<'a> Application<'a> {
             scene.insert_object(Image::from_path("gui/assets/uv_checker.png").unwrap());
         let pbr_material = PbrMaterial {
             tex_base_color: Some(uv_checker),
+            metallic: 0.8,
             ..Default::default()
         };
-        let meshes = Mesh::from_obj("gui/assets/large_sphere_array_5_with_plane.obj")
+        let meshes = Mesh::from_obj("gui/assets/large_sphere_array_5.obj")
+            // let meshes = Mesh::from_obj("gui/assets/large_sphere_array_5_with_plane.obj")
+            // let meshes = Mesh::from_obj("gui/assets/large_primitives.obj")
             .into_iter()
             .map(|m| scene.insert_object(m))
             .collect::<Vec<_>>();
         let static_meshes = meshes
             .into_iter()
+            .take(5)
             .enumerate()
             .map(|(index, mesh)| StaticMesh {
                 mesh,
                 material: scene.insert_object(PbrMaterial {
-                    roughness: 0.2 * (index + 1) as f32,
+                    // roughness: 0.2 * (index + 1) as f32,
+                    roughness: 0.2,
                     ..pbr_material
                 }),
             })
@@ -118,18 +126,32 @@ impl<'a> Application<'a> {
             color: Srgb::new(1., 1., 1.),
             intensity: 2000.,
         }));
-        scene.lights.push(Light::Point(PointLight {
-            transform: Transform {
-                translation: Vec3 {
-                    x: 0.,
-                    y: 2.,
-                    z: 0.,
-                },
-                ..Default::default()
-            },
-            color: Srgb::new(1., 0., 0.),
-            intensity: 100000.,
-        }));
+        // scene.lights.push(Light::Point(PointLight {
+        //     transform: Transform {
+        //         translation: Vec3 {
+        //             x: -2.,
+        //             y: 1.5,
+        //             z: 0.,
+        //         },
+        //         ..Default::default()
+        //     },
+        //     color: Srgb::new(1., 0., 0.),
+        //     intensity: 100000.,
+        // }));
+        // scene.lights.push(Light::Spot(SpotLight {
+        //     transform: Transform {
+        //         translation: Vec3 {
+        //             x: 2.,
+        //             y: 2.,
+        //             z: -2.,
+        //         },
+        //         rotation: Quat::from_axis_angle(Vec3::X, std::f32::consts::FRAC_PI_3),
+        //     },
+        //     color: Srgb::new(0., 1., 0.),
+        //     intensity: 100000.,
+        //     inner_angle: std::f32::consts::FRAC_PI_6 * 0.75,
+        //     outer_angle: std::f32::consts::FRAC_PI_4 * 0.75,
+        // }));
 
         let main_camera = ControllableCamera::new(
             Camera {
@@ -137,19 +159,25 @@ impl<'a> Application<'a> {
                     translation: Vec3::new(0., 0., 10.),
                     ..Default::default()
                 },
-                projection: CameraProjection::Perspective(PerspectiveProjection {
-                    aspect_ratio: dim.x as f32 / dim.y as f32,
-                    fov: std::f32::consts::FRAC_PI_4,
-                    near: 0.1,
-                    far: 1000.,
-                }),
-                // projection: CameraProjection::Orthographic(OrthographicProjection::symmetric(
-                //     8., 4.5, -1000., 1000.,
-                // )),
+                // projection: CameraProjection::Perspective(
+                //     aurora_core::scene::entity::PerspectiveProjection {
+                //         aspect_ratio: dim.x as f32 / dim.y as f32,
+                //         fov: std::f32::consts::FRAC_PI_4,
+                //         near: 0.1,
+                //         far: 1000.,
+                //     },
+                // ),
+                projection: CameraProjection::Orthographic(
+                    aurora_core::scene::entity::OrthographicProjection::symmetric(
+                        8., 4.5, -1000., 1000.,
+                    ),
+                ),
                 exposure: Exposure { ev100: 9.7 },
             },
             CameraConfig::default(),
         );
+
+        let shader_defs = [PbrSpecular::GGX.to_def(), PbrDiffuse::Lambert.to_def()].into();
 
         let gpu_scene = GpuScene::default();
 
@@ -163,6 +191,7 @@ impl<'a> Application<'a> {
             scene,
             gpu_scene,
             flow: Default::default(),
+            shader_defs,
 
             main_camera: Arc::new(Mutex::new(main_camera)),
 
@@ -206,7 +235,7 @@ impl<'a> Application<'a> {
         let screenshot = aurora_core::util::create_texture(
             &self.renderer.device,
             self.dim.extend(1),
-            TextureFormat::Rgba8Unorm,
+            TextureFormat::Rgba8UnormSrgb,
             TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC,
         );
 
@@ -218,7 +247,7 @@ impl<'a> Application<'a> {
         );
 
         let targets = RenderTarget {
-            color_format: TextureFormat::Rgba8Unorm,
+            color_format: TextureFormat::Rgba8UnormSrgb,
             color: screenshot.create_view(&TextureViewDescriptor::default()),
             depth_format: Some(TextureFormat::Depth32Float),
             depth: Some(depth.create_view(&TextureViewDescriptor::default())),
@@ -228,8 +257,12 @@ impl<'a> Application<'a> {
 
         self.scene.camera = self.main_camera.lock().unwrap().camera;
         self.gpu_scene.sync(&mut self.scene, &self.renderer);
-        flow.inner
-            .build(&self.renderer, &mut self.gpu_scene, None, &targets);
+        flow.inner.build(
+            &self.renderer,
+            &mut self.gpu_scene,
+            Some(self.shader_defs.clone()),
+            &targets,
+        );
         flow.inner.set_queue(
             flow.ids[2],
             self.scene.static_meshes.values().cloned().collect(),
@@ -269,7 +302,7 @@ impl<'a> Application<'a> {
             self.flow.inner.build(
                 &self.renderer,
                 &mut self.gpu_scene,
-                Some([PbrSpecular::GGX.to_def(), PbrDiffuse::Lambert.to_def()].into()),
+                Some(self.shader_defs.clone()),
                 &targets,
             );
         }
@@ -297,6 +330,14 @@ impl<'a> Application<'a> {
                 .surface
                 .get_default_config(&self.renderer.adapter, dim.x, dim.y)
                 .unwrap(),
+        );
+        self.depth_texture = util::create_texture(
+            &self.renderer.device,
+            dim.extend(1),
+            TextureFormat::Depth32Float,
+            TextureUsages::RENDER_ATTACHMENT
+                | TextureUsages::TEXTURE_BINDING
+                | TextureUsages::COPY_SRC,
         );
     }
 }

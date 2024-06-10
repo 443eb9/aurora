@@ -19,11 +19,20 @@ struct PointLight {
     intensity: f32,
 }
 
+struct SpotLight {
+    position: vec3f,
+    direction: vec3f,
+    color: vec3f,
+    intensity: f32,
+    inner: f32,
+    outer: f32,
+}
+
 struct PbrMaterial {
     base_color: vec3f,
     roughness: f32,
     metallic: f32,
-    ior: f32,
+    reflectance: f32,
 }
 
 struct PbrVertexInput {
@@ -47,7 +56,7 @@ struct BrdfSurfaceUnlit {
     normal: vec3f,
     view: vec3f,
 
-    f_normal: f32,
+    f_normal: vec3f,
 
     NdotV: f32,
 }

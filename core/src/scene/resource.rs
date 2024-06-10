@@ -11,12 +11,14 @@ use wgpu::{
 
 use crate::{
     render::{
-        resource::{DynamicGpuBuffer, GpuCamera, GpuDirectionalLight, GpuPointLight, Vertex},
+        resource::{
+            DynamicGpuBuffer, GpuCamera, GpuDirectionalLight, GpuPointLight, GpuSpotLight, Vertex,
+        },
         scene::GpuAssets,
         Transferable,
     },
     scene::{
-        entity::{Camera, DirectionalLight, PointLight},
+        entity::{Camera, DirectionalLight, PointLight, SpotLight},
         SceneObject,
     },
     util::{self, ext::RgbToVec3},
@@ -56,6 +58,21 @@ impl Transferable for PointLight {
             position: self.transform.translation,
             color: self.color.into_linear().to_vec3(),
             intensity: self.intensity,
+        }
+    }
+}
+
+impl Transferable for SpotLight {
+    type GpuRepr = GpuSpotLight;
+
+    fn transfer(&self, _renderer: &WgpuRenderer) -> Self::GpuRepr {
+        Self::GpuRepr {
+            position: self.transform.translation,
+            direction: self.transform.local_neg_z(),
+            color: self.color.into_linear().to_vec3(),
+            intensity: self.intensity,
+            inner_angle: self.inner_angle,
+            outer_angle: self.outer_angle,
         }
     }
 }

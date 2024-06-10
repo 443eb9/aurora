@@ -13,6 +13,7 @@ pub struct Camera {
 pub enum Light {
     Directional(DirectionalLight),
     Point(PointLight),
+    Spot(SpotLight),
 }
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -27,6 +28,15 @@ pub struct PointLight {
     pub transform: Transform,
     pub color: Srgb,
     pub intensity: f32,
+}
+
+#[derive(Debug, Default, Clone, Copy)]
+pub struct SpotLight {
+    pub transform: Transform,
+    pub color: Srgb,
+    pub intensity: f32,
+    pub inner_angle: f32,
+    pub outer_angle: f32,
 }
 
 #[derive(Debug, Clone, Copy)]

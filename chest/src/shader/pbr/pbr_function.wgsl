@@ -11,15 +11,14 @@
 fn construct_surface_unlit(vert: PbrVertexOutput, material: PbrMaterial, uv: vec2f) -> BrdfSurfaceUnlit {
     var surface: BrdfSurfaceUnlit;
 
-    surface.base_color = material.base_color * textureSample(tex_base_color, tex_sampler, uv).rgb;
     surface.roughness = material.roughness * material.roughness;
-    surface.metallic = material.metallic;
+    surface.metallic = saturate(material.metallic);
+    surface.base_color = (1. - surface.metallic) * material.base_color * textureSample(tex_base_color, tex_sampler, uv).rgb;
     
     surface.normal = vert.normal_ws;
     surface.view = normalize(camera.position - vert.position_ws);
 
-    let f = (material.ior - 1.) / (material.ior + 1.);
-    surface.f_normal = f * f;
+    surface.f_normal = mix(vec3f(0.16 * material.reflectance * material.reflectance), surface.base_color, surface.metallic);
 
     surface.NdotV = saturate(dot(surface.normal, surface.view));
 
@@ -49,7 +48,7 @@ fn D_GGX(unlit: ptr<function, BrdfSurfaceUnlit>, lit: ptr<function, BrdfSurfaceL
 
 // Fresnel Reflectance
 // Schlick approximation
-fn F_Schlick(HdotL: f32, f_normal: f32) -> f32 {
+fn F_Schlick(HdotL: f32, f_normal: vec3f) -> vec3f {
     return f_normal + (1. - f_normal) * pow(1. - HdotL, 5.);
 }
 
@@ -64,11 +63,11 @@ fn G2_HeightCorrelated(unlit: ptr<function, BrdfSurfaceUnlit>, lit: ptr<function
     return 0.5 / (l + v);
 }
 
-fn FD_Lambert(unlit: ptr<function, BrdfSurfaceUnlit>, lit: ptr<function, BrdfSurfaceLit>) -> f32 {
+fn FD_Lambert(unlit: ptr<function, BrdfSurfaceUnlit>, lit: ptr<function, BrdfSurfaceLit>) -> vec3f {
     return (1. - F_Schlick((*lit).HdotL, (*unlit).f_normal)) / PI;
 }
 
-fn FD_Burley(unlit: ptr<function, BrdfSurfaceUnlit>, lit: ptr<function, BrdfSurfaceLit>) -> f32 {
+fn FD_Burley(unlit: ptr<function, BrdfSurfaceUnlit>, lit: ptr<function, BrdfSurfaceLit>) -> vec3f {
     let f = 0.5 + 2. * (*unlit).roughness * (*lit).HdotL * (*lit).HdotL;
     let l = F_Schlick((*lit).NdotL, f);
     let v = F_Schlick((*unlit).NdotV, f);

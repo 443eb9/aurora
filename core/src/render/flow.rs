@@ -14,9 +14,9 @@ use wgpu::{
 use crate::{
     render::{
         resource::{
-            GpuCamera, GpuDirectionalLight, GpuPointLight, RenderMesh, RenderTarget, CAMERA_UUID,
-            DIR_LIGHT_UUID, DUMMY_2D_TEX, LIGHTS_BIND_GROUP_UUID, POINT_LIGHT_UUID,
-            POST_PROCESS_COLOR_LAYOUT_UUID, POST_PROCESS_DEPTH_LAYOUT_UUID,
+            GpuCamera, GpuDirectionalLight, GpuPointLight, GpuSpotLight, RenderMesh, RenderTarget,
+            CAMERA_UUID, DIR_LIGHT_UUID, DUMMY_2D_TEX, LIGHTS_BIND_GROUP_UUID, POINT_LIGHT_UUID,
+            POST_PROCESS_COLOR_LAYOUT_UUID, POST_PROCESS_DEPTH_LAYOUT_UUID, SPOT_LIGHT_UUID,
         },
         scene::GpuScene,
     },
@@ -186,6 +186,17 @@ impl RenderNode for GeneralNode {
                             },
                             count: None,
                         },
+                        // Spot
+                        BindGroupLayoutEntry {
+                            binding: 2,
+                            visibility: ShaderStages::FRAGMENT,
+                            ty: BindingType::Buffer {
+                                ty: BufferBindingType::Storage { read_only: true },
+                                has_dynamic_offset: false,
+                                min_binding_size: Some(GpuSpotLight::min_size()),
+                            },
+                            count: None,
+                        },
                     ],
                 });
 
@@ -205,10 +216,11 @@ impl RenderNode for GeneralNode {
     ) {
         let assets = &mut scene.assets;
 
-        let (Some(bf_camera), Some(bf_dir_lights), Some(bf_point_lights)) = (
+        let (Some(bf_camera), Some(bf_dir_lights), Some(bf_point_lights), Some(bf_spot_lights)) = (
             assets.buffers[&CAMERA_UUID].entire_binding(),
             assets.buffers[&DIR_LIGHT_UUID].entire_binding(),
             assets.buffers[&POINT_LIGHT_UUID].entire_binding(),
+            assets.buffers[&SPOT_LIGHT_UUID].entire_binding(),
         ) else {
             return;
         };
@@ -240,6 +252,10 @@ impl RenderNode for GeneralNode {
                     BindGroupEntry {
                         binding: 1,
                         resource: bf_point_lights,
+                    },
+                    BindGroupEntry {
+                        binding: 2,
+                        resource: bf_spot_lights,
                     },
                 ],
             }),

@@ -334,7 +334,7 @@ impl RenderNode for PbrNode {
                     view: &target.color,
                     resolve_target: None,
                     ops: Operations {
-                        load: LoadOp::Clear(CLEAR_COLOR),
+                        load: LoadOp::Clear(Color::TRANSPARENT),
                         store: StoreOp::Store,
                     },
                 })],

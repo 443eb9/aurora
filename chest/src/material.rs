@@ -26,7 +26,7 @@ pub struct PbrMaterial {
     pub tex_base_color: Option<Uuid>,
     pub roughness: f32,
     pub metallic: f32,
-    pub ior: f32,
+    pub reflectance: f32,
 }
 
 impl Default for PbrMaterial {
@@ -36,7 +36,7 @@ impl Default for PbrMaterial {
             tex_base_color: Default::default(),
             roughness: 1.,
             metallic: 0.,
-            ior: 2.,
+            reflectance: 1.,
         }
     }
 }
@@ -183,7 +183,7 @@ impl Transferable for PbrMaterial {
             base_color: self.base_color.into_linear().to_vec3(),
             roughness: self.roughness,
             metallic: self.metallic,
-            ior: self.ior,
+            ior: self.reflectance,
         }
     }
 }
