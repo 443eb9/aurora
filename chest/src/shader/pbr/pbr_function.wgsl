@@ -2,21 +2,26 @@
 #import aurora::{
     math::PI,
     pbr::{
-        pbr_binding::{camera, tex_base_color, tex_sampler},
+        pbr_binding::{camera, tex_base_color, tex_normal, tex_sampler},
         pbr_type::{BrdfSurfaceLit, BrdfSurfaceUnlit, PbrMaterial, PbrVertexOutput}
     }
 }
 
 // Construct a BrdfSurface WITHOUT light related info.
-fn construct_surface_unlit(vert: PbrVertexOutput, material: PbrMaterial, uv: vec2f) -> BrdfSurfaceUnlit {
+fn construct_surface_unlit(
+    position: vec3f,
+    normal: vec3f,
+    uv: vec2f,
+    material: PbrMaterial,
+) -> BrdfSurfaceUnlit {
     var surface: BrdfSurfaceUnlit;
 
     surface.roughness = material.roughness * material.roughness;
     surface.metallic = saturate(material.metallic);
     surface.base_color = (1. - surface.metallic) * material.base_color * textureSample(tex_base_color, tex_sampler, uv).rgb;
     
-    surface.normal = vert.normal_ws;
-    surface.view = normalize(camera.position - vert.position_ws);
+    surface.normal = normal;
+    surface.view = normalize(camera.position - position);
 
     surface.f_normal = mix(vec3f(0.16 * material.reflectance * material.reflectance), surface.base_color, surface.metallic);
 
@@ -37,6 +42,13 @@ fn construct_surface_lit(light: vec3f, unlit: ptr<function, BrdfSurfaceUnlit>) -
     surface.HdotL = saturate(dot(surface.half, surface.light));
 
     return surface;
+}
+
+fn unpack_normal(normal_os: vec3f, tangent_os: vec4f, uv: vec2f) -> vec3f {
+    let bitangent_os = cross(normal_os, tangent_os.xyz) * tangent_os.w;
+    let ttw = mat3x3f(tangent_os.xyz, bitangent_os, normal_os);
+    // TODO: Why 1. - normal_ts?
+    return ttw * (1. - textureSample(tex_normal, tex_sampler, uv).xyz);
 }
 
 // GGX NDF

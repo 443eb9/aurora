@@ -1,6 +1,7 @@
 use std::any::TypeId;
 
 use glam::Vec3;
+use naga_oil::compose::ShaderDefValue;
 use palette::{rgb::Rgb, LinSrgb};
 use uuid::Uuid;
 
@@ -11,6 +12,16 @@ pub trait TypeIdAsUuid {
 impl TypeIdAsUuid for TypeId {
     fn to_uuid(self) -> Uuid {
         unsafe { std::mem::transmute(self) }
+    }
+}
+
+pub trait StrAsShaderDef {
+    fn to_def(self) -> (String, ShaderDefValue);
+}
+
+impl StrAsShaderDef for &str {
+    fn to_def(self) -> (String, ShaderDefValue) {
+        (self.to_string(), ShaderDefValue::Bool(true))
     }
 }
 

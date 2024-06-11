@@ -194,10 +194,15 @@ impl RenderNode for PbrNode {
             shader_defs.clone(),
         );
 
+        let mut shader_defs = shader_defs.unwrap_or_default();
+        shader_defs.extend([
+            ("LUT_TEX_BINDING".to_string(), ShaderDefValue::UInt(4)),
+            ("LUT_SAMPLER_BINDING".to_string(), ShaderDefValue::UInt(5)),
+        ]);
         let shader = composer
             .make_naga_module(NagaModuleDescriptor {
                 source: include_str!("shader/pbr/pbr.wgsl"),
-                shader_defs: shader_defs.unwrap_or_default(),
+                shader_defs,
                 ..Default::default()
             })
             .unwrap();
@@ -236,7 +241,9 @@ impl RenderNode for PbrNode {
                                 // Normal
                                 1 => Float32x3,
                                 // UV
-                                2 => Float32x3
+                                2 => Float32x2,
+                                // Tangent
+                                3 => Float32x4,
                             ],
                         }],
                     },

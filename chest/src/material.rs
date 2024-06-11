@@ -24,6 +24,7 @@ use crate::node::TONY_MC_MAPFACE_LUT;
 pub struct PbrMaterial {
     pub base_color: Srgb,
     pub tex_base_color: Option<Uuid>,
+    pub tex_normal: Option<Uuid>,
     pub roughness: f32,
     pub metallic: f32,
     pub reflectance: f32,
@@ -34,6 +35,7 @@ impl Default for PbrMaterial {
         Self {
             base_color: Srgb::new(1., 1., 1.),
             tex_base_color: Default::default(),
+            tex_normal: Default::default(),
             roughness: 1.,
             metallic: 0.,
             reflectance: 1.,
@@ -80,16 +82,27 @@ impl Material for PbrMaterial {
                             },
                             count: None,
                         },
-                        // Sampler
+                        // tex_normal
                         BindGroupLayoutEntry {
                             binding: 2,
+                            visibility: ShaderStages::FRAGMENT,
+                            ty: BindingType::Texture {
+                                sample_type: TextureSampleType::Float { filterable: true },
+                                view_dimension: TextureViewDimension::D2,
+                                multisampled: false,
+                            },
+                            count: None,
+                        },
+                        // Sampler
+                        BindGroupLayoutEntry {
+                            binding: 3,
                             visibility: ShaderStages::FRAGMENT,
                             ty: BindingType::Sampler(SamplerBindingType::Filtering),
                             count: None,
                         },
                         // LUT
                         BindGroupLayoutEntry {
-                            binding: 3,
+                            binding: 4,
                             visibility: ShaderStages::FRAGMENT,
                             ty: BindingType::Texture {
                                 sample_type: TextureSampleType::Float { filterable: true },
@@ -100,7 +113,7 @@ impl Material for PbrMaterial {
                         },
                         // LUT Sampler
                         BindGroupLayoutEntry {
-                            binding: 4,
+                            binding: 5,
                             visibility: ShaderStages::FRAGMENT,
                             ty: BindingType::Sampler(SamplerBindingType::Filtering),
                             count: None,
@@ -140,21 +153,31 @@ impl Material for PbrMaterial {
                     },
                     BindGroupEntry {
                         binding: 2,
-                        resource: BindingResource::Sampler(
-                            &renderer
-                                .device
-                                .create_sampler(&SamplerDescriptor::default()),
+                        resource: BindingResource::TextureView(
+                            &assets.textures[&self.tex_normal.unwrap_or(DUMMY_2D_TEX)]
+                                .create_view(&TextureViewDescriptor::default()),
                         ),
                     },
                     BindGroupEntry {
                         binding: 3,
+                        resource: BindingResource::Sampler(&renderer.device.create_sampler(
+                            &SamplerDescriptor {
+                                mag_filter: FilterMode::Linear,
+                                min_filter: FilterMode::Linear,
+                                mipmap_filter: FilterMode::Linear,
+                                ..Default::default()
+                            },
+                        )),
+                    },
+                    BindGroupEntry {
+                        binding: 4,
                         resource: BindingResource::TextureView(
                             &assets.textures[&TONY_MC_MAPFACE_LUT]
                                 .create_view(&TextureViewDescriptor::default()),
                         ),
                     },
                     BindGroupEntry {
-                        binding: 4,
+                        binding: 5,
                         resource: BindingResource::Sampler(&renderer.device.create_sampler(
                             &SamplerDescriptor {
                                 mag_filter: FilterMode::Linear,

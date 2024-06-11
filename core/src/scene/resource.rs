@@ -1,6 +1,7 @@
 use std::path::Path;
 
 use dyn_clone::DynClone;
+use glam::{Vec2, Vec3};
 use image::ImageResult;
 use uuid::Uuid;
 use wgpu::{
@@ -85,12 +86,12 @@ pub struct Image {
 
 impl Image {
     pub fn from_path(path: impl AsRef<Path>) -> ImageResult<Self> {
-        let img = image::open(path)?;
+        let img = image::open(path)?.into_rgba8();
 
         Ok(Self {
             width: img.width(),
             height: img.height(),
-            raw: img.into_bytes(),
+            raw: img.into_raw(),
         })
     }
 
@@ -164,13 +165,17 @@ impl Mesh {
                             vertices.push(Vertex {
                                 position: obj.position[position_id].into(),
                                 normal: obj.normal[normal_id].into(),
-                                uv: glam::Vec2::from(obj.texture[texture_id]).extend(0.),
+                                uv: Vec2::from(obj.texture[texture_id]),
+                                tangent: Default::default(),
                             });
                         }
                     }
                 }
             }
-            meshes.push(Self { raw: vertices });
+            assert_eq!(vertices.len() % 3, 0, "Invalid mesh.");
+            let mut mesh = Self { raw: vertices };
+            mesh.recalculate_tangent();
+            meshes.push(mesh);
         }
 
         meshes
@@ -178,6 +183,57 @@ impl Mesh {
 
     pub fn vertex_count(&self) -> u32 {
         self.raw.len() as u32
+    }
+
+    pub fn recalculate_tangent(&mut self) {
+        let mut tangents = vec![Vec3::default(); self.raw.len()];
+        let mut bitangents = vec![Vec3::default(); self.raw.len()];
+
+        for i_tri in 0..self.raw.len() / 3 {
+            let i0 = i_tri * 3;
+            let i1 = i0 + 1;
+            let i2 = i1 + 1;
+
+            let v0 = &self.raw[i0];
+            let v1 = &self.raw[i1];
+            let v2 = &self.raw[i2];
+
+            let e1 = v1.position - v0.position;
+            let e2 = v2.position - v0.position;
+
+            let x1 = v1.uv.x - v0.uv.x;
+            let x2 = v2.uv.x - v0.uv.x;
+
+            let y1 = v1.uv.y - v0.uv.y;
+            let y2 = v2.uv.y - v0.uv.y;
+
+            let r = 1. / (x1 * y2 - x2 * y1);
+            let t = (e1 * y2 - e2 * y1) * r;
+            let b = (e2 * x1 - e1 * x2) * r;
+
+            tangents[i0] += t;
+            tangents[i1] += t;
+            tangents[i2] += t;
+
+            bitangents[i0] += b;
+            bitangents[i1] += b;
+            bitangents[i2] += b;
+        }
+
+        for i_vert in 0..self.raw.len() {
+            let t = tangents[i_vert];
+            let b = bitangents[i_vert];
+            let n = self.raw[i_vert].normal;
+            let sign = {
+                if t.cross(b).dot(n) > 0. {
+                    1.
+                } else {
+                    -1.
+                }
+            };
+
+            self.raw[i_vert].tangent = n.reject_from(t).extend(sign);
+        }
     }
 }
 

@@ -19,7 +19,8 @@ use aurora_core::{
         resource::{Image, Mesh},
         Scene,
     },
-    util, WgpuRenderer,
+    util::{self, ext::StrAsShaderDef},
+    WgpuRenderer,
 };
 use glam::{Mat4, Quat, UVec2, Vec2, Vec3};
 use naga_oil::compose::ShaderDefValue;
@@ -90,9 +91,13 @@ impl<'a> Application<'a> {
 
         let uv_checker =
             scene.insert_object(Image::from_path("gui/assets/uv_checker.png").unwrap());
+        let normal_map = scene.insert_object(
+            Image::from_path("gui/assets/sergun-kuyucu-medieval-blocks-normal.png").unwrap(),
+        );
         let pbr_material = PbrMaterial {
             tex_base_color: Some(uv_checker),
-            metallic: 0.8,
+            metallic: 0.,
+            tex_normal: Some(normal_map),
             ..Default::default()
         };
         let meshes = Mesh::from_obj("gui/assets/large_sphere_array_5.obj")
@@ -108,8 +113,8 @@ impl<'a> Application<'a> {
             .map(|(index, mesh)| StaticMesh {
                 mesh,
                 material: scene.insert_object(PbrMaterial {
-                    // roughness: 0.2 * (index + 1) as f32,
-                    roughness: 0.2,
+                    roughness: 0.2 * (index + 1) as f32,
+                    // roughness: 0.8,
                     ..pbr_material
                 }),
             })
@@ -159,25 +164,30 @@ impl<'a> Application<'a> {
                     translation: Vec3::new(0., 0., 10.),
                     ..Default::default()
                 },
-                // projection: CameraProjection::Perspective(
-                //     aurora_core::scene::entity::PerspectiveProjection {
-                //         aspect_ratio: dim.x as f32 / dim.y as f32,
-                //         fov: std::f32::consts::FRAC_PI_4,
-                //         near: 0.1,
-                //         far: 1000.,
-                //     },
-                // ),
-                projection: CameraProjection::Orthographic(
-                    aurora_core::scene::entity::OrthographicProjection::symmetric(
-                        8., 4.5, -1000., 1000.,
-                    ),
+                projection: CameraProjection::Perspective(
+                    aurora_core::scene::entity::PerspectiveProjection {
+                        aspect_ratio: dim.x as f32 / dim.y as f32,
+                        fov: std::f32::consts::FRAC_PI_4,
+                        near: 0.1,
+                        far: 1000.,
+                    },
                 ),
+                // projection: CameraProjection::Orthographic(
+                //     aurora_core::scene::entity::OrthographicProjection::symmetric(
+                //         8., 4.5, -1000., 1000.,
+                //     ),
+                // ),
                 exposure: Exposure { ev100: 9.7 },
             },
             CameraConfig::default(),
         );
 
-        let shader_defs = [PbrSpecular::GGX.to_def(), PbrDiffuse::Lambert.to_def()].into();
+        let shader_defs = [
+            PbrSpecular::GGX.to_def(),
+            PbrDiffuse::Lambert.to_def(),
+            "TEX_NORMAL".to_def(),
+        ]
+        .into();
 
         let gpu_scene = GpuScene::default();
 

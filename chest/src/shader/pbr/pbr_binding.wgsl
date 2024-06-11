@@ -9,4 +9,5 @@
 
 @group(2) @binding(0) var<uniform> material: PbrMaterial;
 @group(2) @binding(1) var tex_base_color: texture_2d<f32>;
-@group(2) @binding(2) var tex_sampler: sampler;
+@group(2) @binding(2) var tex_normal: texture_2d<f32>;
+@group(2) @binding(3) var tex_sampler: sampler;

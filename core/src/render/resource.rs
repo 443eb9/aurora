@@ -1,5 +1,5 @@
 use encase::{internal::WriteInto, DynamicStorageBuffer, ShaderType};
-use glam::{Mat4, Vec3};
+use glam::{Mat4, Vec2, Vec3, Vec4};
 use uuid::Uuid;
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
@@ -122,11 +122,12 @@ impl DynamicGpuBuffer {
     }
 }
 
-#[derive(ShaderType)]
+#[repr(C)]
 pub struct Vertex {
     pub position: Vec3,
     pub normal: Vec3,
-    pub uv: Vec3,
+    pub uv: Vec2,
+    pub tangent: Vec4,
 }
 
 pub struct RenderMesh {
