@@ -38,7 +38,7 @@ impl Default for PbrMaterial {
             tex_normal: Default::default(),
             roughness: 1.,
             metallic: 0.,
-            reflectance: 1.,
+            reflectance: 0.5,
         }
     }
 }

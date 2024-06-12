@@ -100,21 +100,22 @@ impl<'a> Application<'a> {
             tex_normal: Some(normal_map),
             ..Default::default()
         };
-        let meshes = Mesh::from_obj("gui/assets/large_sphere_array_5.obj")
+        // let meshes = Mesh::from_obj("gui/assets/large_sphere_array_5.obj")
             // let meshes = Mesh::from_obj("gui/assets/large_sphere_array_5_with_plane.obj")
-            // let meshes = Mesh::from_obj("gui/assets/large_primitives.obj")
+            let meshes = Mesh::from_obj("gui/assets/large_primitives.obj")
             .into_iter()
             .map(|m| scene.insert_object(m))
             .collect::<Vec<_>>();
         let static_meshes = meshes
             .into_iter()
-            .take(5)
+            // .take(5)
             .enumerate()
             .map(|(index, mesh)| StaticMesh {
                 mesh,
                 material: scene.insert_object(PbrMaterial {
-                    roughness: 0.2 * (index + 1) as f32,
-                    // roughness: 0.8,
+                    // reflectance: 0.15 * (index + 1) as f32,
+                    // roughness: 0.3,
+                    // metallic: 0.5,
                     ..pbr_material
                 }),
             })
@@ -131,32 +132,32 @@ impl<'a> Application<'a> {
             color: Srgb::new(1., 1., 1.),
             intensity: 2000.,
         }));
-        // scene.lights.push(Light::Point(PointLight {
-        //     transform: Transform {
-        //         translation: Vec3 {
-        //             x: -2.,
-        //             y: 1.5,
-        //             z: 0.,
-        //         },
-        //         ..Default::default()
-        //     },
-        //     color: Srgb::new(1., 0., 0.),
-        //     intensity: 100000.,
-        // }));
-        // scene.lights.push(Light::Spot(SpotLight {
-        //     transform: Transform {
-        //         translation: Vec3 {
-        //             x: 2.,
-        //             y: 2.,
-        //             z: -2.,
-        //         },
-        //         rotation: Quat::from_axis_angle(Vec3::X, std::f32::consts::FRAC_PI_3),
-        //     },
-        //     color: Srgb::new(0., 1., 0.),
-        //     intensity: 100000.,
-        //     inner_angle: std::f32::consts::FRAC_PI_6 * 0.75,
-        //     outer_angle: std::f32::consts::FRAC_PI_4 * 0.75,
-        // }));
+        scene.lights.push(Light::Point(PointLight {
+            transform: Transform {
+                translation: Vec3 {
+                    x: -2.,
+                    y: 1.5,
+                    z: 0.,
+                },
+                ..Default::default()
+            },
+            color: Srgb::new(1., 0., 0.),
+            intensity: 100000.,
+        }));
+        scene.lights.push(Light::Spot(SpotLight {
+            transform: Transform {
+                translation: Vec3 {
+                    x: 2.,
+                    y: 2.,
+                    z: -2.,
+                },
+                rotation: Quat::from_axis_angle(Vec3::X, std::f32::consts::FRAC_PI_3),
+            },
+            color: Srgb::new(0., 1., 0.),
+            intensity: 100000.,
+            inner_angle: std::f32::consts::FRAC_PI_6 * 0.75,
+            outer_angle: std::f32::consts::FRAC_PI_4 * 0.75,
+        }));
 
         let main_camera = ControllableCamera::new(
             Camera {

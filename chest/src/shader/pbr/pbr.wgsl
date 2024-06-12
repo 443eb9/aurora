@@ -67,5 +67,4 @@ fn fragment(input: PbrVertexOutput) -> @location(0) vec4f {
 
     color = pbr_function::apply_exposure(color * unlit.base_color);
     return vec4f(tonemapping::tonemapping_tony_mc_mapface(color), 1.);
-    // return vec4f(normal, 1.);
 }
