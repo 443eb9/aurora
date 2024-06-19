@@ -28,6 +28,14 @@ struct SpotLight {
     outer: f32,
 }
 
+struct AreaLight {
+    vertices: array<u32, 2>,
+    color: vec3f,
+    intensity: f32,
+    // TODO
+    // texture: u32,
+}
+
 struct PbrMaterial {
     base_color: vec3f,
     roughness: f32,

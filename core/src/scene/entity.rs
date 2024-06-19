@@ -2,6 +2,8 @@ use glam::{Mat4, Quat, Vec3};
 use palette::Srgb;
 use uuid::Uuid;
 
+use crate::scene::resource::Mesh;
+
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Camera {
     pub transform: Transform,
@@ -14,6 +16,7 @@ pub enum Light {
     Directional(DirectionalLight),
     Point(PointLight),
     Spot(SpotLight),
+    Area(AreaLight),
 }
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -37,6 +40,14 @@ pub struct SpotLight {
     pub intensity: f32,
     pub inner_angle: f32,
     pub outer_angle: f32,
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct AreaLight {
+    pub mesh: Mesh,
+    pub color: Srgb,
+    pub intensity: f32,
+    pub texture: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, Copy)]

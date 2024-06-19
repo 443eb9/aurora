@@ -1,13 +1,15 @@
 use std::collections::HashMap;
 
+use glam::Vec3;
 use uuid::Uuid;
 use wgpu::{BindGroup, BindGroupLayout, BufferUsages, Texture};
 
 use crate::{
     render::{
         resource::{
-            DynamicGpuBuffer, GpuDirectionalLight, GpuPointLight, GpuSpotLight, CAMERA_UUID,
-            DIR_LIGHT_UUID, POINT_LIGHT_UUID, SPOT_LIGHT_UUID,
+            DynamicGpuBuffer, GpuAreaLight, GpuDirectionalLight, GpuPointLight, GpuSpotLight,
+            AREA_LIGHT_UUID, AREA_LIGHT_VERTICES_UUID, CAMERA_UUID, DIR_LIGHT_UUID,
+            POINT_LIGHT_UUID, SPOT_LIGHT_UUID,
         },
         Transferable,
     },
@@ -47,24 +49,44 @@ impl GpuScene {
         let mut bf_dir_lights = DynamicGpuBuffer::new(BufferUsages::STORAGE);
         let mut bf_point_lights = DynamicGpuBuffer::new(BufferUsages::STORAGE);
         let mut bf_spot_lights = DynamicGpuBuffer::new(BufferUsages::STORAGE);
+        let mut bf_area_lights = DynamicGpuBuffer::new(BufferUsages::STORAGE);
+        let mut bf_area_light_vertices = DynamicGpuBuffer::new(BufferUsages::STORAGE);
 
         for light in &scene.lights {
             match light {
                 Light::Directional(l) => bf_dir_lights.push(&l.transfer(renderer)),
                 Light::Point(l) => bf_point_lights.push(&l.transfer(renderer)),
                 Light::Spot(l) => bf_spot_lights.push(&l.transfer(renderer)),
+                Light::Area(l) => {
+                    let (mut area_light, vertices) = l.transfer(renderer);
+                    
+                    let t = bf_area_light_vertices.len::<Vec3>().unwrap() as u32;
+                    area_light.vertices[0] += t;
+                    area_light.vertices[1] += t;
+
+                    vertices.into_iter().for_each(|v| {
+                        bf_area_light_vertices.push(&v);
+                    });
+                    bf_area_lights.push(&area_light)
+                }
             };
         }
 
         bf_dir_lights.safe_write::<GpuDirectionalLight>(&renderer.device, &renderer.queue);
         bf_point_lights.safe_write::<GpuPointLight>(&renderer.device, &renderer.queue);
         bf_spot_lights.safe_write::<GpuSpotLight>(&renderer.device, &renderer.queue);
+        bf_area_lights.safe_write::<GpuAreaLight>(&renderer.device, &renderer.queue);
+        bf_area_light_vertices.safe_write::<Vec3>(&renderer.device, &renderer.queue);
 
         self.assets.buffers.insert(DIR_LIGHT_UUID, bf_dir_lights);
         self.assets
             .buffers
             .insert(POINT_LIGHT_UUID, bf_point_lights);
         self.assets.buffers.insert(SPOT_LIGHT_UUID, bf_spot_lights);
+        self.assets.buffers.insert(AREA_LIGHT_UUID, bf_area_lights);
+        self.assets
+            .buffers
+            .insert(AREA_LIGHT_VERTICES_UUID, bf_area_light_vertices);
 
         scene.asset_events.drain(..).for_each(|ae| match ae {
             AssetEvent::Added(uuid, ty) => match ty {

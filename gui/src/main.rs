@@ -3,6 +3,7 @@ use winit::event_loop::EventLoop;
 
 mod app;
 mod render;
+mod resource;
 mod scene;
 
 async fn real_time_app() {

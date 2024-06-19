@@ -185,6 +185,11 @@ impl RenderNode for PbrNode {
         );
         util::add_shader_module(
             &mut composer,
+            include_str!("shader/pbr/ltc.wgsl"),
+            shader_defs.clone(),
+        );
+        util::add_shader_module(
+            &mut composer,
             include_str!("shader/tonemapping.wgsl"),
             shader_defs.clone(),
         );
@@ -368,11 +373,7 @@ impl RenderNode for PbrNode {
                     continue;
                 };
 
-                if let Some(offset) = mesh.offset {
-                    pass.set_bind_group(2, b_material, &[offset]);
-                } else {
-                    pass.set_bind_group(2, b_material, &[]);
-                }
+                pass.set_bind_group(2, b_material, &[mesh.offset.unwrap()]);
                 pass.set_vertex_buffer(0, vertices.buffer().unwrap().slice(..));
                 pass.draw(0..vertices.len::<Vertex>().unwrap() as u32, 0..1);
             }

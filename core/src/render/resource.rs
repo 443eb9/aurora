@@ -16,6 +16,8 @@ pub const LIGHTS_BIND_GROUP_UUID: Uuid = Uuid::from_u128(78974651986405986540896
 pub const DIR_LIGHT_UUID: Uuid = Uuid::from_u128(50864540865401960354989784651053240851);
 pub const POINT_LIGHT_UUID: Uuid = Uuid::from_u128(7901283699454486410056310);
 pub const SPOT_LIGHT_UUID: Uuid = Uuid::from_u128(123941018541520225801649306164979476413);
+pub const AREA_LIGHT_UUID: Uuid = Uuid::from_u128(1897651364698804086406900684);
+pub const AREA_LIGHT_VERTICES_UUID: Uuid = Uuid::from_u128(94960106453120368413652016354);
 
 pub const DUMMY_2D_TEX: Uuid = Uuid::from_u128(8674167498640649160513219685401);
 
@@ -122,6 +124,7 @@ impl DynamicGpuBuffer {
     }
 }
 
+#[derive(Debug, Default, Clone, Copy)]
 #[repr(C)]
 pub struct Vertex {
     pub position: Vec3,
@@ -165,4 +168,13 @@ pub struct GpuSpotLight {
     pub intensity: f32,
     pub inner_angle: f32,
     pub outer_angle: f32,
+}
+
+#[derive(ShaderType)]
+pub struct GpuAreaLight {
+    pub vertices: [u32; 2],
+    pub color: Vec3,
+    pub intensity: f32,
+    // TODO
+    // pub texture: u32,
 }

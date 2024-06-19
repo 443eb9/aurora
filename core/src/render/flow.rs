@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use encase::ShaderType;
+use glam::Vec3;
 use indexmap::IndexMap;
 use naga_oil::compose::ShaderDefValue;
 use uuid::Uuid;
@@ -14,9 +15,10 @@ use wgpu::{
 use crate::{
     render::{
         resource::{
-            GpuCamera, GpuDirectionalLight, GpuPointLight, GpuSpotLight, RenderMesh, RenderTarget,
-            CAMERA_UUID, DIR_LIGHT_UUID, DUMMY_2D_TEX, LIGHTS_BIND_GROUP_UUID, POINT_LIGHT_UUID,
-            POST_PROCESS_COLOR_LAYOUT_UUID, POST_PROCESS_DEPTH_LAYOUT_UUID, SPOT_LIGHT_UUID,
+            GpuAreaLight, GpuCamera, GpuDirectionalLight, GpuPointLight, GpuSpotLight, RenderMesh,
+            RenderTarget, AREA_LIGHT_UUID, AREA_LIGHT_VERTICES_UUID, CAMERA_UUID, DIR_LIGHT_UUID,
+            DUMMY_2D_TEX, LIGHTS_BIND_GROUP_UUID, POINT_LIGHT_UUID, POST_PROCESS_COLOR_LAYOUT_UUID,
+            POST_PROCESS_DEPTH_LAYOUT_UUID, SPOT_LIGHT_UUID,
         },
         scene::GpuScene,
     },
@@ -197,6 +199,28 @@ impl RenderNode for GeneralNode {
                             },
                             count: None,
                         },
+                        // Area
+                        BindGroupLayoutEntry {
+                            binding: 3,
+                            visibility: ShaderStages::FRAGMENT,
+                            ty: BindingType::Buffer {
+                                ty: BufferBindingType::Storage { read_only: true },
+                                has_dynamic_offset: false,
+                                min_binding_size: Some(GpuAreaLight::min_size()),
+                            },
+                            count: None,
+                        },
+                        // Area vertices
+                        BindGroupLayoutEntry {
+                            binding: 4,
+                            visibility: ShaderStages::FRAGMENT,
+                            ty: BindingType::Buffer {
+                                ty: BufferBindingType::Storage { read_only: true },
+                                has_dynamic_offset: false,
+                                min_binding_size: Some(Vec3::min_size()),
+                            },
+                            count: None,
+                        },
                     ],
                 });
 
@@ -216,12 +240,22 @@ impl RenderNode for GeneralNode {
     ) {
         let assets = &mut scene.assets;
 
-        let (Some(bf_camera), Some(bf_dir_lights), Some(bf_point_lights), Some(bf_spot_lights)) = (
+        let (
+            Some(bf_camera),
+            Some(bf_dir_lights),
+            Some(bf_point_lights),
+            Some(bf_spot_lights),
+            Some(bf_area_lights),
+            Some(bf_area_light_vertices),
+        ) = (
             assets.buffers[&CAMERA_UUID].entire_binding(),
             assets.buffers[&DIR_LIGHT_UUID].entire_binding(),
             assets.buffers[&POINT_LIGHT_UUID].entire_binding(),
             assets.buffers[&SPOT_LIGHT_UUID].entire_binding(),
-        ) else {
+            assets.buffers[&AREA_LIGHT_UUID].entire_binding(),
+            assets.buffers[&AREA_LIGHT_VERTICES_UUID].entire_binding(),
+        )
+        else {
             return;
         };
 
@@ -256,6 +290,14 @@ impl RenderNode for GeneralNode {
                     BindGroupEntry {
                         binding: 2,
                         resource: bf_spot_lights,
+                    },
+                    BindGroupEntry {
+                        binding: 3,
+                        resource: bf_area_lights,
+                    },
+                    BindGroupEntry {
+                        binding: 4,
+                        resource: bf_area_light_vertices,
                     },
                 ],
             }),

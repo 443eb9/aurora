@@ -25,7 +25,7 @@ impl WgpuRenderer {
                 &DeviceDescriptor {
                     label: None,
                     required_features: Features::empty(),
-                    required_limits: Limits::downlevel_defaults(),
+                    required_limits: Limits::default(),
                 },
                 None,
             )

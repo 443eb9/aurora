@@ -13,13 +13,14 @@ use wgpu::{
 use crate::{
     render::{
         resource::{
-            DynamicGpuBuffer, GpuCamera, GpuDirectionalLight, GpuPointLight, GpuSpotLight, Vertex,
+            DynamicGpuBuffer, GpuAreaLight, GpuCamera, GpuDirectionalLight, GpuPointLight,
+            GpuSpotLight, Vertex,
         },
         scene::GpuAssets,
         Transferable,
     },
     scene::{
-        entity::{Camera, DirectionalLight, PointLight, SpotLight},
+        entity::{AreaLight, Camera, DirectionalLight, PointLight, SpotLight},
         SceneObject,
     },
     util::{self, ext::RgbToVec3},
@@ -75,6 +76,21 @@ impl Transferable for SpotLight {
             inner_angle: self.inner_angle,
             outer_angle: self.outer_angle,
         }
+    }
+}
+
+impl Transferable for AreaLight {
+    type GpuRepr = (GpuAreaLight, Vec<Vec3>);
+
+    fn transfer(&self, _renderer: &WgpuRenderer) -> Self::GpuRepr {
+        (
+            GpuAreaLight {
+                vertices: [0, self.mesh.vertices_count() as u32],
+                color: self.color.into_linear().to_vec3(),
+                intensity: self.intensity,
+            },
+            self.mesh.raw.iter().map(|v| v.position).collect(),
+        )
     }
 }
 
@@ -138,6 +154,7 @@ impl Transferable for Image {
     }
 }
 
+#[derive(Debug, Default, Clone)]
 pub struct Mesh {
     raw: Vec<Vertex>,
 }
@@ -181,7 +198,7 @@ impl Mesh {
         meshes
     }
 
-    pub fn vertex_count(&self) -> u32 {
+    pub fn vertices_count(&self) -> u32 {
         self.raw.len() as u32
     }
 
