@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use dyn_clone::DynClone;
 use encase::ShaderType;
 use glam::Vec3;
 use indexmap::IndexMap;

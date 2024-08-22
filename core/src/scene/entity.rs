@@ -169,6 +169,7 @@ impl PerspectiveProjection {
     #[inline]
     pub fn compute_matrix(&self) -> Mat4 {
         Mat4::perspective_rh(self.fov, self.aspect_ratio, self.near, self.far)
+        // Mat4::perspective_infinite_reverse_rh(self.fov, self.aspect_ratio, self.near)
     }
 }
 

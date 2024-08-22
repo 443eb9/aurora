@@ -12,18 +12,18 @@ opt-level = 3
 aurora_derive = { version = "0.1", path = "../macros" }
 ddsfile = "0.5"
 dyn-clone = "1.0"
-encase = { version = "0.8", features = ["glam"] }
+encase = { version = "0.9", features = ["glam"] }
 env_logger = "0.11"
 flume = "0.11"
-glam = { version = "0.27", features = ["bytemuck"] }
+glam = { version = "0.28", features = ["bytemuck"] }
 gltf = "1.4"
 image = "0.25"
-indexmap = "2.2"
-naga_oil = "0.14"
+indexmap = "2.4"
+naga_oil = "0.15"
 log = "0.4"
 obj = "0.10"
 palette = "0.7"
 pollster = "0.3"
-uuid = { version = "1.8", features = ["v4"] }
-wgpu = { version = "0.20", features = ["naga-ir"] }
+uuid = { version = "1.10", features = ["v4"] }
+wgpu = { version = "22.1.0", features = ["naga-ir"] }
 winit = "0.30"

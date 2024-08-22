@@ -1,5 +1,6 @@
 use wgpu::{
-    Adapter, Device, DeviceDescriptor, Features, Instance, Limits, Queue, RequestAdapterOptions,
+    Adapter, Device, DeviceDescriptor, Features, Instance, Limits, MemoryHints, Queue,
+    RequestAdapterOptions,
 };
 
 pub mod render;
@@ -26,6 +27,7 @@ impl WgpuRenderer {
                     label: None,
                     required_features: Features::empty(),
                     required_limits: Limits::default(),
+                    memory_hints: MemoryHints::Performance,
                 },
                 None,
             )

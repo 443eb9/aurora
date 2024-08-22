@@ -133,6 +133,7 @@ pub struct Vertex {
     pub tangent: Vec4,
 }
 
+#[derive(Clone)]
 pub struct RenderMesh {
     pub mesh: StaticMesh,
     pub offset: Option<u32>,

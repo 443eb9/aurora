@@ -5,6 +5,7 @@ use crate::WgpuRenderer;
 pub mod flow;
 pub mod resource;
 pub mod scene;
+pub mod shadow;
 
 pub trait Transferable {
     type GpuRepr;

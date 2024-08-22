@@ -67,6 +67,7 @@ impl RenderNode for BasicTriangleNode {
                 .create_render_pipeline(&RenderPipelineDescriptor {
                     label: Some("basic_triagle_pipeline"),
                     layout: None,
+                    cache: None,
                     vertex: VertexState {
                         module: &shader_module,
                         entry_point: "vertex",
@@ -233,6 +234,7 @@ impl RenderNode for PbrNode {
                 .create_render_pipeline(&RenderPipelineDescriptor {
                     label: Some("pbr_pipeline"),
                     layout: Some(&layout),
+                    cache: None,
                     vertex: VertexState {
                         module: &module,
                         entry_point: "vertex",
@@ -459,6 +461,7 @@ impl RenderNode for DepthViewNode {
                 .create_render_pipeline(&RenderPipelineDescriptor {
                     label: Some("depth_view_pipeline"),
                     layout: Some(&layout),
+                    cache: None,
                     vertex: VertexState {
                         module: &vert_module,
                         entry_point: "vertex",
