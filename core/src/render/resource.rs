@@ -21,7 +21,7 @@ pub const AREA_LIGHT_VERTICES_UUID: Uuid = Uuid::from_u128(949601064531203684136
 
 pub const DUMMY_2D_TEX: Uuid = Uuid::from_u128(8674167498640649160513219685401);
 
-pub struct RenderTarget {
+pub struct RenderTargets {
     pub color_format: TextureFormat,
     pub color: TextureView,
     pub depth_format: Option<TextureFormat>,

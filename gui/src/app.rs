@@ -7,7 +7,7 @@ use std::{
 
 use aurora_chest::shader_defs::{PbrDiffuse, PbrSpecular};
 use aurora_core::{
-    render::{resource::RenderTarget, scene::GpuScene, ShaderDefEnum},
+    render::{resource::RenderTargets, scene::GpuScene, ShaderDefEnum},
     scene::{
         entity::{Camera, CameraProjection, Exposure, Transform},
         Scene,
@@ -168,7 +168,7 @@ impl<'a> Application<'a> {
         let screenshot = aurora_core::util::create_texture(
             &self.renderer.device,
             self.dim.extend(1),
-            TextureFormat::Rgba8UnormSrgb,
+            TextureFormat::Rgba8Unorm,
             TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC,
         );
 
@@ -179,29 +179,12 @@ impl<'a> Application<'a> {
             TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
         );
 
-        let targets = RenderTarget {
-            color_format: TextureFormat::Rgba8UnormSrgb,
+        self.redraw(Some(RenderTargets {
+            color_format: TextureFormat::Rgba8Unorm,
             color: screenshot.create_view(&TextureViewDescriptor::default()),
             depth_format: Some(TextureFormat::Depth32Float),
             depth: Some(depth.create_view(&TextureViewDescriptor::default())),
-        };
-
-        let mut flow = PbrRenderFlow::default();
-
-        self.scene.camera = self.main_camera.lock().unwrap().camera;
-        self.gpu_scene.sync(&mut self.scene, &self.renderer);
-        flow.inner.build(
-            &self.renderer,
-            &mut self.gpu_scene,
-            Some(self.shader_defs.clone()),
-            &targets,
-        );
-        flow.inner.set_queue(
-            flow.ids[2],
-            self.scene.static_meshes.values().cloned().collect(),
-        );
-        flow.inner
-            .run(&self.renderer, &mut self.gpu_scene, &targets);
+        }));
 
         aurora_core::util::save_color_texture_as_image(
             "generated/screenshot.png",
@@ -212,33 +195,45 @@ impl<'a> Application<'a> {
         .await;
     }
 
-    pub fn redraw(&mut self) {
+    pub fn redraw(&mut self, target_override: Option<RenderTargets>) {
         let (Ok(frame), Ok(camera)) = (self.surface.get_current_texture(), self.main_camera.lock())
         else {
             return;
         };
 
-        let targets = RenderTarget {
-            color_format: TextureFormat::Bgra8UnormSrgb,
-            color: frame.texture.create_view(&TextureViewDescriptor::default()),
-            depth_format: Some(TextureFormat::Depth32Float),
-            depth: Some(
-                self.depth_texture
-                    .create_view(&TextureViewDescriptor::default()),
-            ),
-        };
-
         self.scene.camera = camera.camera;
         self.gpu_scene.sync(&mut self.scene, &self.renderer);
 
-        if self.delta < 0. {
+        let targets;
+        if let Some(new_target) = target_override {
             self.flow.inner.build(
                 &self.renderer,
                 &mut self.gpu_scene,
                 Some(self.shader_defs.clone()),
-                &targets,
+                &new_target,
             );
+
+            targets = new_target;
+        } else {
+            let screen = RenderTargets {
+                color_format: TextureFormat::Bgra8UnormSrgb,
+                color: frame.texture.create_view(&TextureViewDescriptor::default()),
+                depth_format: Some(TextureFormat::Depth32Float),
+                depth: Some(
+                    self.depth_texture
+                        .create_view(&TextureViewDescriptor::default()),
+                ),
+            };
+
+            targets = screen;
         }
+
+        self.flow.inner.build(
+            &self.renderer,
+            &mut self.gpu_scene,
+            Some(self.shader_defs.clone()),
+            &targets,
+        );
 
         self.flow.inner.set_queue(
             self.flow.ids[2],
@@ -286,9 +281,7 @@ impl<'a> ApplicationHandler for Application<'a> {
     ) {
         match event {
             WindowEvent::RedrawRequested => {
-                // pollster::block_on(self.take_screenshot());
-                // std::process::exit(0);
-                self.redraw();
+                self.redraw(None);
             }
             WindowEvent::Resized(size) => self.resize(UVec2 {
                 x: size.width,

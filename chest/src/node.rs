@@ -8,7 +8,7 @@ use aurora_core::{
     render::{
         flow::RenderNode,
         resource::{
-            DynamicGpuBuffer, RenderMesh, RenderTarget, Vertex, CAMERA_UUID,
+            DynamicGpuBuffer, RenderMesh, RenderTargets, Vertex, CAMERA_UUID,
             LIGHTS_BIND_GROUP_UUID, POST_PROCESS_DEPTH_LAYOUT_UUID,
         },
         scene::GpuScene,
@@ -50,7 +50,7 @@ impl RenderNode for BasicTriangleNode {
         renderer: &WgpuRenderer,
         _scene: &mut GpuScene,
         _shader_defs: Option<HashMap<String, ShaderDefValue>>,
-        target: &RenderTarget,
+        target: &RenderTargets,
     ) {
         let shader_module = renderer
             .device
@@ -97,7 +97,7 @@ impl RenderNode for BasicTriangleNode {
         _renderer: &WgpuRenderer,
         _scene: &mut GpuScene,
         _queue: &mut [RenderMesh],
-        _target: &RenderTarget,
+        _target: &RenderTargets,
     ) {
     }
 
@@ -106,7 +106,7 @@ impl RenderNode for BasicTriangleNode {
         renderer: &WgpuRenderer,
         _scene: &GpuScene,
         _queue: &[RenderMesh],
-        target: &RenderTarget,
+        target: &RenderTargets,
     ) {
         let mut encoder = renderer
             .device
@@ -148,7 +148,7 @@ impl RenderNode for PbrNode {
         renderer: &WgpuRenderer,
         scene: &mut GpuScene,
         shader_defs: Option<HashMap<String, ShaderDefValue>>,
-        target: &RenderTarget,
+        target: &RenderTargets,
     ) {
         scene.assets.textures.insert(
             TONY_MC_MAPFACE_LUT,
@@ -286,7 +286,7 @@ impl RenderNode for PbrNode {
         renderer: &WgpuRenderer,
         scene: &mut GpuScene,
         queue: &mut [RenderMesh],
-        _target: &RenderTarget,
+        _target: &RenderTargets,
     ) {
         match scene.assets.buffers.entry(self.mat_uuid) {
             Entry::Occupied(mut e) => e.get_mut().clear(),
@@ -322,7 +322,7 @@ impl RenderNode for PbrNode {
         renderer: &WgpuRenderer,
         scene: &GpuScene,
         queue: &[RenderMesh],
-        target: &RenderTarget,
+        target: &RenderTargets,
     ) {
         let assets = &scene.assets;
 
@@ -397,7 +397,7 @@ impl RenderNode for DepthViewNode {
         renderer: &WgpuRenderer,
         scene: &mut GpuScene,
         _shader_defs: Option<HashMap<String, ShaderDefValue>>,
-        target: &RenderTarget,
+        target: &RenderTargets,
     ) {
         let Some(l_post_process) = scene.assets.layouts.get(&POST_PROCESS_DEPTH_LAYOUT_UUID) else {
             return;
@@ -498,7 +498,7 @@ impl RenderNode for DepthViewNode {
         _renderer: &WgpuRenderer,
         _scene: &mut GpuScene,
         _queue: &mut [RenderMesh],
-        _target: &RenderTarget,
+        _target: &RenderTargets,
     ) {
     }
 
@@ -507,7 +507,7 @@ impl RenderNode for DepthViewNode {
         renderer: &WgpuRenderer,
         scene: &GpuScene,
         _queue: &[RenderMesh],
-        target: &RenderTarget,
+        target: &RenderTargets,
     ) {
         let mut encoder = renderer
             .device

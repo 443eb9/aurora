@@ -6,7 +6,7 @@ use uuid::Uuid;
 use crate::{
     render::{
         flow::RenderNode,
-        resource::{RenderMesh, RenderTarget},
+        resource::{RenderMesh, RenderTargets},
         scene::GpuScene,
     },
     WgpuRenderer,
@@ -25,7 +25,7 @@ impl RenderNode for ShadowMapNode {
         renderer: &WgpuRenderer,
         scene: &mut GpuScene,
         shader_defs: Option<HashMap<String, ShaderDefValue>>,
-        target: &RenderTarget,
+        target: &RenderTargets,
     ) {
         todo!()
     }
@@ -35,7 +35,7 @@ impl RenderNode for ShadowMapNode {
         renderer: &WgpuRenderer,
         scene: &mut GpuScene,
         queue: &mut [RenderMesh],
-        target: &RenderTarget,
+        target: &RenderTargets,
     ) {
         todo!()
     }
@@ -45,7 +45,7 @@ impl RenderNode for ShadowMapNode {
         renderer: &WgpuRenderer,
         scene: &GpuScene,
         queue: &[RenderMesh],
-        target: &RenderTarget,
+        target: &RenderTargets,
     ) {
         todo!()
     }

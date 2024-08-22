@@ -17,7 +17,7 @@ use crate::{
     render::{
         resource::{
             GpuAreaLight, GpuCamera, GpuDirectionalLight, GpuPointLight, GpuSpotLight, RenderMesh,
-            RenderTarget, AREA_LIGHT_UUID, AREA_LIGHT_VERTICES_UUID, CAMERA_UUID, DIR_LIGHT_UUID,
+            RenderTargets, AREA_LIGHT_UUID, AREA_LIGHT_VERTICES_UUID, CAMERA_UUID, DIR_LIGHT_UUID,
             DUMMY_2D_TEX, LIGHTS_BIND_GROUP_UUID, POINT_LIGHT_UUID, POST_PROCESS_COLOR_LAYOUT_UUID,
             POST_PROCESS_DEPTH_LAYOUT_UUID, SPOT_LIGHT_UUID,
         },
@@ -83,7 +83,7 @@ impl RenderFlow {
         renderer: &WgpuRenderer,
         scene: &mut GpuScene,
         shader_defs: Option<HashMap<String, ShaderDefValue>>,
-        target: &RenderTarget,
+        target: &RenderTargets,
     ) {
         for (node, _) in self.flow.values_mut() {
             node.build(renderer, scene, shader_defs.clone(), target);
@@ -91,7 +91,7 @@ impl RenderFlow {
     }
 
     #[inline]
-    pub fn run(&mut self, renderer: &WgpuRenderer, scene: &mut GpuScene, target: &RenderTarget) {
+    pub fn run(&mut self, renderer: &WgpuRenderer, scene: &mut GpuScene, target: &RenderTargets) {
         for (node, queue) in self.flow.values_mut() {
             node.prepare(renderer, scene, queue, target);
         }
@@ -109,7 +109,7 @@ pub trait RenderNode {
         renderer: &WgpuRenderer,
         scene: &mut GpuScene,
         shader_defs: Option<HashMap<String, ShaderDefValue>>,
-        target: &RenderTarget,
+        target: &RenderTargets,
     );
     /// Prepare bind groups and other assets for rendering.
     fn prepare(
@@ -117,7 +117,7 @@ pub trait RenderNode {
         renderer: &WgpuRenderer,
         scene: &mut GpuScene,
         queue: &mut [RenderMesh],
-        target: &RenderTarget,
+        target: &RenderTargets,
     );
     /// Draw meshes.
     fn draw(
@@ -125,7 +125,7 @@ pub trait RenderNode {
         renderer: &WgpuRenderer,
         scene: &GpuScene,
         queue: &[RenderMesh],
-        target: &RenderTarget,
+        target: &RenderTargets,
     );
 }
 
@@ -139,7 +139,7 @@ impl RenderNode for GeneralNode {
         renderer: &WgpuRenderer,
         scene: &mut GpuScene,
         _shader_defs: Option<HashMap<String, ShaderDefValue>>,
-        _target: &RenderTarget,
+        _target: &RenderTargets,
     ) {
         if !scene.assets.layouts.contains_key(&CAMERA_UUID) {
             let l_camera = renderer
@@ -237,7 +237,7 @@ impl RenderNode for GeneralNode {
         renderer: &WgpuRenderer,
         scene: &mut GpuScene,
         _queue: &mut [RenderMesh],
-        _target: &RenderTarget,
+        _target: &RenderTargets,
     ) {
         let assets = &mut scene.assets;
 
@@ -310,7 +310,7 @@ impl RenderNode for GeneralNode {
         _renderer: &WgpuRenderer,
         _scene: &GpuScene,
         _queue: &[RenderMesh],
-        _target: &RenderTarget,
+        _target: &RenderTargets,
     ) {
     }
 }
@@ -325,7 +325,7 @@ impl RenderNode for PostProcessGeneralNode {
         renderer: &WgpuRenderer,
         scene: &mut GpuScene,
         _shader_defs: Option<HashMap<String, ShaderDefValue>>,
-        _target: &RenderTarget,
+        _target: &RenderTargets,
     ) {
         if !scene
             .assets
@@ -399,7 +399,7 @@ impl RenderNode for PostProcessGeneralNode {
         _renderer: &WgpuRenderer,
         _scene: &mut GpuScene,
         _queue: &mut [RenderMesh],
-        _target: &RenderTarget,
+        _target: &RenderTargets,
     ) {
     }
 
@@ -408,7 +408,7 @@ impl RenderNode for PostProcessGeneralNode {
         _renderer: &WgpuRenderer,
         _scene: &GpuScene,
         _queue: &[RenderMesh],
-        _target: &RenderTarget,
+        _target: &RenderTargets,
     ) {
     }
 }
@@ -422,7 +422,7 @@ impl RenderNode for ImageFallbackNode {
         renderer: &WgpuRenderer,
         scene: &mut GpuScene,
         _shader_defs: Option<HashMap<String, ShaderDefValue>>,
-        _target: &RenderTarget,
+        _target: &RenderTargets,
     ) {
         if !scene.assets.textures.contains_key(&DUMMY_2D_TEX) {
             scene.assets.textures.insert(
@@ -455,7 +455,7 @@ impl RenderNode for ImageFallbackNode {
         _renderer: &WgpuRenderer,
         _scene: &mut GpuScene,
         _queue: &mut [RenderMesh],
-        _target: &RenderTarget,
+        _target: &RenderTargets,
     ) {
     }
 
@@ -464,7 +464,7 @@ impl RenderNode for ImageFallbackNode {
         _renderer: &WgpuRenderer,
         _scene: &GpuScene,
         _queue: &[RenderMesh],
-        _target: &RenderTarget,
+        _target: &RenderTargets,
     ) {
     }
 }

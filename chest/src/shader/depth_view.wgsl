@@ -6,5 +6,6 @@
 
 @fragment
 fn fragment(input: FullscreenVertexOutput) -> @location(0) vec4f {
-    return vec4f(textureSample(depth_texture, depth_sampler, input.uv));
+    let uv = vec2f(input.uv.x, 1. - input.uv.y);
+    return vec4f(pow(textureSample(depth_texture, depth_sampler, uv), 4.));
 }
