@@ -2,8 +2,6 @@ use glam::{Mat4, Quat, Vec3};
 use palette::Srgb;
 use uuid::Uuid;
 
-use crate::scene::resource::Mesh;
-
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Camera {
     pub transform: Transform,

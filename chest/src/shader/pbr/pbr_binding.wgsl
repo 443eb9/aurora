@@ -1,9 +1,7 @@
 #define_import_path aurora::pbr::pbr_binding
 #import aurora::{
-    common_types::{DirectionalLight, PointLight, SpotLight},
-    pbr::pbr_type::{
-        Camera, DirectionalLight, PbrMaterial, PointLight, SpotLight
-    }
+    common_type::{Camera, DirectionalLight, PointLight, SpotLight},
+    pbr::pbr_type::PbrMaterial
 }
 
 @group(0) @binding(0) var<uniform> camera: Camera;

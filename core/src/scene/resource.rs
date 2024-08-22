@@ -13,8 +13,7 @@ use wgpu::{
 use crate::{
     render::{
         resource::{
-            DynamicGpuBuffer, GpuAreaLight, GpuCamera, GpuDirectionalLight, GpuPointLight,
-            GpuSpotLight, Vertex,
+            DynamicGpuBuffer, GpuCamera, GpuDirectionalLight, GpuPointLight, GpuSpotLight, Vertex,
         },
         scene::GpuAssets,
         Transferable,

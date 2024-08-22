@@ -171,7 +171,7 @@ impl RenderNode for PbrNode {
         );
         util::add_shader_module(
             &mut composer,
-            include_str!("shader/common_types.wgsl"),
+            include_str!("shader/common_type.wgsl"),
             shader_defs.clone(),
         );
         util::add_shader_module(

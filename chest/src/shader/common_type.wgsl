@@ -1,4 +1,4 @@
-#define_import_path aurora::common_types
+#define_import_path aurora::common_type
 
 struct Camera {
     view: mat4x4f,

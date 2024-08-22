@@ -1,15 +1,13 @@
 use std::collections::HashMap;
 
-use glam::Vec3;
 use uuid::Uuid;
 use wgpu::{BindGroup, BindGroupLayout, BufferUsages, Texture};
 
 use crate::{
     render::{
         resource::{
-            DynamicGpuBuffer, GpuAreaLight, GpuDirectionalLight, GpuPointLight, GpuSpotLight,
-            AREA_LIGHT_UUID, AREA_LIGHT_VERTICES_UUID, CAMERA_UUID, DIR_LIGHT_UUID,
-            POINT_LIGHT_UUID, SPOT_LIGHT_UUID,
+            DynamicGpuBuffer, GpuDirectionalLight, GpuPointLight, GpuSpotLight,
+            CAMERA_UUID, DIR_LIGHT_UUID, POINT_LIGHT_UUID, SPOT_LIGHT_UUID,
         },
         Transferable,
     },
