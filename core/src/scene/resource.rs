@@ -20,7 +20,7 @@ use crate::{
         Transferable,
     },
     scene::{
-        entity::{AreaLight, Camera, DirectionalLight, PointLight, SpotLight},
+        entity::{Camera, DirectionalLight, PointLight, SpotLight},
         SceneObject,
     },
     util::{self, ext::RgbToVec3},
@@ -76,21 +76,6 @@ impl Transferable for SpotLight {
             inner_angle: self.inner_angle,
             outer_angle: self.outer_angle,
         }
-    }
-}
-
-impl Transferable for AreaLight {
-    type GpuRepr = (GpuAreaLight, Vec<Vec3>);
-
-    fn transfer(&self, _renderer: &WgpuRenderer) -> Self::GpuRepr {
-        (
-            GpuAreaLight {
-                vertices: [0, self.mesh.vertices_count() as u32],
-                color: self.color.into_linear().to_vec3(),
-                intensity: self.intensity,
-            },
-            self.mesh.raw.iter().map(|v| v.position).collect(),
-        )
     }
 }
 

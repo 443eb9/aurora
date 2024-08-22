@@ -171,6 +171,11 @@ impl RenderNode for PbrNode {
         );
         util::add_shader_module(
             &mut composer,
+            include_str!("shader/common_types.wgsl"),
+            shader_defs.clone(),
+        );
+        util::add_shader_module(
+            &mut composer,
             include_str!("shader/pbr/pbr_type.wgsl"),
             shader_defs.clone(),
         );
@@ -182,11 +187,6 @@ impl RenderNode for PbrNode {
         util::add_shader_module(
             &mut composer,
             include_str!("shader/pbr/pbr_function.wgsl"),
-            shader_defs.clone(),
-        );
-        util::add_shader_module(
-            &mut composer,
-            include_str!("shader/pbr/ltc.wgsl"),
             shader_defs.clone(),
         );
         util::add_shader_module(
@@ -557,5 +557,41 @@ impl RenderNode for DepthViewNode {
         }
 
         renderer.queue.submit(Some(encoder.finish()));
+    }
+}
+
+pub struct ShadowMapNode {
+    pipeline: Option<RenderPipeline>,
+}
+
+impl RenderNode for ShadowMapNode {
+    fn build(
+        &mut self,
+        renderer: &WgpuRenderer,
+        scene: &mut GpuScene,
+        shader_defs: Option<HashMap<String, ShaderDefValue>>,
+        target: &RenderTargets,
+    ) {
+        todo!()
+    }
+
+    fn prepare(
+        &mut self,
+        renderer: &WgpuRenderer,
+        scene: &mut GpuScene,
+        queue: &mut [RenderMesh],
+        target: &RenderTargets,
+    ) {
+        todo!()
+    }
+
+    fn draw(
+        &self,
+        renderer: &WgpuRenderer,
+        scene: &GpuScene,
+        queue: &[RenderMesh],
+        target: &RenderTargets,
+    ) {
+        todo!()
     }
 }

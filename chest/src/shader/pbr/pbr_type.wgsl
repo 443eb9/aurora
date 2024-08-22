@@ -1,41 +1,5 @@
 #define_import_path aurora::pbr::pbr_type
 
-struct Camera {
-    view: mat4x4f,
-    proj: mat4x4f,
-    position: vec3f,
-    exposure: f32,
-}
-
-struct DirectionalLight {
-    direction: vec3f,
-    color: vec3f,
-    intensity: f32,
-}
-
-struct PointLight {
-    position: vec3f,
-    color: vec3f,
-    intensity: f32,
-}
-
-struct SpotLight {
-    position: vec3f,
-    direction: vec3f,
-    color: vec3f,
-    intensity: f32,
-    inner: f32,
-    outer: f32,
-}
-
-struct AreaLight {
-    vertices: array<u32, 2>,
-    color: vec3f,
-    intensity: f32,
-    // TODO
-    // texture: u32,
-}
-
 struct PbrMaterial {
     base_color: vec3f,
     roughness: f32,

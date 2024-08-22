@@ -4,9 +4,6 @@
     pbr::{
         pbr_binding::{camera, dir_lights, material, point_lights, spot_lights, tex_base_color, tex_sampler},
         pbr_function,
-        pbr_type::{
-            Camera, DirectionalLight, PbrMaterial, PbrVertexInput, PbrVertexOutput
-        }
     }
     tonemapping,
 }
