@@ -1,4 +1,4 @@
-#define_import_path aurora::shadow_mapping
+#define_import_path aurora::shadow_render
 #import aurora::{
     common_binding::camera,
     common_type::VertexInput,
@@ -18,6 +18,4 @@ fn vertex(in: VertexInput) -> ShadowVertexOutput {
 }
 
 @fragment
-fn fragment() -> @location(0) vec4f {
-    return vec4f(0.);
-}
+fn fragment() { }

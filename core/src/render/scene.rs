@@ -6,8 +6,8 @@ use wgpu::{BindGroup, BindGroupLayout, BufferUsages, Texture};
 use crate::{
     render::{
         resource::{
-            DynamicGpuBuffer, GpuDirectionalLight, GpuPointLight, GpuSpotLight, CAMERA_UUID,
-            DIR_LIGHT_UUID, LIGHT_VIEW_UUID, POINT_LIGHT_UUID, SPOT_LIGHT_UUID,
+            DynamicGpuBuffer, GpuCamera, GpuDirectionalLight, GpuPointLight, GpuSpotLight,
+            CAMERA_UUID, DIR_LIGHT_UUID, LIGHT_VIEW_UUID, POINT_LIGHT_UUID, SPOT_LIGHT_UUID,
         },
         Transferable,
     },
@@ -53,14 +53,13 @@ impl GpuScene {
         bf_camera.write(&renderer.device, &renderer.queue);
         self.assets.buffers.insert(CAMERA_UUID, bf_camera);
 
-        let mut bf_light_camera = DynamicGpuBuffer::new(BufferUsages::UNIFORM);
+        let mut bf_light_view = DynamicGpuBuffer::new(BufferUsages::UNIFORM);
         for (id, light) in &scene.lights {
-            let offset = bf_light_camera.push(&light.as_camera(&scene.camera));
+            let offset = bf_light_view.push(&light.as_camera(&scene.camera));
             self.assets.offsets.insert(*id, offset);
         }
-        self.assets
-            .buffers
-            .insert(LIGHT_VIEW_UUID, bf_light_camera);
+        bf_light_view.safe_write::<GpuCamera>(&renderer.device, &renderer.queue);
+        self.assets.buffers.insert(LIGHT_VIEW_UUID, bf_light_view);
 
         self.light_counter = Default::default();
         let mut bf_dir_lights = DynamicGpuBuffer::new(BufferUsages::STORAGE);

@@ -1,6 +1,6 @@
-use aurora_chest::node::{BasicTriangleNode, PbrNode, ShadowMappingNode};
+use aurora_chest::node::{BasicTriangleNode, DepthViewNode, PbrNode, ShadowMappingNode};
 use aurora_core::{
-    render::flow::{GeneralNode, ImageFallbackNode, RenderFlow},
+    render::flow::{GeneralNode, ImageFallbackNode, PostProcessGeneralNode, RenderFlow},
     scene::entity::StaticMesh,
 };
 use uuid::Uuid;
@@ -17,6 +17,8 @@ impl Default for PbrRenderFlow {
         ids.push(flow.add::<GeneralNode>());
         ids.push(flow.add::<ImageFallbackNode>());
         ids.push(flow.add::<ShadowMappingNode>());
+        ids.push(flow.add::<PostProcessGeneralNode>());
+        ids.push(flow.add::<DepthViewNode>());
         // ids.push(flow.add::<PbrNode>());
 
         Self { inner: flow, ids }

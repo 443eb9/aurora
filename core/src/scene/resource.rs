@@ -19,7 +19,7 @@ use crate::{
         Transferable,
     },
     scene::{
-        entity::{Camera, DirectionalLight, PointLight, SpotLight},
+        entity::{Camera, DirectionalLight, Light, OrthographicProjection, PointLight, SpotLight},
         SceneObject,
     },
     util::{self, ext::RgbToVec3},
@@ -74,6 +74,26 @@ impl Transferable for SpotLight {
             intensity: self.intensity,
             inner_angle: self.inner_angle,
             outer_angle: self.outer_angle,
+        }
+    }
+}
+
+impl Light {
+    pub fn as_camera(&self, real_camera: &Camera) -> GpuCamera {
+        match self {
+            Light::Directional(l) => GpuCamera {
+                view: l
+                    .transform
+                    .with_translation(real_camera.transform.translation)
+                    .compute_matrix()
+                    .inverse(),
+                proj: OrthographicProjection::symmetric(128., 128., -10000., 10000.)
+                    .compute_matrix(),
+                position_ws: real_camera.transform.translation,
+                exposure: 0.,
+            },
+            Light::Point(_) => todo!(),
+            Light::Spot(_) => todo!(),
         }
     }
 }

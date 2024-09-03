@@ -7,7 +7,7 @@ use wgpu::{
     TextureView,
 };
 
-use crate::scene::entity::{Camera, Light, OrthographicProjection, StaticMesh};
+use crate::scene::entity::StaticMesh;
 
 pub const CAMERA_UUID: Uuid = Uuid::from_u128(4514851245144087048541368740532463840);
 pub const LIGHT_VIEW_UUID: Uuid = Uuid::from_u128(78964516340896416354635118974);
@@ -119,26 +119,6 @@ impl DynamicGpuBuffer {
             Some(b.len() / stride)
         } else {
             None
-        }
-    }
-}
-
-impl Light {
-    pub fn as_camera(&self, real_camera: &Camera) -> GpuCamera {
-        match self {
-            Light::Directional(l) => GpuCamera {
-                view: l
-                    .transform
-                    .with_translation(real_camera.transform.translation)
-                    .compute_matrix()
-                    .inverse(),
-                proj: OrthographicProjection::symmetric(1024., 1024., -10000., 10000.)
-                    .compute_matrix(),
-                position_ws: real_camera.transform.translation,
-                exposure: 0.,
-            },
-            Light::Point(_) => todo!(),
-            Light::Spot(_) => todo!(),
         }
     }
 }

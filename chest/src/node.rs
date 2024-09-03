@@ -557,7 +557,21 @@ impl RenderNode for DepthViewNode {
             entries: &[
                 BindGroupEntry {
                     binding: 0,
-                    resource: BindingResource::TextureView(target.depth.as_ref().unwrap()),
+                    resource: BindingResource::TextureView(
+                        &SHADOW_MAPS
+                            .lock()
+                            .unwrap()
+                            .as_ref()
+                            .unwrap()
+                            .directional_shadow_map
+                            .create_view(&TextureViewDescriptor {
+                                format: Some(TextureFormat::Depth32Float),
+                                dimension: Some(TextureViewDimension::D2),
+                                base_array_layer: 0,
+                                array_layer_count: Some(1),
+                                ..Default::default()
+                            }),
+                    ),
                 },
                 BindGroupEntry {
                     binding: 1,
@@ -617,7 +631,7 @@ impl RenderNode for ShadowMappingNode {
         );
         let shader = composer
             .make_naga_module(NagaModuleDescriptor {
-                source: include_str!("shader/shadow_mapping.wgsl"),
+                source: include_str!("shader/shadow/shadow_render.wgsl"),
                 shader_defs: shader_defs.unwrap_or_default(),
                 ..Default::default()
             })
@@ -626,33 +640,39 @@ impl RenderNode for ShadowMappingNode {
         let module = renderer
             .device
             .create_shader_module(ShaderModuleDescriptor {
-                label: Some("shadow_mapping_shader"),
+                label: Some("shadow_render_shader"),
                 source: ShaderSource::Naga(Cow::Owned(shader)),
             });
 
-        let camera_layout = renderer
-            .device
-            .create_bind_group_layout(&BindGroupLayoutDescriptor {
-                label: None,
-                entries: &[BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: ShaderStages::VERTEX,
-                    ty: BindingType::Buffer {
-                        ty: BufferBindingType::Uniform,
-                        has_dynamic_offset: true,
-                        min_binding_size: Some(<GpuCamera as encase::ShaderType>::min_size()),
-                    },
-                    count: None,
-                }],
-            });
+        let light_view_layout =
+            renderer
+                .device
+                .create_bind_group_layout(&BindGroupLayoutDescriptor {
+                    label: None,
+                    entries: &[BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: ShaderStages::VERTEX,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Uniform,
+                            has_dynamic_offset: true,
+                            min_binding_size: Some(<GpuCamera as encase::ShaderType>::min_size()),
+                        },
+                        count: None,
+                    }],
+                });
 
         let layout = renderer
             .device
             .create_pipeline_layout(&PipelineLayoutDescriptor {
                 label: Some("shadow_mapping_shader"),
-                bind_group_layouts: &[&camera_layout],
+                bind_group_layouts: &[&light_view_layout],
                 push_constant_ranges: &[],
             });
+
+        gpu_scene
+            .assets
+            .layouts
+            .insert(LIGHT_VIEW_UUID, light_view_layout);
 
         self.pipeline = Some(
             renderer
@@ -681,13 +701,13 @@ impl RenderNode for ShadowMappingNode {
                         }],
                     },
                     multisample: MultisampleState::default(),
-                    // fragment: Some(FragmentState {
-                    //     module: &module,
-                    //     entry_point: "fragment",
-                    //     compilation_options: PipelineCompilationOptions::default(),
-                    //     targets: &[None],
-                    // }),
-                    fragment: None,
+                    fragment: Some(FragmentState {
+                        module: &module,
+                        entry_point: "fragment",
+                        compilation_options: PipelineCompilationOptions::default(),
+                        targets: &[None],
+                    }),
+                    // fragment: None,
                     depth_stencil: Some(DepthStencilState {
                         format: target.depth_format.unwrap(),
                         depth_write_enabled: true,
@@ -755,9 +775,9 @@ impl RenderNode for ShadowMappingNode {
 
     fn prepare(
         &mut self,
-        _renderer: &WgpuRenderer,
+        renderer: &WgpuRenderer,
         scene: &Scene,
-        _gpu_scene: &mut GpuScene,
+        gpu_scene: &mut GpuScene,
         _queue: &mut [RenderMesh],
         _target: &RenderTargets,
     ) {
@@ -778,7 +798,7 @@ impl RenderNode for ShadowMappingNode {
         };
 
         let mut point_desc = TextureViewDescriptor {
-            label: Some("directional_shadow_map_view"),
+            label: Some("point_shadow_map_view"),
             format: Some(TextureFormat::Depth32Float),
             dimension: Some(TextureViewDimension::Cube),
             base_array_layer: 0,
@@ -806,6 +826,24 @@ impl RenderNode for ShadowMappingNode {
                 }
             }
         }
+
+        gpu_scene.assets.bind_groups.insert(
+            LIGHT_VIEW_UUID,
+            renderer.device.create_bind_group(&BindGroupDescriptor {
+                label: Some("light_view_bind_group"),
+                layout: gpu_scene.assets.layouts.get(&LIGHT_VIEW_UUID).unwrap(),
+                entries: &[BindGroupEntry {
+                    binding: 0,
+                    resource: gpu_scene
+                        .assets
+                        .buffers
+                        .get(&LIGHT_VIEW_UUID)
+                        .unwrap()
+                        .entire_binding()
+                        .unwrap(),
+                }],
+            }),
+        );
     }
 
     fn draw(
@@ -819,11 +857,13 @@ impl RenderNode for ShadowMappingNode {
         let assets = &gpu_scene.assets;
 
         let Some(light_view_bind_groups) = assets.bind_groups.get(&LIGHT_VIEW_UUID) else {
+            dbg!();
             return;
         };
 
         let mut encoder = renderer.device.create_command_encoder(&Default::default());
         for (id, _) in &scene.lights {
+            dbg!();
             let Some(pipeline) = &self.pipeline else {
                 return;
             };
@@ -841,6 +881,7 @@ impl RenderNode for ShadowMappingNode {
                 }),
                 ..Default::default()
             });
+            dbg!();
 
             pass.set_pipeline(pipeline);
             pass.set_bind_group(
@@ -854,6 +895,7 @@ impl RenderNode for ShadowMappingNode {
                     return;
                 };
 
+                pass.set_vertex_buffer(0, vertices.buffer().unwrap().slice(..));
                 pass.draw(0..vertices.len::<Vertex>().unwrap() as u32, 0..1);
             }
         }
