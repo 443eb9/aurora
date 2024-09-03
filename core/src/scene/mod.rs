@@ -25,7 +25,7 @@ pub enum AssetEvent {
 #[derive(Default)]
 pub struct Scene {
     pub camera: Camera,
-    pub lights: Vec<Light>,
+    pub lights: HashMap<Uuid, Light>,
     pub static_meshes: HashMap<Uuid, StaticMesh>,
     pub meshes: HashMap<Uuid, Mesh>,
     /// The Uuid as the key represents this specific material,
@@ -102,6 +102,14 @@ impl SceneObject for Image {
         scene
             .asset_events
             .push(AssetEvent::Added(uuid, AssetType::Image));
+        uuid
+    }
+}
+
+impl SceneObject for Light {
+    fn insert_self(self, scene: &mut Scene) -> Uuid {
+        let uuid = Uuid::new_v4();
+        scene.lights.insert(uuid, self);
         uuid
     }
 }

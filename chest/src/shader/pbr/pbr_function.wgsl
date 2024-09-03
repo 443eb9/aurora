@@ -1,8 +1,9 @@
 #define_import_path aurora::pbr::pbr_function
 #import aurora::{
+    common_binding::camera,
     math::PI,
     pbr::{
-        pbr_binding::{camera, tex_base_color, tex_normal, tex_sampler},
+        pbr_binding::{tex_base_color, tex_normal, tex_sampler},
         pbr_type::{BrdfSurfaceLit, BrdfSurfaceUnlit, PbrMaterial, PbrVertexOutput}
     }
 }

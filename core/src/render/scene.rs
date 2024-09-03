@@ -6,8 +6,8 @@ use wgpu::{BindGroup, BindGroupLayout, BufferUsages, Texture};
 use crate::{
     render::{
         resource::{
-            DynamicGpuBuffer, GpuDirectionalLight, GpuPointLight, GpuSpotLight,
-            CAMERA_UUID, DIR_LIGHT_UUID, POINT_LIGHT_UUID, SPOT_LIGHT_UUID,
+            DynamicGpuBuffer, GpuDirectionalLight, GpuPointLight, GpuSpotLight, CAMERA_UUID,
+            DIR_LIGHT_UUID, LIGHT_VIEW_UUID, POINT_LIGHT_UUID, SPOT_LIGHT_UUID,
         },
         Transferable,
     },
@@ -29,11 +29,20 @@ pub struct GpuAssets {
 
     /// For material layouts, uuids are their type ids.
     pub layouts: HashMap<Uuid, BindGroupLayout>,
+
+    pub offsets: HashMap<Uuid, u32>,
+}
+
+#[derive(Default)]
+pub struct GpuLightCounter {
+    pub directional_lights: u32,
+    pub omni_lights: u32,
 }
 
 #[derive(Default)]
 pub struct GpuScene {
     pub assets: GpuAssets,
+    pub light_counter: GpuLightCounter,
     pub materials: HashMap<Uuid, Box<dyn Material>>,
 }
 
@@ -44,15 +53,34 @@ impl GpuScene {
         bf_camera.write(&renderer.device, &renderer.queue);
         self.assets.buffers.insert(CAMERA_UUID, bf_camera);
 
+        let mut bf_light_camera = DynamicGpuBuffer::new(BufferUsages::UNIFORM);
+        for (id, light) in &scene.lights {
+            let offset = bf_light_camera.push(&light.as_camera(&scene.camera));
+            self.assets.offsets.insert(*id, offset);
+        }
+        self.assets
+            .buffers
+            .insert(LIGHT_VIEW_UUID, bf_light_camera);
+
+        self.light_counter = Default::default();
         let mut bf_dir_lights = DynamicGpuBuffer::new(BufferUsages::STORAGE);
         let mut bf_point_lights = DynamicGpuBuffer::new(BufferUsages::STORAGE);
         let mut bf_spot_lights = DynamicGpuBuffer::new(BufferUsages::STORAGE);
 
-        for light in &scene.lights {
+        for light in scene.lights.values() {
             match light {
-                Light::Directional(l) => bf_dir_lights.push(&l.transfer(renderer)),
-                Light::Point(l) => bf_point_lights.push(&l.transfer(renderer)),
-                Light::Spot(l) => bf_spot_lights.push(&l.transfer(renderer)),
+                Light::Directional(l) => {
+                    bf_dir_lights.push(&l.transfer(renderer));
+                    self.light_counter.directional_lights += 1;
+                }
+                Light::Point(l) => {
+                    bf_point_lights.push(&l.transfer(renderer));
+                    self.light_counter.omni_lights += 1
+                }
+                Light::Spot(l) => {
+                    bf_spot_lights.push(&l.transfer(renderer));
+                    self.light_counter.omni_lights += 1;
+                }
             };
         }
 

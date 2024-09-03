@@ -38,7 +38,7 @@ pub fn load_primitives() -> Scene {
         scene.insert_object(sm);
     });
 
-    scene.lights.push(Light::Directional(DirectionalLight {
+    scene.insert_object(Light::Directional(DirectionalLight {
         transform: Transform {
             rotation: Quat::from_mat4(&Mat4::look_at_lh(Vec3::ZERO, Vec3::NEG_ONE, Vec3::Y)),
             ..Default::default()
@@ -46,32 +46,33 @@ pub fn load_primitives() -> Scene {
         color: Srgb::new(1., 1., 1.),
         intensity: 2000.,
     }));
-    scene.lights.push(Light::Point(PointLight {
-        transform: Transform {
-            translation: Vec3 {
-                x: -2.,
-                y: 1.5,
-                z: 0.,
-            },
-            ..Default::default()
-        },
-        color: Srgb::new(1., 0., 0.),
-        intensity: 100000.,
-    }));
-    scene.lights.push(Light::Spot(SpotLight {
-        transform: Transform {
-            translation: Vec3 {
-                x: 2.,
-                y: 2.,
-                z: -2.,
-            },
-            rotation: Quat::from_axis_angle(Vec3::X, std::f32::consts::FRAC_PI_3),
-        },
-        color: Srgb::new(0., 1., 0.),
-        intensity: 100000.,
-        inner_angle: std::f32::consts::FRAC_PI_6 * 0.75,
-        outer_angle: std::f32::consts::FRAC_PI_4 * 0.75,
-    }));
+    // scene.insert_object(Light::Point(PointLight {
+    //     transform: Transform {
+    //         translation: Vec3 {
+    //             x: -2.,
+    //             y: 1.5,
+    //             z: 0.,
+    //         },
+    //         ..Default::default()
+    //     },
+    //     color: Srgb::new(1., 0., 0.),
+    //     intensity: 100000.,
+    // }));
+    // scene.insert_object(Light::Spot(SpotLight {
+    //     transform: Transform {
+    //         translation: Vec3 {
+    //             x: 2.,
+    //             y: 2.,
+    //             z: -2.,
+    //         },
+    //         rotation: Quat::from_axis_angle(Vec3::X, std::f32::consts::FRAC_PI_3),
+    //         ..Default::default()
+    //     },
+    //     color: Srgb::new(0., 1., 0.),
+    //     intensity: 100000.,
+    //     inner_angle: std::f32::consts::FRAC_PI_6 * 0.75,
+    //     outer_angle: std::f32::consts::FRAC_PI_4 * 0.75,
+    // }));
 
     scene
 }

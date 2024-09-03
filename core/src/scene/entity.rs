@@ -45,10 +45,21 @@ pub struct StaticMesh {
     pub material: Uuid,
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy)]
 pub struct Transform {
     pub translation: Vec3,
     pub rotation: Quat,
+    pub scale: Vec3,
+}
+
+impl Default for Transform {
+    fn default() -> Self {
+        Self {
+            translation: Vec3::ZERO,
+            rotation: Quat::IDENTITY,
+            scale: Vec3::ONE,
+        }
+    }
 }
 
 macro_rules! impl_local_axis {
@@ -111,6 +122,24 @@ impl Transform {
     impl_local_axis!(local_x, local_neg_x, X, NEG_X);
     impl_local_axis!(local_y, local_neg_y, Y, NEG_Y);
     impl_local_axis!(local_z, local_neg_z, Z, NEG_Z);
+
+    #[inline]
+    pub fn with_translation(mut self, translation: Vec3) -> Self {
+        self.translation = translation;
+        self
+    }
+
+    #[inline]
+    pub fn with_rotation(mut self, rotation: Quat) -> Self {
+        self.rotation = rotation;
+        self
+    }
+
+    #[inline]
+    pub fn with_scale(mut self, scale: Vec3) -> Self {
+        self.scale = scale;
+        self
+    }
 }
 
 #[derive(Debug, Clone, Copy)]

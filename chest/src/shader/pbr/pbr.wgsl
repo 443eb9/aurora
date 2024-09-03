@@ -1,16 +1,18 @@
 #define_import_path aurora::pbr::pbr
 #import aurora::{
+    common_binding::camera,
+    common_type::VertexInput,
     math::PI,
     pbr::{
-        pbr_binding::{camera, dir_lights, material, point_lights, spot_lights, tex_base_color, tex_sampler},
+        pbr_binding::{dir_lights, material, point_lights, spot_lights, tex_base_color, tex_sampler},
         pbr_function,
-        pbr_type::{PbrVertexInput, PbrVertexOutput}
+        pbr_type::PbrVertexOutput,
     }
     tonemapping,
 }
 
 @vertex
-fn vertex(input: PbrVertexInput) -> PbrVertexOutput {
+fn vertex(input: VertexInput) -> PbrVertexOutput {
     var output: PbrVertexOutput;
     output.position_ws = input.position;
     output.position_cs = camera.proj * camera.view * vec4f(input.position, 1.);

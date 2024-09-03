@@ -208,6 +208,7 @@ impl<'a> Application<'a> {
         if let Some(new_target) = target_override {
             self.flow.inner.build(
                 &self.renderer,
+                &self.scene,
                 &mut self.gpu_scene,
                 Some(self.shader_defs.clone()),
                 &new_target,
@@ -230,19 +231,18 @@ impl<'a> Application<'a> {
 
         self.flow.inner.build(
             &self.renderer,
+            &self.scene,
             &mut self.gpu_scene,
             Some(self.shader_defs.clone()),
             &targets,
         );
 
-        self.flow.inner.set_queue(
-            self.flow.ids[2],
-            self.scene.static_meshes.values().cloned().collect(),
-        );
+        self.flow
+            .set_queue(self.scene.static_meshes.values().cloned().collect());
 
         self.flow
             .inner
-            .run(&self.renderer, &mut self.gpu_scene, &targets);
+            .run(&self.renderer, &self.scene, &mut self.gpu_scene, &targets);
 
         self.delta = self.last_draw.elapsed().as_secs_f32();
         self.last_draw = Instant::now();

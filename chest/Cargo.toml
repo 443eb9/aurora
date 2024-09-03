@@ -6,10 +6,11 @@ edition = "2021"
 [dependencies]
 aurora_core = { version = "0.1", path = "../core" }
 aurora_derive = { version = "0.1", path = "../macros" }
+ddsfile.workspace = true
 encase.workspace = true
 glam.workspace = true
 naga_oil.workspace = true
+once_cell.workspace = true
 palette.workspace = true
-ddsfile.workspace = true
 uuid.workspace = true
 wgpu.workspace = true

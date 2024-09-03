@@ -1,20 +1,23 @@
 #define_import_path aurora::shadow_mapping
-
-@group(2) @binding(0) depth_texture: texture_depth_2d;
-@group(2) @binding(0) depth_sampler: sampler;
+#import aurora::{
+    common_binding::camera,
+    common_type::VertexInput,
+}
 
 struct ShadowVertexOutput {
-    @location(0) position: vec3f,
+    @builtin(position) position_cs: vec4f,
+    @location(0) position_ws: vec3f,
 }
 
-fn vertex(in: ShadowVertexInput) -> ShadowVertexOutput {
-    
+@vertex
+fn vertex(in: VertexInput) -> ShadowVertexOutput {
+    var out: ShadowVertexOutput;
+    out.position_cs = camera.proj * camera.view * vec4f(in.position, 1.);
+    out.position_ws = in.position;
+    return out;
 }
 
+@fragment
 fn fragment() -> @location(0) vec4f {
     return vec4f(0.);
-}
-
-fn apply_shadow(in: vec4f) -> vec4f {
-
 }

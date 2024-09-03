@@ -7,9 +7,10 @@ use wgpu::{
     TextureView,
 };
 
-use crate::scene::entity::StaticMesh;
+use crate::scene::entity::{Camera, Light, OrthographicProjection, StaticMesh};
 
 pub const CAMERA_UUID: Uuid = Uuid::from_u128(4514851245144087048541368740532463840);
+pub const LIGHT_VIEW_UUID: Uuid = Uuid::from_u128(78964516340896416354635118974);
 pub const POST_PROCESS_COLOR_LAYOUT_UUID: Uuid = Uuid::from_u128(374318654136541653489410561064);
 pub const POST_PROCESS_DEPTH_LAYOUT_UUID: Uuid = Uuid::from_u128(887897413248965416140604016399654);
 pub const LIGHTS_BIND_GROUP_UUID: Uuid = Uuid::from_u128(7897465198640598654089653401853401968);
@@ -118,6 +119,26 @@ impl DynamicGpuBuffer {
             Some(b.len() / stride)
         } else {
             None
+        }
+    }
+}
+
+impl Light {
+    pub fn as_camera(&self, real_camera: &Camera) -> GpuCamera {
+        match self {
+            Light::Directional(l) => GpuCamera {
+                view: l
+                    .transform
+                    .with_translation(real_camera.transform.translation)
+                    .compute_matrix()
+                    .inverse(),
+                proj: OrthographicProjection::symmetric(1024., 1024., -10000., 10000.)
+                    .compute_matrix(),
+                position_ws: real_camera.transform.translation,
+                exposure: 0.,
+            },
+            Light::Point(_) => todo!(),
+            Light::Spot(_) => todo!(),
         }
     }
 }
