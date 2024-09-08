@@ -1,4 +1,4 @@
-use encase::{internal::WriteInto, DynamicStorageBuffer, ShaderType};
+use encase::{internal::WriteInto, DynamicStorageBuffer, DynamicUniformBuffer, ShaderType};
 use glam::{Mat4, Vec2, Vec3, Vec4};
 use uuid::Uuid;
 use wgpu::{
@@ -63,15 +63,18 @@ impl DynamicGpuBuffer {
     }
 
     pub fn write(&mut self, device: &Device, queue: &Queue) {
-        if self.changed && self.buffer.is_none() {
+        let capacity = self.buffer.as_ref().map(|b| b.size()).unwrap_or(0);
+        let size = self.raw.as_ref().len() as u64;
+
+        if capacity < size || (self.changed && size > 0) {
             self.buffer = Some(device.create_buffer_init(&BufferInitDescriptor {
                 label: None,
-                contents: self.raw.as_ref(),
                 usage: self.usage,
+                contents: self.raw.as_ref(),
             }));
             self.changed = false;
         } else if let Some(buffer) = &self.buffer {
-            queue.write_buffer(&buffer, 0, self.raw.as_ref());
+            queue.write_buffer(buffer, 0, self.raw.as_ref());
         }
     }
 

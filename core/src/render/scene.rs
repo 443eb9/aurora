@@ -53,14 +53,6 @@ impl GpuScene {
         bf_camera.write(&renderer.device, &renderer.queue);
         self.assets.buffers.insert(CAMERA_UUID, bf_camera);
 
-        let mut bf_light_view = DynamicGpuBuffer::new(BufferUsages::UNIFORM);
-        for (id, light) in &scene.lights {
-            let offset = bf_light_view.push(&light.as_camera(&scene.camera));
-            self.assets.offsets.insert(*id, offset);
-        }
-        bf_light_view.safe_write::<GpuCamera>(&renderer.device, &renderer.queue);
-        self.assets.buffers.insert(LIGHT_VIEW_UUID, bf_light_view);
-
         self.light_counter = Default::default();
         let mut bf_dir_lights = DynamicGpuBuffer::new(BufferUsages::STORAGE);
         let mut bf_point_lights = DynamicGpuBuffer::new(BufferUsages::STORAGE);

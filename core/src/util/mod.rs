@@ -8,6 +8,7 @@ use wgpu::{
     TextureFormat, TextureUsages,
 };
 
+pub mod cube;
 pub mod ext;
 
 pub fn create_texture(

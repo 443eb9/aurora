@@ -1,4 +1,4 @@
-use glam::{Mat4, Quat, Vec3};
+use glam::{Mat3, Mat4, Quat, Vec3};
 use palette::Srgb;
 use uuid::Uuid;
 
@@ -139,6 +139,21 @@ impl Transform {
     pub fn with_scale(mut self, scale: Vec3) -> Self {
         self.scale = scale;
         self
+    }
+
+    #[inline]
+    pub fn looking_at(mut self, target: Vec3, up: Vec3) -> Self {
+        self.look_at(target, up);
+        self
+    }
+
+    // From Bevy
+    #[inline]
+    pub fn look_at(&mut self, target: Vec3, up: Vec3) {
+        let forward = Vec3::normalize(self.translation - target);
+        let right = up.cross(forward).normalize();
+        let up = forward.cross(right);
+        self.rotation = Quat::from_mat3(&Mat3::from_cols(right, up, forward));
     }
 }
 

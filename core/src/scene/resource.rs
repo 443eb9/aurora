@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use dyn_clone::DynClone;
-use glam::{Vec2, Vec3};
+use glam::{Mat4, Vec2, Vec3};
 use image::ImageResult;
 use uuid::Uuid;
 use wgpu::{
@@ -19,10 +19,13 @@ use crate::{
         Transferable,
     },
     scene::{
-        entity::{Camera, DirectionalLight, Light, OrthographicProjection, PointLight, SpotLight},
+        entity::{
+            Camera, DirectionalLight, Light, OrthographicProjection, PointLight, SpotLight,
+            Transform,
+        },
         SceneObject,
     },
-    util::{self, ext::RgbToVec3},
+    util::{self, cube::CUBE_MAP_FACES, ext::RgbToVec3},
     WgpuRenderer,
 };
 
@@ -79,9 +82,9 @@ impl Transferable for SpotLight {
 }
 
 impl Light {
-    pub fn as_camera(&self, real_camera: &Camera) -> GpuCamera {
+    pub fn as_cameras(&self, real_camera: &Camera) -> Vec<GpuCamera> {
         match self {
-            Light::Directional(l) => GpuCamera {
+            Light::Directional(l) => vec![GpuCamera {
                 view: l
                     .transform
                     .with_translation(real_camera.transform.translation)
@@ -91,8 +94,25 @@ impl Light {
                     .compute_matrix(),
                 position_ws: real_camera.transform.translation,
                 exposure: 0.,
-            },
-            Light::Point(_) => todo!(),
+            }],
+            Light::Point(l) => CUBE_MAP_FACES
+                .into_iter()
+                .map(|face| {
+                    let trans = Transform::default()
+                        .looking_at(face.target, face.up)
+                        .with_translation(l.transform.translation);
+                    GpuCamera {
+                        view: trans.compute_matrix().inverse(),
+                        proj: Mat4::perspective_infinite_reverse_rh(
+                            std::f32::consts::FRAC_PI_2,
+                            1.,
+                            0.1,
+                        ),
+                        position_ws: trans.translation,
+                        exposure: 0.,
+                    }
+                })
+                .collect(),
             Light::Spot(_) => todo!(),
         }
     }

@@ -8,8 +8,8 @@ use aurora_core::{
     render::{
         flow::RenderNode,
         resource::{
-            DynamicGpuBuffer, GpuCamera, RenderMesh, RenderTargets, Vertex, CAMERA_UUID,
-            LIGHTS_BIND_GROUP_UUID, LIGHT_VIEW_UUID, POST_PROCESS_DEPTH_LAYOUT_UUID,
+            DynamicGpuBuffer, GpuCamera, GpuDirectionalLight, RenderMesh, RenderTargets, Vertex,
+            CAMERA_UUID, LIGHTS_BIND_GROUP_UUID, LIGHT_VIEW_UUID, POST_PROCESS_DEPTH_LAYOUT_UUID,
         },
         scene::GpuScene,
     },
@@ -17,6 +17,7 @@ use aurora_core::{
     util::ext::TypeIdAsUuid,
     WgpuRenderer,
 };
+use encase::DynamicUniformBuffer;
 use naga_oil::compose::{
     ComposableModuleDescriptor, Composer, NagaModuleDescriptor, ShaderDefValue, ShaderLanguage,
     ShaderType,
@@ -563,7 +564,7 @@ impl RenderNode for DepthViewNode {
                             .unwrap()
                             .as_ref()
                             .unwrap()
-                            .directional_shadow_map
+                            .point_shadow_map
                             .create_view(&TextureViewDescriptor {
                                 format: Some(TextureFormat::Depth32Float),
                                 dimension: Some(TextureViewDimension::D2),
@@ -606,7 +607,7 @@ impl RenderNode for DepthViewNode {
 #[derive(Default)]
 pub struct ShadowMappingNode {
     pipeline: Option<RenderPipeline>,
-    shadow_map_views: HashMap<Uuid, TextureView>,
+    shadow_map_views: HashMap<Uuid, Vec<(TextureView, u32)>>,
 }
 
 impl RenderNode for ShadowMappingNode {
@@ -800,32 +801,60 @@ impl RenderNode for ShadowMappingNode {
         let mut point_desc = TextureViewDescriptor {
             label: Some("point_shadow_map_view"),
             format: Some(TextureFormat::Depth32Float),
-            dimension: Some(TextureViewDimension::Cube),
+            dimension: Some(TextureViewDimension::D2),
             base_array_layer: 0,
-            array_layer_count: Some(6),
+            array_layer_count: Some(1),
             ..Default::default()
         };
 
+        let mut bf_light_view = DynamicGpuBuffer::new(BufferUsages::UNIFORM);
         for (id, light) in &scene.lights {
+            let offsets = light
+                .as_cameras(&scene.camera)
+                .into_iter()
+                .map(|camera| bf_light_view.push(&camera));
+
             match light {
                 Light::Directional(_) => {
                     directional_desc.base_array_layer = directional_index;
                     self.shadow_map_views.insert(
                         *id,
-                        shadow_maps
-                            .directional_shadow_map
-                            .create_view(&directional_desc),
+                        offsets
+                            .map(|offset| {
+                                (
+                                    shadow_maps
+                                        .directional_shadow_map
+                                        .create_view(&directional_desc),
+                                    offset,
+                                )
+                            })
+                            .collect(),
                     );
                     directional_index += 1;
                 }
                 Light::Point(_) | Light::Spot(_) => {
-                    point_desc.base_array_layer = point_index * 6;
-                    self.shadow_map_views
-                        .insert(*id, shadow_maps.point_shadow_map.create_view(&point_desc));
+                    self.shadow_map_views.insert(
+                        *id,
+                        offsets
+                            .enumerate()
+                            .map(|(i_face, offset)| {
+                                point_desc.base_array_layer = point_index * 6 + i_face as u32;
+                                (
+                                    shadow_maps.point_shadow_map.create_view(&point_desc),
+                                    offset,
+                                )
+                            })
+                            .collect(),
+                    );
                     point_index += 1;
                 }
             }
         }
+        bf_light_view.write(&renderer.device, &renderer.queue);
+        gpu_scene
+            .assets
+            .buffers
+            .insert(LIGHT_VIEW_UUID, bf_light_view);
 
         gpu_scene.assets.bind_groups.insert(
             LIGHT_VIEW_UUID,
@@ -839,7 +868,7 @@ impl RenderNode for ShadowMappingNode {
                         .buffers
                         .get(&LIGHT_VIEW_UUID)
                         .unwrap()
-                        .entire_binding()
+                        .binding::<GpuCamera>()
                         .unwrap(),
                 }],
             }),
@@ -857,48 +886,44 @@ impl RenderNode for ShadowMappingNode {
         let assets = &gpu_scene.assets;
 
         let Some(light_view_bind_groups) = assets.bind_groups.get(&LIGHT_VIEW_UUID) else {
-            dbg!();
             return;
         };
 
         let mut encoder = renderer.device.create_command_encoder(&Default::default());
         for (id, _) in &scene.lights {
-            dbg!();
             let Some(pipeline) = &self.pipeline else {
                 return;
             };
 
-            let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {
-                label: Some("shadow_pass"),
-                color_attachments: &[None],
-                depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
-                    view: self.shadow_map_views.get(id).unwrap(),
-                    depth_ops: Some(Operations {
-                        load: LoadOp::Clear(1.),
-                        store: StoreOp::Store,
+            for (depth_view, offset) in self.shadow_map_views.get(id).unwrap() {
+                let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {
+                    label: Some("shadow_pass"),
+                    color_attachments: &[None],
+                    depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
+                        view: depth_view,
+                        depth_ops: Some(Operations {
+                            load: LoadOp::Clear(1.),
+                            store: StoreOp::Store,
+                        }),
+                        stencil_ops: None,
                     }),
-                    stencil_ops: None,
-                }),
-                ..Default::default()
-            });
-            dbg!();
+                    ..Default::default()
+                });
 
-            pass.set_pipeline(pipeline);
-            pass.set_bind_group(
-                0,
-                light_view_bind_groups,
-                &[*assets.offsets.get(id).unwrap()],
-            );
+                pass.set_pipeline(pipeline);
+                pass.set_bind_group(0, light_view_bind_groups, &[*offset]);
 
-            for mesh in queue {
-                let Some(vertices) = assets.buffers.get(&mesh.mesh.mesh) else {
-                    return;
-                };
+                for mesh in queue {
+                    let Some(vertices) = assets.buffers.get(&mesh.mesh.mesh) else {
+                        return;
+                    };
 
-                pass.set_vertex_buffer(0, vertices.buffer().unwrap().slice(..));
-                pass.draw(0..vertices.len::<Vertex>().unwrap() as u32, 0..1);
+                    pass.set_vertex_buffer(0, vertices.buffer().unwrap().slice(..));
+                    pass.draw(0..vertices.len::<Vertex>().unwrap() as u32, 0..1);
+                }
             }
         }
+
         renderer.queue.submit([encoder.finish()]);
     }
 }
