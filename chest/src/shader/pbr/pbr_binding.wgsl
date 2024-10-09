@@ -12,6 +12,3 @@
 @group(2) @binding(1) var tex_base_color: texture_2d<f32>;
 @group(2) @binding(2) var tex_normal: texture_2d<f32>;
 @group(2) @binding(3) var tex_sampler: sampler;
-
-@group(3) @binding(0) var directional_shadow_map: texture_depth_2d_array;
-@group(3) @binding(1) var directional_shadow_sampler: sampler_comparison;

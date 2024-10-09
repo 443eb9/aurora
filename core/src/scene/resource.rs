@@ -90,7 +90,7 @@ impl Light {
                     .with_translation(real_camera.transform.translation)
                     .compute_matrix()
                     .inverse(),
-                proj: OrthographicProjection::symmetric(128., 128., -10000., 10000.)
+                proj: OrthographicProjection::symmetric(32., 32., 10., -10.)
                     .compute_matrix(),
                 position_ws: real_camera.transform.translation,
                 exposure: 0.,
@@ -113,7 +113,24 @@ impl Light {
                     }
                 })
                 .collect(),
-            Light::Spot(_) => todo!(),
+            Light::Spot(l) => CUBE_MAP_FACES
+                .into_iter()
+                .map(|face| {
+                    let trans = Transform::default()
+                        .looking_at(face.target, face.up)
+                        .with_translation(l.transform.translation);
+                    GpuCamera {
+                        view: trans.compute_matrix().inverse(),
+                        proj: Mat4::perspective_infinite_reverse_rh(
+                            std::f32::consts::FRAC_PI_2,
+                            1.,
+                            0.1,
+                        ),
+                        position_ws: trans.translation,
+                        exposure: 0.,
+                    }
+                })
+                .collect(),
         }
     }
 }

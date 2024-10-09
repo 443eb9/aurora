@@ -16,10 +16,10 @@ impl Default for PbrRenderFlow {
         let mut flow = RenderFlow::default();
         ids.push(flow.add::<GeneralNode>());
         ids.push(flow.add::<ImageFallbackNode>());
+        // ids.push(flow.add::<PostProcessGeneralNode>());
         ids.push(flow.add::<ShadowMappingNode>());
-        ids.push(flow.add::<PostProcessGeneralNode>());
-        ids.push(flow.add::<DepthViewNode>());
-        // ids.push(flow.add::<PbrNode>());
+        ids.push(flow.add::<PbrNode>());
+        // ids.push(flow.add::<DepthViewNode>());
 
         Self { inner: flow, ids }
     }
@@ -27,8 +27,7 @@ impl Default for PbrRenderFlow {
 
 impl PbrRenderFlow {
     pub fn set_queue(&mut self, meshes: Vec<StaticMesh>) {
-        self.inner.set_queue(self.ids[2], meshes.clone());
-        // self.inner.set_queue(self.ids[3], meshes);
+        self.inner.set_queue_global(meshes);
     }
 }
 

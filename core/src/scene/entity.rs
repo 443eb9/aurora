@@ -219,10 +219,10 @@ pub struct OrthographicProjection {
 impl OrthographicProjection {
     pub fn symmetric(width: f32, height: f32, near: f32, far: f32) -> Self {
         Self {
-            left: -width,
-            right: width,
-            bottom: -height,
-            top: height,
+            left: -width * 0.5,
+            right: width * 0.5,
+            bottom: -height * 0.5,
+            top: height * 0.5,
             near,
             far,
         }

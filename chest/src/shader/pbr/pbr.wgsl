@@ -8,28 +8,29 @@
         pbr_function,
         pbr_type::PbrVertexOutput,
     }
+    shadow_mapping,
     tonemapping,
 }
 
 @vertex
-fn vertex(input: VertexInput) -> PbrVertexOutput {
+fn vertex(in: VertexInput) -> PbrVertexOutput {
     var output: PbrVertexOutput;
-    output.position_ws = input.position;
-    output.position_cs = camera.proj * camera.view * vec4f(input.position, 1.);
-    output.normal = input.normal;
-    output.uv = input.uv.xy;
-    output.tangent = input.tangent;
+    output.position_ws = in.position;
+    output.position_cs = camera.proj * camera.view * vec4f(in.position, 1.);
+    output.normal = in.normal;
+    output.uv = in.uv.xy;
+    output.tangent = in.tangent;
     return output;
 }
 
 @fragment
-fn fragment(input: PbrVertexOutput) -> @location(0) vec4f {
+fn fragment(in: PbrVertexOutput) -> @location(0) vec4f {
 #ifdef TEX_NORMAL
-    let normal = pbr_function::unpack_normal(input.normal, input.tangent, input.uv);
+    let normal = pbr_function::unpack_normal(in.normal, in.tangent, in.uv);
 #else
-    let normal = input.normal;
+    let normal = in.normal;
 #endif
-    var unlit = pbr_function::construct_surface_unlit(input.position_ws, normal, input.uv, material);
+    var unlit = pbr_function::construct_surface_unlit(in.position_ws, normal, in.uv, material);
 
     var color = vec3f(0.);
 
@@ -37,22 +38,31 @@ fn fragment(input: PbrVertexOutput) -> @location(0) vec4f {
 
     for (var i_light = 0u; i_light < arrayLength(&dir_lights) - 1u; i_light += 1u) {
         let light = &dir_lights[i_light];
-        color += pbr_function::apply_lighting((*light).direction, (*light).intensity, (*light).color, &unlit);
+        
+        let bright = pbr_function::apply_lighting((*light).direction, (*light).intensity, (*light).color, &unlit);
+        let dark = shadow_mapping::sample_directional_shadow_map(i_light, in.position_ws);
+
+        color += bright * dark;
+        // color = vec3f(dark);
     }
 
     for (var i_light = 0u; i_light < arrayLength(&point_lights) - 1u; i_light += 1u) {
         let light = &point_lights[i_light];
-        let position_rel = (*light).position - input.position_ws;
+        let position_rel = (*light).position - in.position_ws;
         let direction = normalize(position_rel);
         let d2 = max(dot(position_rel, position_rel), 0.0001);
 
         let intensity = (*light).intensity / (4. * PI * d2);
-        color += pbr_function::apply_lighting(direction, intensity, (*light).color, &unlit);
+
+        let bright = pbr_function::apply_lighting(direction, intensity, (*light).color, &unlit);
+        let dark = shadow_mapping::sample_point_shadow_map(i_light, in.position_ws);
+
+        color += bright * dark;
     }
 
     for (var i_light = 0u; i_light < arrayLength(&spot_lights) - 1u; i_light += 1u) {
         let light = &spot_lights[i_light];
-        let position_rel = (*light).position - input.position_ws;
+        let position_rel = (*light).position - in.position_ws;
         let direction = normalize(position_rel);
         let d2 = max(dot(position_rel, position_rel), 0.0001);
 
@@ -62,9 +72,14 @@ fn fragment(input: PbrVertexOutput) -> @location(0) vec4f {
 
         let intensity = (*light).intensity / (2. * PI * (1. - cos((*light).outer / 2.)) * d2) * lambda;
         // let intensity = (*light).intensity / (PI * dot(position_rel, position_rel)) * lambda;
-        color += pbr_function::apply_lighting(direction, intensity, (*light).color, &unlit);
+
+        let bright = pbr_function::apply_lighting(direction, intensity, (*light).color, &unlit);
+        let dark = shadow_mapping::sample_spot_shadow_map(i_light, in.position_ws);
+
+        color += bright * dark;
     }
 
     color = pbr_function::apply_exposure(color * unlit.base_color);
     return vec4f(tonemapping::tonemapping_tony_mc_mapface(color), 1.);
+    // return vec4f(color, 1.);
 }

@@ -38,26 +38,26 @@ pub fn load_primitives() -> Scene {
         scene.insert_object(sm);
     });
 
-    // scene.insert_object(Light::Directional(DirectionalLight {
-    //     transform: Transform {
-    //         rotation: Quat::from_mat4(&Mat4::look_at_lh(Vec3::ZERO, Vec3::NEG_ONE, Vec3::Y)),
-    //         ..Default::default()
-    //     },
-    //     color: Srgb::new(1., 1., 1.),
-    //     intensity: 2000.,
-    // }));
-    scene.insert_object(Light::Point(PointLight {
+    scene.insert_object(Light::Directional(DirectionalLight {
         transform: Transform {
-            translation: Vec3 {
-                x: -2.,
-                y: 1.5,
-                z: 0.,
-            },
+            rotation: Quat::from_mat4(&Mat4::look_at_lh(Vec3::ZERO, Vec3::NEG_ONE, Vec3::Y)),
             ..Default::default()
         },
-        color: Srgb::new(1., 0., 0.),
-        intensity: 100000.,
+        color: Srgb::new(1., 1., 1.),
+        intensity: 2000.,
     }));
+    // scene.insert_object(Light::Point(PointLight {
+    //     transform: Transform {
+    //         translation: Vec3 {
+    //             x: -2.,
+    //             y: 1.5,
+    //             z: 0.,
+    //         },
+    //         ..Default::default()
+    //     },
+    //     color: Srgb::new(1., 0., 0.),
+    //     intensity: 100000.,
+    // }));
     // scene.insert_object(Light::Spot(SpotLight {
     //     transform: Transform {
     //         translation: Vec3 {

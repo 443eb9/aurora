@@ -36,7 +36,8 @@ pub struct GpuAssets {
 #[derive(Default)]
 pub struct GpuLightCounter {
     pub directional_lights: u32,
-    pub omni_lights: u32,
+    pub point_lights: u32,
+    pub spot_lights: u32,
 }
 
 #[derive(Default)]
@@ -66,11 +67,11 @@ impl GpuScene {
                 }
                 Light::Point(l) => {
                     bf_point_lights.push(&l.transfer(renderer));
-                    self.light_counter.omni_lights += 1
+                    self.light_counter.point_lights += 1
                 }
                 Light::Spot(l) => {
                     bf_spot_lights.push(&l.transfer(renderer));
-                    self.light_counter.omni_lights += 1;
+                    self.light_counter.spot_lights += 1;
                 }
             };
         }
