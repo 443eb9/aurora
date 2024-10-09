@@ -43,7 +43,6 @@ fn fragment(in: PbrVertexOutput) -> @location(0) vec4f {
         let dark = shadow_mapping::sample_directional_shadow_map(i_light, in.position_ws);
 
         color += bright * dark;
-        // color = vec3f(dark);
     }
 
     for (var i_light = 0u; i_light < arrayLength(&point_lights) - 1u; i_light += 1u) {
@@ -81,5 +80,4 @@ fn fragment(in: PbrVertexOutput) -> @location(0) vec4f {
 
     color = pbr_function::apply_exposure(color * unlit.base_color);
     return vec4f(tonemapping::tonemapping_tony_mc_mapface(color), 1.);
-    // return vec4f(color, 1.);
 }

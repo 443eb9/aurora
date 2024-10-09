@@ -814,7 +814,7 @@ impl RenderNode for ShadowMappingNode {
 
         let shadow_map_sampler = renderer.device.create_sampler(&SamplerDescriptor {
             label: Some("shadow_map_sampler"),
-            compare: Some(CompareFunction::Less),
+            compare: Some(CompareFunction::LessEqual),
             mag_filter: FilterMode::Linear,
             min_filter: FilterMode::Linear,
             mipmap_filter: FilterMode::Linear,

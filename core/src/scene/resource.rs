@@ -87,12 +87,13 @@ impl Light {
             Light::Directional(l) => vec![GpuCamera {
                 view: l
                     .transform
-                    .with_translation(real_camera.transform.translation)
+                    // .with_translation(real_camera.transform.translation)
                     .compute_matrix()
                     .inverse(),
                 proj: OrthographicProjection::symmetric(32., 32., 10., -10.)
                     .compute_matrix(),
-                position_ws: real_camera.transform.translation,
+                // position_ws: real_camera.transform.translation,
+                position_ws: l.transform.translation,
                 exposure: 0.,
             }],
             Light::Point(l) => CUBE_MAP_FACES
