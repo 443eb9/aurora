@@ -15,7 +15,9 @@ pub fn load_primitives() -> Scene {
         Image::from_path("gui/assets/sergun-kuyucu-medieval-blocks-normal.png").unwrap(),
     );
 
-    let meshes = Mesh::from_obj("gui/assets/large_primitives.obj")
+    let meshes = 
+    Mesh::from_obj("gui/assets/large_primitives.obj")
+    // Mesh::from_obj("gui/assets/Room.obj")
         .into_iter()
         .map(|m| scene.insert_object(m))
         .collect::<Vec<_>>();
@@ -46,18 +48,19 @@ pub fn load_primitives() -> Scene {
         color: Srgb::new(1., 1., 1.),
         intensity: 2000.,
     }));
-    // scene.insert_object(Light::Point(PointLight {
-    //     transform: Transform {
-    //         translation: Vec3 {
-    //             x: -2.,
-    //             y: 1.5,
-    //             z: 0.,
-    //         },
-    //         ..Default::default()
-    //     },
-    //     color: Srgb::new(1., 0., 0.),
-    //     intensity: 100000.,
-    // }));
+    scene.insert_object(Light::Point(PointLight {
+        transform: Transform {
+            translation: Vec3 {
+                x: -2.,
+                y: 1.5,
+                z: 0.,
+            },
+            ..Default::default()
+        },
+        // transform: Transform::default(),
+        color: Srgb::new(0.2, 0.5, 0.8),
+        intensity: 100000.,
+    }));
     // scene.insert_object(Light::Spot(SpotLight {
     //     transform: Transform {
     //         translation: Vec3 {

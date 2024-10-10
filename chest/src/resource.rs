@@ -10,8 +10,8 @@ use wgpu::{
 pub struct ShadowMaps {
     pub directional_shadow_map: Texture,
     pub directional_shadow_map_view: TextureView,
-    // pub point_shadow_map: Texture,
-    // pub point_shadow_map_view: TextureView,
+    pub point_shadow_map: Texture,
+    pub point_shadow_map_view: TextureView,
     // pub spot_shadow_map: Texture,
     // pub spot_shadow_map_view: TextureView,
     pub shadow_map_sampler: Sampler,
@@ -41,20 +41,20 @@ impl ShadowMaps {
                 },
                 BindGroupEntry {
                     binding: 1,
-                    resource: BindingResource::TextureView(&self.directional_shadow_map_view),
-                },
-                // BindGroupEntry {
-                //     binding: 2,
-                //     resource: BindingResource::TextureView(&self.point_shadow_map_view),
-                // },
-                // BindGroupEntry {
-                //     binding: 3,
-                //     resource: BindingResource::TextureView(&self.spot_shadow_map_view),
-                // },
-                BindGroupEntry {
-                    binding: 2,
                     resource: BindingResource::Sampler(&self.shadow_map_sampler),
                 },
+                BindGroupEntry {
+                    binding: 2,
+                    resource: BindingResource::TextureView(&self.directional_shadow_map_view),
+                },
+                BindGroupEntry {
+                    binding: 3,
+                    resource: BindingResource::TextureView(&self.point_shadow_map_view),
+                },
+                // BindGroupEntry {
+                //     binding: 4,
+                //     resource: BindingResource::TextureView(&self.spot_shadow_map_view),
+                // },
             ],
         }))
     }

@@ -16,7 +16,7 @@ impl Default for PbrRenderFlow {
         let mut flow = RenderFlow::default();
         ids.push(flow.add::<GeneralNode>());
         ids.push(flow.add::<ImageFallbackNode>());
-        // ids.push(flow.add::<PostProcessGeneralNode>());
+        ids.push(flow.add::<PostProcessGeneralNode>());
         ids.push(flow.add::<ShadowMappingNode>());
         ids.push(flow.add::<PbrNode>());
         // ids.push(flow.add::<DepthViewNode>());

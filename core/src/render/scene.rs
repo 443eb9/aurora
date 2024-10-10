@@ -125,6 +125,6 @@ impl GpuScene {
             },
         });
 
-        renderer.queue.submit(None);
+        // renderer.queue.submit(None);
     }
 }

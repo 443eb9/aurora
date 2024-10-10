@@ -585,11 +585,11 @@ impl RenderNode for DepthViewNode {
                             .unwrap()
                             .as_ref()
                             .unwrap()
-                            .directional_shadow_map
+                            .point_shadow_map
                             .create_view(&TextureViewDescriptor {
                                 format: Some(TextureFormat::Depth32Float),
                                 dimension: Some(TextureViewDimension::D2),
-                                base_array_layer: 0,
+                                base_array_layer: 1,
                                 array_layer_count: Some(1),
                                 ..Default::default()
                             }),
@@ -674,7 +674,7 @@ impl RenderNode for ShadowMappingNode {
                     label: None,
                     entries: &[BindGroupLayoutEntry {
                         binding: 0,
-                        visibility: ShaderStages::VERTEX,
+                        visibility: ShaderStages::VERTEX_FRAGMENT,
                         ty: BindingType::Buffer {
                             ty: BufferBindingType::Uniform,
                             has_dynamic_offset: true,
@@ -768,27 +768,27 @@ impl RenderNode for ShadowMappingNode {
                 ..Default::default()
             });
 
-        // let point_shadow_map = renderer.device.create_texture(&TextureDescriptor {
-        //     label: Some("point_shadow_map"),
-        //     size: Extent3d {
-        //         width: 512,
-        //         height: 512,
-        //         depth_or_array_layers: (gpu_scene.light_counter.point_lights * 6).max(6),
-        //     },
-        //     mip_level_count: 1,
-        //     sample_count: 1,
-        //     dimension: TextureDimension::D2,
-        //     format: TextureFormat::Depth32Float,
-        //     usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
-        //     view_formats: &[],
-        // });
+        let point_shadow_map = renderer.device.create_texture(&TextureDescriptor {
+            label: Some("point_shadow_map"),
+            size: Extent3d {
+                width: 512,
+                height: 512,
+                depth_or_array_layers: (gpu_scene.light_counter.point_lights * 6).max(6),
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: TextureDimension::D2,
+            format: TextureFormat::Depth32Float,
+            usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
 
-        // let point_shadow_map_view = point_shadow_map.create_view(&TextureViewDescriptor {
-        //     label: Some("point_shadow_map_view"),
-        //     dimension: Some(TextureViewDimension::CubeArray),
-        //     aspect: TextureAspect::DepthOnly,
-        //     ..Default::default()
-        // });
+        let point_shadow_map_view = point_shadow_map.create_view(&TextureViewDescriptor {
+            label: Some("point_shadow_map_view"),
+            dimension: Some(TextureViewDimension::CubeArray),
+            aspect: TextureAspect::DepthOnly,
+            ..Default::default()
+        });
 
         // let spot_shadow_map = renderer.device.create_texture(&TextureDescriptor {
         //     label: Some("spot_shadow_map"),
@@ -814,7 +814,7 @@ impl RenderNode for ShadowMappingNode {
 
         let shadow_map_sampler = renderer.device.create_sampler(&SamplerDescriptor {
             label: Some("shadow_map_sampler"),
-            compare: Some(CompareFunction::LessEqual),
+            // compare: Some(CompareFunction::LessEqual),
             mag_filter: FilterMode::Linear,
             min_filter: FilterMode::Linear,
             mipmap_filter: FilterMode::Linear,
@@ -837,9 +837,16 @@ impl RenderNode for ShadowMappingNode {
                         },
                         count: None,
                     },
-                    // Directional Light Shaodow Maps
+                    // Shadow Map Sampler
                     BindGroupLayoutEntry {
                         binding: 1,
+                        visibility: ShaderStages::FRAGMENT,
+                        ty: BindingType::Sampler(SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                    // Directional Light Shaodow Maps
+                    BindGroupLayoutEntry {
+                        binding: 2,
                         visibility: ShaderStages::FRAGMENT,
                         ty: BindingType::Texture {
                             sample_type: TextureSampleType::Depth,
@@ -848,43 +855,36 @@ impl RenderNode for ShadowMappingNode {
                         },
                         count: None,
                     },
-                    // // Point Light Shaodow Maps
-                    // BindGroupLayoutEntry {
-                    //     binding: 2,
-                    //     visibility: ShaderStages::FRAGMENT,
-                    //     ty: BindingType::Texture {
-                    //         sample_type: TextureSampleType::Depth,
-                    //         view_dimension: TextureViewDimension::CubeArray,
-                    //         multisampled: false,
-                    //     },
-                    //     count: None,
-                    // },
-                    // // Spot Light Shaodow Maps
-                    // BindGroupLayoutEntry {
-                    //     binding: 3,
-                    //     visibility: ShaderStages::FRAGMENT,
-                    //     ty: BindingType::Texture {
-                    //         sample_type: TextureSampleType::Depth,
-                    //         view_dimension: TextureViewDimension::CubeArray,
-                    //         multisampled: false,
-                    //     },
-                    //     count: None,
-                    // },
-                    // Shadow Map Sampler
+                    // Point Light Shaodow Maps
                     BindGroupLayoutEntry {
-                        binding: 2,
+                        binding: 3,
                         visibility: ShaderStages::FRAGMENT,
-                        ty: BindingType::Sampler(SamplerBindingType::Comparison),
+                        ty: BindingType::Texture {
+                            sample_type: TextureSampleType::Depth,
+                            view_dimension: TextureViewDimension::CubeArray,
+                            multisampled: false,
+                        },
                         count: None,
                     },
+                    // // Spot Light Shaodow Maps
+                    // BindGroupLayoutEntry {
+                    //     binding: 4,
+                    //     visibility: ShaderStages::FRAGMENT,
+                    //     ty: BindingType::Texture {
+                    //         sample_type: TextureSampleType::Depth,
+                    //         view_dimension: TextureViewDimension::CubeArray,
+                    //         multisampled: false,
+                    //     },
+                    //     count: None,
+                    // },
                 ],
             });
 
         SHADOW_MAPS.lock().unwrap().replace(ShadowMaps {
             directional_shadow_map,
             directional_shadow_map_view,
-            // point_shadow_map,
-            // point_shadow_map_view,
+            point_shadow_map,
+            point_shadow_map_view,
             // spot_shadow_map,
             // spot_shadow_map_view,
             shadow_map_sampler,
@@ -954,19 +954,19 @@ impl RenderNode for ShadowMappingNode {
                     directional_index += 1;
                 }
                 Light::Point(_) | Light::Spot(_) => {
-                    // self.render_shadow_map_views.insert(
-                    //     *id,
-                    //     offsets
-                    //         .enumerate()
-                    //         .map(|(i_face, offset)| {
-                    //             point_desc.base_array_layer = point_index * 6 + i_face as u32;
-                    //             (
-                    //                 shadow_maps.point_shadow_map.create_view(&point_desc),
-                    //                 offset,
-                    //             )
-                    //         })
-                    //         .collect(),
-                    // );
+                    self.render_shadow_map_views.insert(
+                        *id,
+                        offsets
+                            .enumerate()
+                            .map(|(i_face, offset)| {
+                                point_desc.base_array_layer = point_index * 6 + i_face as u32;
+                                (
+                                    shadow_maps.point_shadow_map.create_view(&point_desc),
+                                    offset,
+                                )
+                            })
+                            .collect(),
+                    );
                     point_index += 1;
                 }
             }

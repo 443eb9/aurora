@@ -14,9 +14,9 @@ async fn real_time_app() {
 }
 
 fn main() {
-    env_logger::builder()
-        .filter_level(log::LevelFilter::Info)
-        .init();
+    // env_logger::builder()
+    //     .filter_level(log::LevelFilter::Info)
+    //     .init();
 
     pollster::block_on(real_time_app());
 }

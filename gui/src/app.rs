@@ -84,7 +84,7 @@ impl<'a> Application<'a> {
         let main_camera = ControllableCamera::new(
             Camera {
                 transform: Transform {
-                    translation: Vec3::new(0., 0., 10.),
+                    translation: Vec3::new(0., 0., 0.),
                     ..Default::default()
                 },
                 projection: CameraProjection::Perspective(

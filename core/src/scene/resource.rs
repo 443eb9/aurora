@@ -33,11 +33,16 @@ impl Transferable for Camera {
     type GpuRepr = GpuCamera;
 
     fn transfer(&self, _renderer: &WgpuRenderer) -> Self::GpuRepr {
+        // let proj = Mat4::perspective_rh(std::f32::consts::FRAC_PI_2, 1., 0.1, 1000.);
+
         Self::GpuRepr {
             position_ws: self.transform.translation,
             view: self.transform.compute_matrix().inverse(),
             proj: self.projection.compute_matrix(),
             exposure: self.exposure.ev100,
+            // Only used in shadow mapping.
+            near: 0.,
+            far: 0.,
         }
     }
 }
@@ -90,11 +95,12 @@ impl Light {
                     // .with_translation(real_camera.transform.translation)
                     .compute_matrix()
                     .inverse(),
-                proj: OrthographicProjection::symmetric(32., 32., 10., -10.)
-                    .compute_matrix(),
+                proj: OrthographicProjection::symmetric(32., 32., 10., -10.).compute_matrix(),
                 // position_ws: real_camera.transform.translation,
                 position_ws: l.transform.translation,
                 exposure: 0.,
+                near: 0.,
+                far: 0.,
             }],
             Light::Point(l) => CUBE_MAP_FACES
                 .into_iter()
@@ -104,13 +110,11 @@ impl Light {
                         .with_translation(l.transform.translation);
                     GpuCamera {
                         view: trans.compute_matrix().inverse(),
-                        proj: Mat4::perspective_infinite_reverse_rh(
-                            std::f32::consts::FRAC_PI_2,
-                            1.,
-                            0.1,
-                        ),
+                        proj: Mat4::perspective_rh(std::f32::consts::FRAC_PI_2, 1., 0.1, 20.),
                         position_ws: trans.translation,
                         exposure: 0.,
+                        near: 0.1,
+                        far: 20.,
                     }
                 })
                 .collect(),
@@ -122,13 +126,11 @@ impl Light {
                         .with_translation(l.transform.translation);
                     GpuCamera {
                         view: trans.compute_matrix().inverse(),
-                        proj: Mat4::perspective_infinite_reverse_rh(
-                            std::f32::consts::FRAC_PI_2,
-                            1.,
-                            0.1,
-                        ),
+                        proj: Mat4::perspective_rh(std::f32::consts::FRAC_PI_2, 1., 20., 0.0001),
                         position_ws: trans.translation,
                         exposure: 0.,
+                        near: 0.1,
+                        far: 10.,
                     }
                 })
                 .collect(),

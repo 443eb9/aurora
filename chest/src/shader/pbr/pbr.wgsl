@@ -54,7 +54,7 @@ fn fragment(in: PbrVertexOutput) -> @location(0) vec4f {
         let intensity = (*light).intensity / (4. * PI * d2);
 
         let bright = pbr_function::apply_lighting(direction, intensity, (*light).color, &unlit);
-        let dark = shadow_mapping::sample_point_shadow_map(i_light, in.position_ws);
+        let dark = shadow_mapping::sample_point_shadow_map(i_light, in.position_ws - (*light).position);
 
         color += bright * dark;
     }
