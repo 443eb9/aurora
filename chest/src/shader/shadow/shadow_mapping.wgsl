@@ -18,16 +18,8 @@ fn sample_directional_shadow_map(light: u32, position_ws: vec3f) -> f32 {
     if (uv.x < 0. || uv.x > 1. || uv.y < 0. || uv.y > 1.) {
         return 1.;
     } else {
-        let frag_depth = saturate(position_cs.z) - 0.001;
+        let frag_depth = saturate(position_cs.z) - 0.05;
         return textureSampleCompare(directional_shadow_map, shadow_map_sampler, uv, light, frag_depth);
-
-        // let shadow_depth = textureSample(directional_shadow_map, shadow_map_sampler, t.xy, light);
-        // let frag_depth = saturate(t.z) - 0.001;
-        // if (frag_depth < shadow_depth) {
-        //     return 1.;
-        // } else {
-        //     return 0.;
-        // }
     }
 }
 
@@ -41,11 +33,5 @@ fn sample_point_shadow_map(light: u32, relative_pos: vec3f) -> f32 {
     let v = vec2f(frag_depth * proj[2][2] + proj[3][2], -frag_depth);
     let projected_depth = v.x / v.y - 0.001;
 
-    // let shadow_depth = textureSample(point_shadow_map, shadow_map_sampler, -relative_pos, light);
-    // if (projected_depth < shadow_depth) {
-    //     return 1.;
-    // } else {
-    //     return 0.;
-    // }
     return textureSampleCompare(point_shadow_map, shadow_map_sampler, -relative_pos, light, projected_depth);
 }

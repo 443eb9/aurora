@@ -168,7 +168,7 @@ impl<'a> Application<'a> {
         let screenshot = aurora_core::util::create_texture(
             &self.renderer.device,
             self.dim.extend(1),
-            TextureFormat::Rgba8Unorm,
+            TextureFormat::Rgba8UnormSrgb,
             TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC,
         );
 
@@ -180,7 +180,7 @@ impl<'a> Application<'a> {
         );
 
         self.redraw(Some(RenderTargets {
-            color_format: TextureFormat::Rgba8Unorm,
+            color_format: TextureFormat::Rgba8UnormSrgb,
             color: screenshot.create_view(&TextureViewDescriptor::default()),
             depth_format: Some(TextureFormat::Depth32Float),
             depth: Some(depth.create_view(&TextureViewDescriptor::default())),

@@ -773,7 +773,10 @@ impl RenderNode for ShadowMappingNode {
             size: Extent3d {
                 width: 512,
                 height: 512,
-                depth_or_array_layers: (gpu_scene.light_counter.point_lights * 6).max(6),
+                depth_or_array_layers: ((gpu_scene.light_counter.point_lights
+                    + gpu_scene.light_counter.spot_lights)
+                    * 6)
+                .max(6),
             },
             mip_level_count: 1,
             sample_count: 1,
@@ -873,7 +876,7 @@ impl RenderNode for ShadowMappingNode {
         let mut point_index = 0;
 
         let mut directional_desc = TextureViewDescriptor {
-            label: Some("directional_shadow_map_view"),
+            label: Some("directional_shadow_map_render_view"),
             format: Some(TextureFormat::Depth32Float),
             dimension: Some(TextureViewDimension::D2),
             aspect: TextureAspect::DepthOnly,
@@ -883,7 +886,7 @@ impl RenderNode for ShadowMappingNode {
         };
 
         let mut point_desc = TextureViewDescriptor {
-            label: Some("point_shadow_map_view"),
+            label: Some("point_shadow_map_render_view"),
             format: Some(TextureFormat::Depth32Float),
             dimension: Some(TextureViewDimension::D2),
             aspect: TextureAspect::DepthOnly,

@@ -16,8 +16,8 @@ pub fn load_primitives() -> Scene {
     );
 
     let meshes = 
-    Mesh::from_obj("gui/assets/large_primitives.obj")
-    // Mesh::from_obj("gui/assets/Room.obj")
+    // Mesh::from_obj("gui/assets/large_primitives.obj")
+    Mesh::from_obj("gui/assets/Room.obj")
         .into_iter()
         .map(|m| scene.insert_object(m))
         .collect::<Vec<_>>();
@@ -40,40 +40,40 @@ pub fn load_primitives() -> Scene {
         scene.insert_object(sm);
     });
 
-    scene.insert_object(Light::Directional(DirectionalLight {
-        transform: Transform {
-            rotation: Quat::from_mat4(&Mat4::look_at_lh(Vec3::ZERO, Vec3::NEG_ONE, Vec3::Y)),
-            ..Default::default()
-        },
-        color: Srgb::new(1., 1., 1.),
-        intensity: 2000.,
-    }));
+    // scene.insert_object(Light::Directional(DirectionalLight {
+    //     transform: Transform {
+    //         rotation: Quat::from_mat4(&Mat4::look_at_lh(Vec3::ZERO, Vec3::NEG_ONE, Vec3::Y)),
+    //         ..Default::default()
+    //     },
+    //     color: Srgb::new(1., 1., 1.),
+    //     intensity: 2000.,
+    // }));
     scene.insert_object(Light::Point(PointLight {
-        transform: Transform {
-            translation: Vec3 {
-                x: -2.,
-                y: 1.5,
-                z: 0.,
-            },
-            ..Default::default()
-        },
-        // transform: Transform::default(),
+        // transform: Transform {
+        //     translation: Vec3 {
+        //         x: -2.,
+        //         y: 1.5,
+        //         z: 0.,
+        //     },
+        //     ..Default::default()
+        // },
+        transform: Transform::default(),
         color: Srgb::new(0.2, 0.5, 0.8),
-        intensity: 100000.,
+        intensity: 10000.,
     }));
     scene.insert_object(Light::Spot(SpotLight {
         transform: Transform {
-            translation: Vec3 {
-                x: 2.,
-                y: 2.,
-                z: -2.,
-            },
-            // translation: Vec3::ZERO,
+            // translation: Vec3 {
+            //     x: 2.,
+            //     y: 2.,
+            //     z: -2.,
+            // },
+            translation: Vec3::ZERO,
             rotation: Quat::from_axis_angle(Vec3::X, std::f32::consts::FRAC_PI_3),
             ..Default::default()
         },
         color: Srgb::new(0., 1., 0.),
-        intensity: 100000.,
+        intensity: 10000.,
         inner_angle: std::f32::consts::FRAC_PI_6 * 0.75,
         outer_angle: std::f32::consts::FRAC_PI_4 * 0.75,
     }));
