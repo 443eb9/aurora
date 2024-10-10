@@ -5,8 +5,6 @@ struct Camera {
     proj: mat4x4f,
     position: vec3f,
     exposure: f32,
-    near: f32,
-    far: f32,
 }
 
 struct DirectionalLight {

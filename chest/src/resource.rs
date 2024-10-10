@@ -12,8 +12,6 @@ pub struct ShadowMaps {
     pub directional_shadow_map_view: TextureView,
     pub point_shadow_map: Texture,
     pub point_shadow_map_view: TextureView,
-    // pub spot_shadow_map: Texture,
-    // pub spot_shadow_map_view: TextureView,
     pub shadow_map_sampler: Sampler,
 
     pub layout: Option<Arc<BindGroupLayout>>,

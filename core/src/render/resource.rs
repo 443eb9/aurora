@@ -147,8 +147,6 @@ pub struct GpuCamera {
     pub proj: Mat4,
     pub position_ws: Vec3,
     pub exposure: f32,
-    pub near: f32,
-    pub far: f32,
 }
 
 #[derive(ShaderType)]

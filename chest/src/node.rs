@@ -790,31 +790,9 @@ impl RenderNode for ShadowMappingNode {
             ..Default::default()
         });
 
-        // let spot_shadow_map = renderer.device.create_texture(&TextureDescriptor {
-        //     label: Some("spot_shadow_map"),
-        //     size: Extent3d {
-        //         width: 512,
-        //         height: 512,
-        //         depth_or_array_layers: (gpu_scene.light_counter.spot_lights * 6).max(6),
-        //     },
-        //     mip_level_count: 1,
-        //     sample_count: 1,
-        //     dimension: TextureDimension::D2,
-        //     format: TextureFormat::Depth32Float,
-        //     usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
-        //     view_formats: &[],
-        // });
-
-        // let spot_shadow_map_view = spot_shadow_map.create_view(&TextureViewDescriptor {
-        //     label: Some("spot_shadow_map_view"),
-        //     dimension: Some(TextureViewDimension::CubeArray),
-        //     aspect: TextureAspect::DepthOnly,
-        //     ..Default::default()
-        // });
-
         let shadow_map_sampler = renderer.device.create_sampler(&SamplerDescriptor {
             label: Some("shadow_map_sampler"),
-            // compare: Some(CompareFunction::LessEqual),
+            compare: Some(CompareFunction::LessEqual),
             mag_filter: FilterMode::Linear,
             min_filter: FilterMode::Linear,
             mipmap_filter: FilterMode::Linear,
@@ -841,7 +819,7 @@ impl RenderNode for ShadowMappingNode {
                     BindGroupLayoutEntry {
                         binding: 1,
                         visibility: ShaderStages::FRAGMENT,
-                        ty: BindingType::Sampler(SamplerBindingType::Filtering),
+                        ty: BindingType::Sampler(SamplerBindingType::Comparison),
                         count: None,
                     },
                     // Directional Light Shaodow Maps
@@ -866,17 +844,6 @@ impl RenderNode for ShadowMappingNode {
                         },
                         count: None,
                     },
-                    // // Spot Light Shaodow Maps
-                    // BindGroupLayoutEntry {
-                    //     binding: 4,
-                    //     visibility: ShaderStages::FRAGMENT,
-                    //     ty: BindingType::Texture {
-                    //         sample_type: TextureSampleType::Depth,
-                    //         view_dimension: TextureViewDimension::CubeArray,
-                    //         multisampled: false,
-                    //     },
-                    //     count: None,
-                    // },
                 ],
             });
 
@@ -885,8 +852,6 @@ impl RenderNode for ShadowMappingNode {
             directional_shadow_map_view,
             point_shadow_map,
             point_shadow_map_view,
-            // spot_shadow_map,
-            // spot_shadow_map_view,
             shadow_map_sampler,
             layout: Some(Arc::new(shadow_layout)),
         });

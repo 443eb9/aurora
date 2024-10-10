@@ -61,21 +61,22 @@ pub fn load_primitives() -> Scene {
         color: Srgb::new(0.2, 0.5, 0.8),
         intensity: 100000.,
     }));
-    // scene.insert_object(Light::Spot(SpotLight {
-    //     transform: Transform {
-    //         translation: Vec3 {
-    //             x: 2.,
-    //             y: 2.,
-    //             z: -2.,
-    //         },
-    //         rotation: Quat::from_axis_angle(Vec3::X, std::f32::consts::FRAC_PI_3),
-    //         ..Default::default()
-    //     },
-    //     color: Srgb::new(0., 1., 0.),
-    //     intensity: 100000.,
-    //     inner_angle: std::f32::consts::FRAC_PI_6 * 0.75,
-    //     outer_angle: std::f32::consts::FRAC_PI_4 * 0.75,
-    // }));
+    scene.insert_object(Light::Spot(SpotLight {
+        transform: Transform {
+            translation: Vec3 {
+                x: 2.,
+                y: 2.,
+                z: -2.,
+            },
+            // translation: Vec3::ZERO,
+            rotation: Quat::from_axis_angle(Vec3::X, std::f32::consts::FRAC_PI_3),
+            ..Default::default()
+        },
+        color: Srgb::new(0., 1., 0.),
+        intensity: 100000.,
+        inner_angle: std::f32::consts::FRAC_PI_6 * 0.75,
+        outer_angle: std::f32::consts::FRAC_PI_4 * 0.75,
+    }));
 
     scene
 }

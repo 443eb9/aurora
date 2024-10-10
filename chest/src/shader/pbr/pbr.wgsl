@@ -39,10 +39,10 @@ fn fragment(in: PbrVertexOutput) -> @location(0) vec4f {
     for (var i_light = 0u; i_light < arrayLength(&dir_lights) - 1u; i_light += 1u) {
         let light = &dir_lights[i_light];
         
-        let bright = pbr_function::apply_lighting((*light).direction, (*light).intensity, (*light).color, &unlit);
-        let dark = shadow_mapping::sample_directional_shadow_map(i_light, in.position_ws);
+        let irradiated = pbr_function::apply_lighting((*light).direction, (*light).intensity, (*light).color, &unlit);
+        let shadow = shadow_mapping::sample_directional_shadow_map(i_light, in.position_ws);
 
-        color += bright * dark;
+        color += irradiated * shadow;
     }
 
     for (var i_light = 0u; i_light < arrayLength(&point_lights) - 1u; i_light += 1u) {
@@ -53,10 +53,10 @@ fn fragment(in: PbrVertexOutput) -> @location(0) vec4f {
 
         let intensity = (*light).intensity / (4. * PI * d2);
 
-        let bright = pbr_function::apply_lighting(direction, intensity, (*light).color, &unlit);
-        let dark = shadow_mapping::sample_point_shadow_map(i_light, in.position_ws - (*light).position);
+        let irradiated = pbr_function::apply_lighting(direction, intensity, (*light).color, &unlit);
+        let shadow = shadow_mapping::sample_point_shadow_map(i_light, in.position_ws - (*light).position);
 
-        color += bright * dark;
+        color += irradiated * shadow;
     }
 
     for (var i_light = 0u; i_light < arrayLength(&spot_lights) - 1u; i_light += 1u) {
@@ -72,10 +72,10 @@ fn fragment(in: PbrVertexOutput) -> @location(0) vec4f {
         let intensity = (*light).intensity / (2. * PI * (1. - cos((*light).outer / 2.)) * d2) * lambda;
         // let intensity = (*light).intensity / (PI * dot(position_rel, position_rel)) * lambda;
 
-        let bright = pbr_function::apply_lighting(direction, intensity, (*light).color, &unlit);
-        let dark = shadow_mapping::sample_spot_shadow_map(i_light, in.position_ws);
+        let irradiated = pbr_function::apply_lighting(direction, intensity, (*light).color, &unlit);
+        let shadow = shadow_mapping::sample_point_shadow_map(i_light, in.position_ws - (*light).position);
 
-        color += bright * dark;
+        color += irradiated * shadow;
     }
 
     color = pbr_function::apply_exposure(color * unlit.base_color);
