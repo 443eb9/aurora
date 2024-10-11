@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    f32::consts::FRAC_PI_2,
     sync::{Arc, Mutex},
     thread,
     time::Instant,
@@ -15,7 +16,7 @@ use aurora_core::{
     util::{self, ext::StrAsShaderDef},
     WgpuRenderer,
 };
-use glam::{UVec2, Vec2, Vec3};
+use glam::{EulerRot, Mat4, Quat, UVec2, Vec2, Vec3};
 use naga_oil::compose::ShaderDefValue;
 use wgpu::{Surface, Texture, TextureFormat, TextureUsages, TextureViewDescriptor};
 use winit::{
@@ -85,6 +86,7 @@ impl<'a> Application<'a> {
             Camera {
                 transform: Transform {
                     translation: Vec3::new(0., 0., 0.),
+                    rotation: Quat::from_euler(EulerRot::XYZ, -0.8, 0.5, 0.4),
                     ..Default::default()
                 },
                 projection: CameraProjection::Perspective(
@@ -97,7 +99,7 @@ impl<'a> Application<'a> {
                 ),
                 // projection: CameraProjection::Orthographic(
                 //     aurora_core::scene::entity::OrthographicProjection::symmetric(
-                //         8., 4.5, -1000., 1000.,
+                //         32., 32., -20., 20.,
                 //     ),
                 // ),
                 exposure: Exposure { ev100: 9.7 },

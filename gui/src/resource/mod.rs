@@ -4,7 +4,7 @@ use aurora_core::scene::{
     resource::{Image, Mesh},
     Scene,
 };
-use glam::{Mat4, Quat, Vec3};
+use glam::{EulerRot, Mat4, Quat, Vec3};
 use palette::Srgb;
 
 pub fn load_primitives() -> Scene {
@@ -15,9 +15,8 @@ pub fn load_primitives() -> Scene {
         Image::from_path("gui/assets/sergun-kuyucu-medieval-blocks-normal.png").unwrap(),
     );
 
-    let meshes = 
-    // Mesh::from_obj("gui/assets/large_primitives.obj")
-    Mesh::from_obj("gui/assets/Room.obj")
+    let meshes = Mesh::from_obj("gui/assets/large_primitives.obj")
+        // Mesh::from_obj("gui/assets/Room.obj")
         .into_iter()
         .map(|m| scene.insert_object(m))
         .collect::<Vec<_>>();
@@ -40,14 +39,14 @@ pub fn load_primitives() -> Scene {
         scene.insert_object(sm);
     });
 
-    // scene.insert_object(Light::Directional(DirectionalLight {
-    //     transform: Transform {
-    //         rotation: Quat::from_mat4(&Mat4::look_at_lh(Vec3::ZERO, Vec3::NEG_ONE, Vec3::Y)),
-    //         ..Default::default()
-    //     },
-    //     color: Srgb::new(1., 1., 1.),
-    //     intensity: 2000.,
-    // }));
+    scene.insert_object(Light::Directional(DirectionalLight {
+        transform: Transform {
+            rotation: Quat::from_euler(EulerRot::XYZ, -0.5, -0.2, 0.),
+            ..Default::default()
+        },
+        color: Srgb::new(1., 1., 1.),
+        intensity: 2000.,
+    }));
     scene.insert_object(Light::Point(PointLight {
         // transform: Transform {
         //     translation: Vec3 {

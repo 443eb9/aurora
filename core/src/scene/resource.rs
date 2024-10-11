@@ -47,7 +47,7 @@ impl Transferable for DirectionalLight {
 
     fn transfer(&self, _renderer: &WgpuRenderer) -> Self::GpuRepr {
         Self::GpuRepr {
-            direction: self.transform.local_neg_z(),
+            direction: self.transform.local_z(),
             color: self.color.into_linear().to_vec3(),
             intensity: self.intensity,
         }
@@ -90,7 +90,7 @@ impl Light {
                     // .with_translation(real_camera.transform.translation)
                     .compute_matrix()
                     .inverse(),
-                proj: OrthographicProjection::symmetric(32., 32., 10., -10.).compute_matrix(),
+                proj: OrthographicProjection::symmetric(32., 32., -20., 20.).compute_matrix(),
                 // position_ws: real_camera.transform.translation,
                 position_ws: l.transform.translation,
                 exposure: 0.,

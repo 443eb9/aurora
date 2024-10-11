@@ -585,11 +585,11 @@ impl RenderNode for DepthViewNode {
                             .unwrap()
                             .as_ref()
                             .unwrap()
-                            .point_shadow_map
+                            .directional_shadow_map
                             .create_view(&TextureViewDescriptor {
                                 format: Some(TextureFormat::Depth32Float),
                                 dimension: Some(TextureViewDimension::D2),
-                                base_array_layer: 1,
+                                base_array_layer: 0,
                                 array_layer_count: Some(1),
                                 ..Default::default()
                             }),
