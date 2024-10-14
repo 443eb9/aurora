@@ -1,6 +1,5 @@
 use std::{
     collections::HashMap,
-    f32::consts::FRAC_PI_2,
     sync::{Arc, Mutex},
     thread,
     time::Instant,
@@ -8,15 +7,16 @@ use std::{
 
 use aurora_chest::shader_defs::{PbrDiffuse, PbrSpecular};
 use aurora_core::{
-    render::{resource::RenderTargets, scene::GpuScene, ShaderDefEnum},
-    scene::{
-        entity::{Camera, CameraProjection, Exposure, Transform},
-        Scene,
+    render::{
+        helper::{Camera, CameraProjection, Exposure, Transform},
+        resource::RenderTargets,
+        scene::GpuScene,
+        ShaderDefEnum,
     },
     util::{self, ext::StrAsShaderDef},
     WgpuRenderer,
 };
-use glam::{EulerRot, Mat4, Quat, UVec2, Vec2, Vec3};
+use glam::{EulerRot, Quat, UVec2, Vec2, Vec3};
 use naga_oil::compose::ShaderDefValue;
 use wgpu::{Surface, Texture, TextureFormat, TextureUsages, TextureViewDescriptor};
 use winit::{
@@ -28,10 +28,7 @@ use winit::{
     window::{Window, WindowAttributes, WindowId},
 };
 
-use crate::{
-    render::PbrRenderFlow,
-    scene::{CameraConfig, ControllableCamera},
-};
+use crate::scene::{CameraConfig, ControllableCamera};
 
 pub struct Application<'a> {
     renderer: WgpuRenderer,
@@ -41,11 +38,10 @@ pub struct Application<'a> {
     dim: UVec2,
 
     main_camera: Arc<Mutex<ControllableCamera>>,
-    scene: Scene,
-    gpu_scene: GpuScene,
+    scene: GpuScene,
     shader_defs: HashMap<String, ShaderDefValue>,
 
-    flow: PbrRenderFlow,
+    flow: crate::render::PbrRenderFlow,
     last_draw: Instant,
     delta: f32,
 }
@@ -80,7 +76,7 @@ impl<'a> Application<'a> {
                 | TextureUsages::COPY_SRC,
         );
 
-        let scene = crate::resource::load_primitives();
+        let scene = crate::resource::load_primitives(&renderer);
 
         let main_camera = ControllableCamera::new(
             Camera {
@@ -90,7 +86,7 @@ impl<'a> Application<'a> {
                     ..Default::default()
                 },
                 projection: CameraProjection::Perspective(
-                    aurora_core::scene::entity::PerspectiveProjection {
+                    aurora_core::render::helper::PerspectiveProjection {
                         aspect_ratio: dim.x as f32 / dim.y as f32,
                         fov: std::f32::consts::FRAC_PI_4,
                         near: 0.1,
@@ -114,8 +110,6 @@ impl<'a> Application<'a> {
         ]
         .into();
 
-        let gpu_scene = GpuScene::default();
-
         Self {
             renderer,
             window,
@@ -124,7 +118,6 @@ impl<'a> Application<'a> {
             dim,
 
             scene,
-            gpu_scene,
             flow: Default::default(),
             shader_defs,
 
@@ -203,20 +196,17 @@ impl<'a> Application<'a> {
             return;
         };
 
-        self.scene.camera = camera.camera;
-        self.gpu_scene.sync(&mut self.scene, &self.renderer);
+        self.scene.original.camera = camera.camera;
 
-        let targets;
-        if let Some(new_target) = target_override {
-            self.flow.inner.build(
+        let targets = if let Some(new_target) = target_override {
+            self.flow.inner.force_build(
                 &self.renderer,
-                &self.scene,
-                &mut self.gpu_scene,
+                &mut self.scene,
                 Some(self.shader_defs.clone()),
                 &new_target,
             );
 
-            targets = new_target;
+            new_target
         } else {
             let screen = RenderTargets {
                 color_format: TextureFormat::Bgra8UnormSrgb,
@@ -228,23 +218,23 @@ impl<'a> Application<'a> {
                 ),
             };
 
-            targets = screen;
-        }
+            screen
+        };
 
         self.flow.inner.build(
             &self.renderer,
-            &self.scene,
-            &mut self.gpu_scene,
+            &mut self.scene,
             Some(self.shader_defs.clone()),
             &targets,
         );
 
         self.flow
-            .set_queue(self.scene.static_meshes.values().cloned().collect());
+            .inner
+            .set_queue_global(self.scene.static_meshes.clone());
 
         self.flow
             .inner
-            .run(&self.renderer, &self.scene, &mut self.gpu_scene, &targets);
+            .run(&self.renderer, &mut self.scene, &targets);
 
         self.delta = self.last_draw.elapsed().as_secs_f32();
         self.last_draw = Instant::now();

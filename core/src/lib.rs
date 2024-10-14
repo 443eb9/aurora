@@ -4,7 +4,6 @@ use wgpu::{
 };
 
 pub mod render;
-pub mod scene;
 pub mod util;
 
 pub struct WgpuRenderer {

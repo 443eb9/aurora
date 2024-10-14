@@ -7,6 +7,12 @@ struct Camera {
     exposure: f32,
 }
 
+struct Scene {
+    dir_lights: u32,
+    point_lights: u32,
+    spot_lights: u32,
+}
+
 struct DirectionalLight {
     direction: vec3f,
     color: vec3f,

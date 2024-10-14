@@ -1,24 +1,23 @@
-use encase::{internal::WriteInto, DynamicStorageBuffer, DynamicUniformBuffer, ShaderType};
+use encase::{internal::WriteInto, DynamicStorageBuffer, ShaderType};
 use glam::{Mat4, Vec2, Vec3, Vec4};
 use uuid::Uuid;
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
-    BindingResource, Buffer, BufferBinding, BufferUsages, Device, Queue, TextureFormat,
-    TextureView,
+    BindingResource, Buffer, BufferBinding, BufferDescriptor, BufferUsages, Device, Queue,
+    TextureFormat, TextureView,
 };
 
-use crate::scene::entity::StaticMesh;
+use crate::render::{
+    mesh::StaticMesh,
+    scene::{MaterialTypeId, TextureId},
+};
 
-pub const CAMERA_UUID: Uuid = Uuid::from_u128(4514851245144087048541368740532463840);
-pub const LIGHT_VIEW_UUID: Uuid = Uuid::from_u128(78964516340896416354635118974);
-pub const POST_PROCESS_COLOR_LAYOUT_UUID: Uuid = Uuid::from_u128(374318654136541653489410561064);
-pub const POST_PROCESS_DEPTH_LAYOUT_UUID: Uuid = Uuid::from_u128(887897413248965416140604016399654);
-pub const LIGHTS_BIND_GROUP_UUID: Uuid = Uuid::from_u128(7897465198640598654089653401853401968);
-pub const DIR_LIGHT_UUID: Uuid = Uuid::from_u128(50864540865401960354989784651053240851);
-pub const POINT_LIGHT_UUID: Uuid = Uuid::from_u128(7901283699454486410056310);
-pub const SPOT_LIGHT_UUID: Uuid = Uuid::from_u128(123941018541520225801649306164979476413);
+pub const POST_PROCESS_COLOR_LAYOUT_UUID: MaterialTypeId =
+    MaterialTypeId(Uuid::from_u128(374318654136541653489410561064));
+pub const POST_PROCESS_DEPTH_LAYOUT_UUID: MaterialTypeId =
+    MaterialTypeId(Uuid::from_u128(887897413248965416140604016399654));
 
-pub const DUMMY_2D_TEX: Uuid = Uuid::from_u128(8674167498640649160513219685401);
+pub const DUMMY_2D_TEX: TextureId = TextureId(Uuid::from_u128(8674167498640649160513219685401));
 
 pub struct RenderTargets {
     pub color_format: TextureFormat,
@@ -62,32 +61,29 @@ impl DynamicGpuBuffer {
         &mut self.usage
     }
 
-    pub fn write(&mut self, device: &Device, queue: &Queue) {
+    pub fn write<E: ShaderType + WriteInto>(&mut self, device: &Device, queue: &Queue) {
         let capacity = self.buffer.as_ref().map(|b| b.size()).unwrap_or(0);
         let size = self.raw.as_ref().len() as u64;
 
-        if capacity < size || (self.changed && size > 0) {
-            self.buffer = Some(device.create_buffer_init(&BufferInitDescriptor {
-                label: None,
-                usage: self.usage,
-                contents: self.raw.as_ref(),
-            }));
+        if capacity < size || self.changed {
+            if size == 0 {
+                self.buffer = Some(device.create_buffer(&BufferDescriptor {
+                    label: None,
+                    size: E::min_size().get(),
+                    usage: self.usage,
+                    mapped_at_creation: false,
+                }));
+            } else {
+                self.buffer = Some(device.create_buffer_init(&BufferInitDescriptor {
+                    label: None,
+                    usage: self.usage,
+                    contents: self.raw.as_ref(),
+                }));
+            }
             self.changed = false;
         } else if let Some(buffer) = &self.buffer {
             queue.write_buffer(buffer, 0, self.raw.as_ref());
         }
-    }
-
-    /// Extend the buffer with dummy data then write it.
-    ///
-    /// This prevents from binding 0-sized buffer, which is not allowed.
-    /// But it will increase the array length by 1, so make sure to subtract
-    /// that in shader.
-    pub fn safe_write<T: ShaderType>(&mut self, device: &Device, queue: &Queue) {
-        self.raw
-            .as_mut()
-            .extend_from_slice(&vec![0; T::min_size().get() as usize]);
-        self.write(device, queue);
     }
 
     pub fn clear(&mut self) {
@@ -114,19 +110,9 @@ impl DynamicGpuBuffer {
     pub fn len_bytes(&self) -> usize {
         self.raw.as_ref().len()
     }
-
-    pub fn len<E>(&self) -> Option<usize> {
-        let stride = std::mem::size_of::<E>();
-        let b = self.raw.as_ref();
-        if b.len() % stride == 0 {
-            Some(b.len() / stride)
-        } else {
-            None
-        }
-    }
 }
 
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, ShaderType, Default, Clone, Copy)]
 #[repr(C)]
 pub struct Vertex {
     pub position: Vec3,
@@ -141,12 +127,19 @@ pub struct RenderMesh {
     pub offset: Option<u32>,
 }
 
-#[derive(ShaderType)]
+#[derive(ShaderType, Default, Clone, Copy)]
 pub struct GpuCamera {
     pub view: Mat4,
     pub proj: Mat4,
     pub position_ws: Vec3,
     pub exposure: f32,
+}
+
+#[derive(ShaderType)]
+pub struct GpuSceneDesc {
+    pub dir_lights: u32,
+    pub point_lights: u32,
+    pub spot_lights: u32,
 }
 
 #[derive(ShaderType)]

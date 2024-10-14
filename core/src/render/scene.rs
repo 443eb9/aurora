@@ -1,130 +1,91 @@
 use std::collections::HashMap;
 
 use uuid::Uuid;
-use wgpu::{BindGroup, BindGroupLayout, BufferUsages, Texture};
+use wgpu::{BindGroup, BindGroupLayout, BufferUsages, Sampler, Texture, TextureView};
 
-use crate::{
-    render::{
-        resource::{
-            DynamicGpuBuffer, GpuCamera, GpuDirectionalLight, GpuPointLight, GpuSpotLight,
-            CAMERA_UUID, DIR_LIGHT_UUID, LIGHT_VIEW_UUID, POINT_LIGHT_UUID, SPOT_LIGHT_UUID,
-        },
-        Transferable,
-    },
-    scene::{entity::Light, resource::Material, AssetEvent, AssetType, Scene},
-    WgpuRenderer,
-};
+use crate::render::{helper::Scene, mesh::StaticMesh, resource::DynamicGpuBuffer};
 
-#[derive(Default)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct MaterialInstanceId(pub Uuid);
+
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct MaterialTypeId(pub Uuid);
+
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct MeshInstanceId(pub Uuid);
+
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct TextureId(pub Uuid);
+
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct TextureViewId(pub Uuid);
+
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct SamplerId(pub Uuid);
+
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ExtraLayoutId(pub Uuid);
+
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ExtraBindGroupId(pub Uuid);
+
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ExtraUniformBufferId(pub Uuid);
+
 pub struct GpuAssets {
-    /// For camera and lights storage buffers, uuids are constants.
+    pub camera_uniform: DynamicGpuBuffer,
+    pub scene_desc_uniform: DynamicGpuBuffer,
+    pub directional_light_uniforms: DynamicGpuBuffer,
+    pub point_light_uniforms: DynamicGpuBuffer,
+    pub spot_light_uniforms: DynamicGpuBuffer,
+    pub material_uniforms: HashMap<MaterialTypeId, DynamicGpuBuffer>,
+    pub vertex_buffers: HashMap<MeshInstanceId, (DynamicGpuBuffer, u32)>,
+    pub extra_uniforms: HashMap<ExtraUniformBufferId, DynamicGpuBuffer>,
 
-    /// For material uniform buffers, uuids are their type ids.
-    /// For mesh vertex buffers, uuids are the corresponding mesh ids.
-    pub buffers: HashMap<Uuid, DynamicGpuBuffer>,
-    pub textures: HashMap<Uuid, Texture>,
+    pub textures: HashMap<TextureId, Texture>,
+    pub texture_views: HashMap<TextureViewId, TextureView>,
+    pub samplers: HashMap<SamplerId, Sampler>,
 
-    /// For material bind groups, uuids are their individual uuids.
-    pub bind_groups: HashMap<Uuid, BindGroup>,
+    pub common_bind_group: Option<BindGroup>,
+    pub light_bind_group: Option<BindGroup>,
+    pub material_bind_groups: HashMap<MaterialInstanceId, BindGroup>,
+    pub extra_bind_groups: HashMap<ExtraBindGroupId, BindGroup>,
 
-    /// For material layouts, uuids are their type ids.
-    pub layouts: HashMap<Uuid, BindGroupLayout>,
-
-    pub offsets: HashMap<Uuid, u32>,
+    pub common_layout: Option<BindGroupLayout>,
+    pub lights_layout: Option<BindGroupLayout>,
+    pub material_layouts: HashMap<MaterialTypeId, BindGroupLayout>,
+    pub extra_layouts: HashMap<ExtraLayoutId, BindGroupLayout>,
 }
 
-#[derive(Default)]
-pub struct GpuLightCounter {
-    pub directional_lights: u32,
-    pub point_lights: u32,
-    pub spot_lights: u32,
+impl Default for GpuAssets {
+    fn default() -> Self {
+        Self {
+            camera_uniform: DynamicGpuBuffer::new(BufferUsages::UNIFORM),
+            scene_desc_uniform: DynamicGpuBuffer::new(BufferUsages::UNIFORM),
+            directional_light_uniforms: DynamicGpuBuffer::new(BufferUsages::STORAGE),
+            point_light_uniforms: DynamicGpuBuffer::new(BufferUsages::STORAGE),
+            spot_light_uniforms: DynamicGpuBuffer::new(BufferUsages::STORAGE),
+            material_uniforms: Default::default(),
+            vertex_buffers: Default::default(),
+            textures: Default::default(),
+            common_bind_group: Default::default(),
+            light_bind_group: Default::default(),
+            material_bind_groups: Default::default(),
+            common_layout: Default::default(),
+            lights_layout: Default::default(),
+            material_layouts: Default::default(),
+            extra_bind_groups: Default::default(),
+            extra_layouts: Default::default(),
+            texture_views: Default::default(),
+            extra_uniforms: Default::default(),
+            samplers: Default::default(),
+        }
+    }
 }
 
 #[derive(Default)]
 pub struct GpuScene {
+    pub original: Scene,
     pub assets: GpuAssets,
-    pub light_counter: GpuLightCounter,
-    pub materials: HashMap<Uuid, Box<dyn Material>>,
-}
-
-impl GpuScene {
-    pub fn sync(&mut self, scene: &mut Scene, renderer: &WgpuRenderer) {
-        let mut bf_camera = DynamicGpuBuffer::new(BufferUsages::UNIFORM);
-        bf_camera.push(&scene.camera.transfer(renderer));
-        bf_camera.write(&renderer.device, &renderer.queue);
-        self.assets.buffers.insert(CAMERA_UUID, bf_camera);
-
-        self.light_counter = Default::default();
-        let mut bf_dir_lights = DynamicGpuBuffer::new(BufferUsages::STORAGE);
-        let mut bf_point_lights = DynamicGpuBuffer::new(BufferUsages::STORAGE);
-        let mut bf_spot_lights = DynamicGpuBuffer::new(BufferUsages::STORAGE);
-
-        for light in scene.lights.values() {
-            match light {
-                Light::Directional(l) => {
-                    bf_dir_lights.push(&l.transfer(renderer));
-                    self.light_counter.directional_lights += 1;
-                }
-                Light::Point(l) => {
-                    bf_point_lights.push(&l.transfer(renderer));
-                    self.light_counter.point_lights += 1
-                }
-                Light::Spot(l) => {
-                    bf_spot_lights.push(&l.transfer(renderer));
-                    self.light_counter.spot_lights += 1;
-                }
-            };
-        }
-
-        bf_dir_lights.safe_write::<GpuDirectionalLight>(&renderer.device, &renderer.queue);
-        bf_point_lights.safe_write::<GpuPointLight>(&renderer.device, &renderer.queue);
-        bf_spot_lights.safe_write::<GpuSpotLight>(&renderer.device, &renderer.queue);
-
-        self.assets.buffers.insert(DIR_LIGHT_UUID, bf_dir_lights);
-        self.assets
-            .buffers
-            .insert(POINT_LIGHT_UUID, bf_point_lights);
-        self.assets.buffers.insert(SPOT_LIGHT_UUID, bf_spot_lights);
-
-        scene.asset_events.drain(..).for_each(|ae| match ae {
-            AssetEvent::Added(uuid, ty) => match ty {
-                AssetType::Mesh => {
-                    self.assets
-                        .buffers
-                        .insert(uuid, scene.meshes[&uuid].transfer(renderer));
-                }
-                AssetType::Material => {
-                    let (material, ty) = &scene.materials[&uuid];
-                    if !self.assets.layouts.contains_key(&ty) {
-                        material.create_layout(renderer, &mut self.assets);
-                    }
-                    self.materials
-                        .insert(uuid, dyn_clone::clone_box(material.as_ref()));
-                }
-                AssetType::Image => {
-                    self.assets
-                        .textures
-                        .insert(uuid, scene.images[&uuid].transfer(renderer));
-                }
-                // Ignore
-                AssetType::StaticMesh => {}
-            },
-            AssetEvent::Removed(uuid, ty) => match ty {
-                AssetType::Mesh => {
-                    self.assets.buffers.remove(&uuid);
-                }
-                AssetType::Material => {
-                    self.assets.bind_groups.remove(&uuid);
-                    self.materials.remove(&uuid);
-                }
-                AssetType::Image => {
-                    self.assets.textures.remove(&uuid);
-                }
-                // Ignore
-                AssetType::StaticMesh => {}
-            },
-        });
-
-        // renderer.queue.submit(None);
-    }
+    pub static_meshes: Vec<StaticMesh>,
 }

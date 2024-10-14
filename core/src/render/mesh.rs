@@ -1,9 +1,8 @@
-use std::path::Path;
+use std::{any::TypeId, path::Path};
 
 use dyn_clone::DynClone;
-use glam::{Mat4, Vec2, Vec3};
+use glam::{Vec2, Vec3};
 use image::ImageResult;
-use uuid::Uuid;
 use wgpu::{
     util::{DeviceExt, TextureDataOrder},
     BufferUsages, Extent3d, Texture, TextureDescriptor, TextureDimension, TextureFormat,
@@ -12,120 +11,12 @@ use wgpu::{
 
 use crate::{
     render::{
-        resource::{
-            DynamicGpuBuffer, GpuCamera, GpuDirectionalLight, GpuPointLight, GpuSpotLight, Vertex,
-        },
-        scene::GpuAssets,
-        Transferable,
+        resource::{DynamicGpuBuffer, Vertex},
+        scene::{GpuAssets, MaterialInstanceId, MaterialTypeId, MeshInstanceId},
     },
-    scene::{
-        entity::{
-            Camera, DirectionalLight, Light, OrthographicProjection, PointLight, SpotLight,
-            Transform,
-        },
-        SceneObject,
-    },
-    util::{self, cube::CUBE_MAP_FACES, ext::RgbToVec3},
+    util::{self, ext::TypeIdAsUuid},
     WgpuRenderer,
 };
-
-impl Transferable for Camera {
-    type GpuRepr = GpuCamera;
-
-    fn transfer(&self, _renderer: &WgpuRenderer) -> Self::GpuRepr {
-        Self::GpuRepr {
-            position_ws: self.transform.translation,
-            view: self.transform.compute_matrix().inverse(),
-            proj: self.projection.compute_matrix(),
-            exposure: self.exposure.ev100,
-        }
-    }
-}
-
-impl Transferable for DirectionalLight {
-    type GpuRepr = GpuDirectionalLight;
-
-    fn transfer(&self, _renderer: &WgpuRenderer) -> Self::GpuRepr {
-        Self::GpuRepr {
-            direction: self.transform.local_z(),
-            color: self.color.into_linear().to_vec3(),
-            intensity: self.intensity,
-        }
-    }
-}
-
-impl Transferable for PointLight {
-    type GpuRepr = GpuPointLight;
-
-    fn transfer(&self, _renderer: &WgpuRenderer) -> Self::GpuRepr {
-        Self::GpuRepr {
-            position: self.transform.translation,
-            color: self.color.into_linear().to_vec3(),
-            intensity: self.intensity,
-        }
-    }
-}
-
-impl Transferable for SpotLight {
-    type GpuRepr = GpuSpotLight;
-
-    fn transfer(&self, _renderer: &WgpuRenderer) -> Self::GpuRepr {
-        Self::GpuRepr {
-            position: self.transform.translation,
-            direction: self.transform.local_neg_z(),
-            color: self.color.into_linear().to_vec3(),
-            intensity: self.intensity,
-            inner_angle: self.inner_angle,
-            outer_angle: self.outer_angle,
-        }
-    }
-}
-
-impl Light {
-    pub fn as_cameras(&self, real_camera: &Camera) -> Vec<GpuCamera> {
-        match self {
-            Light::Directional(l) => vec![GpuCamera {
-                view: l
-                    .transform
-                    // .with_translation(real_camera.transform.translation)
-                    .compute_matrix()
-                    .inverse(),
-                proj: OrthographicProjection::symmetric(32., 32., -20., 20.).compute_matrix(),
-                // position_ws: real_camera.transform.translation,
-                position_ws: l.transform.translation,
-                exposure: 0.,
-            }],
-            Light::Point(l) => CUBE_MAP_FACES
-                .into_iter()
-                .map(|face| {
-                    let trans = Transform::default()
-                        .looking_at(face.target, face.up)
-                        .with_translation(l.transform.translation);
-                    GpuCamera {
-                        view: trans.compute_matrix().inverse(),
-                        proj: Mat4::perspective_rh(std::f32::consts::FRAC_PI_2, 1., 0.1, 20.),
-                        position_ws: trans.translation,
-                        exposure: 0.,
-                    }
-                })
-                .collect(),
-            Light::Spot(l) => CUBE_MAP_FACES
-                .into_iter()
-                .map(|face| {
-                    let trans = Transform::default()
-                        .looking_at(face.target, face.up)
-                        .with_translation(l.transform.translation);
-                    GpuCamera {
-                        view: trans.compute_matrix().inverse(),
-                        proj: Mat4::perspective_rh(std::f32::consts::FRAC_PI_2, 1., 0.1, 20.),
-                        position_ws: trans.translation,
-                        exposure: 0.,
-                    }
-                })
-                .collect(),
-        }
-    }
-}
 
 pub struct Image {
     width: u32,
@@ -159,12 +50,8 @@ impl Image {
     pub fn height(&self) -> u32 {
         self.height
     }
-}
 
-impl Transferable for Image {
-    type GpuRepr = Texture;
-
-    fn transfer(&self, renderer: &WgpuRenderer) -> Self::GpuRepr {
+    pub fn to_texture(&self, renderer: &WgpuRenderer) -> Texture {
         renderer.device.create_texture_with_data(
             &renderer.queue,
             &TextureDescriptor {
@@ -285,12 +172,8 @@ impl Mesh {
             self.raw[i_vert].tangent = n.reject_from(t).extend(sign);
         }
     }
-}
 
-impl Transferable for Mesh {
-    type GpuRepr = DynamicGpuBuffer;
-
-    fn transfer(&self, renderer: &WgpuRenderer) -> Self::GpuRepr {
+    pub fn to_vertex_buffer(&self, renderer: &WgpuRenderer) -> DynamicGpuBuffer {
         let mut b = DynamicGpuBuffer::new(BufferUsages::VERTEX);
         b.set(
             self.raw
@@ -299,14 +182,32 @@ impl Transferable for Mesh {
                 .map(|b| *b)
                 .collect(),
         );
-        b.write(&renderer.device, &renderer.queue);
+        b.write::<Vertex>(&renderer.device, &renderer.queue);
         b
     }
 }
 
-pub trait Material: SceneObject + DynClone {
-    fn create_layout(&self, renderer: &WgpuRenderer, assets: &mut GpuAssets);
-    /// The uuid here should be the individual uuid.
-    fn create_bind_group(&self, renderer: &WgpuRenderer, assets: &mut GpuAssets, uuid: Uuid);
+#[derive(Debug, Clone, Copy)]
+pub struct StaticMesh {
+    pub mesh: MeshInstanceId,
+    pub material: MaterialInstanceId,
+}
+
+pub trait Material: DynClone + 'static {
+    fn create_bind_group(
+        &self,
+        renderer: &WgpuRenderer,
+        assets: &mut GpuAssets,
+        material: MaterialInstanceId,
+    );
     fn prepare(&self, renderer: &WgpuRenderer, assets: &mut GpuAssets) -> u32;
+
+    #[inline]
+    fn id(&self) -> MaterialTypeId {
+        MaterialTypeId(TypeId::of::<Self>().to_uuid())
+    }
+}
+
+pub trait CreateBindGroupLayout {
+    fn create_layout(renderer: &WgpuRenderer, assets: &mut GpuAssets);
 }

@@ -1,5 +1,4 @@
-use aurora_core::scene::{entity::Camera, entity::Transform};
-
+use aurora_core::render::helper::{Camera, Transform};
 use glam::{EulerRot, Quat, Vec2, Vec3};
 
 use winit::{
@@ -18,7 +17,7 @@ impl Default for CameraConfig {
     fn default() -> Self {
         Self {
             tranl_sensi: 2.,
-            rot_sensi: Vec2::splat(20.),
+            rot_sensi: Vec2::splat(50.),
             move_smoothness: 20.,
             rot_smoothness: 20.,
         }

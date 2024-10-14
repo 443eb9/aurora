@@ -1,31 +1,55 @@
+use std::rc::Rc;
+
 use aurora_chest::material::PbrMaterial;
-use aurora_core::scene::{
-    entity::{DirectionalLight, Light, PointLight, SpotLight, StaticMesh, Transform},
-    resource::{Image, Mesh},
-    Scene,
+use aurora_core::{
+    render::{
+        helper::Transform,
+        mesh::{Image, Mesh, StaticMesh},
+        resource::{GpuDirectionalLight, GpuPointLight, GpuSpotLight},
+        scene::{GpuScene, MaterialInstanceId, MeshInstanceId, TextureId},
+    },
+    WgpuRenderer,
 };
-use glam::{EulerRot, Mat4, Quat, Vec3};
+use glam::{EulerRot, Quat, Vec3};
 use palette::Srgb;
+use uuid::Uuid;
 
-pub fn load_primitives() -> Scene {
-    let mut scene = Scene::default();
+pub fn load_primitives(renderer: &WgpuRenderer) -> GpuScene {
+    let mut scene = GpuScene::default();
 
-    let uv_checker = scene.insert_object(Image::from_path("gui/assets/uv_checker.png").unwrap());
-    let normal_map = scene.insert_object(
-        Image::from_path("gui/assets/sergun-kuyucu-medieval-blocks-normal.png").unwrap(),
+    let uv_checker = TextureId(Uuid::new_v4());
+    scene.assets.textures.insert(
+        uv_checker,
+        Image::from_path("gui/assets/uv_checker.png")
+            .unwrap()
+            .to_texture(renderer),
+    );
+    let normal_map = TextureId(Uuid::new_v4());
+    scene.assets.textures.insert(
+        normal_map,
+        Image::from_path("gui/assets/sergun-kuyucu-medieval-blocks-normal.png")
+            .unwrap()
+            .to_texture(renderer),
     );
 
-    let meshes = Mesh::from_obj("gui/assets/large_primitives.obj")
-        // Mesh::from_obj("gui/assets/Room.obj")
+    let meshes = //
+    // Mesh::from_obj("gui/assets/large_primitives.obj")
+        Mesh::from_obj("gui/assets/Room.obj")
         .into_iter()
-        .map(|m| scene.insert_object(m))
+        .map(|m| {
+            let instance_id = MeshInstanceId(Uuid::new_v4());
+            scene.assets.vertex_buffers.insert(
+                instance_id,
+                (m.to_vertex_buffer(renderer), m.vertices_count()),
+            );
+            instance_id
+        })
         .collect::<Vec<_>>();
-    let static_meshes = meshes
-        .into_iter()
-        .enumerate()
-        .map(|(_, mesh)| StaticMesh {
-            mesh,
-            material: scene.insert_object(PbrMaterial {
+    let static_meshes = meshes.into_iter().enumerate().map(|(_, mesh)| {
+        let instance_id = MaterialInstanceId(Uuid::new_v4());
+        scene.original.materials.insert(
+            instance_id,
+            Rc::new(PbrMaterial {
                 base_color: Srgb::new(1., 1., 1.),
                 tex_base_color: Some(uv_checker),
                 tex_normal: Some(normal_map),
@@ -33,49 +57,69 @@ pub fn load_primitives() -> Scene {
                 roughness: 0.3,
                 metallic: 0.,
             }),
-        })
-        .collect::<Vec<_>>();
-    static_meshes.into_iter().for_each(|sm| {
-        scene.insert_object(sm);
-    });
+        );
 
-    scene.insert_object(Light::Directional(DirectionalLight {
-        transform: Transform {
-            rotation: Quat::from_euler(EulerRot::XYZ, -0.5, -0.2, 0.),
-            ..Default::default()
-        },
-        color: Srgb::new(1., 1., 1.),
-        intensity: 2000.,
-    }));
-    scene.insert_object(Light::Point(PointLight {
-        // transform: Transform {
-        //     translation: Vec3 {
-        //         x: -2.,
-        //         y: 1.5,
-        //         z: 0.,
-        //     },
-        //     ..Default::default()
-        // },
-        transform: Transform::default(),
-        color: Srgb::new(0.2, 0.5, 0.8),
-        intensity: 10000.,
-    }));
-    scene.insert_object(Light::Spot(SpotLight {
-        transform: Transform {
-            // translation: Vec3 {
-            //     x: 2.,
-            //     y: 2.,
-            //     z: -2.,
+        StaticMesh {
+            mesh,
+            material: instance_id,
+        }
+    });
+    scene.static_meshes.extend(static_meshes);
+
+    // scene.original.directional_lights.insert(
+    //     Uuid::new_v4(),
+    //     GpuDirectionalLight {
+    //         direction: Transform {
+    //             rotation: Quat::from_euler(EulerRot::XYZ, -0.5, -0.2, 0.),
+    //             ..Default::default()
+    //         }
+    //         .local_z(),
+    //         color: Srgb::new(1., 1., 1.).into_linear().into_components().into(),
+    //         intensity: 2000.,
+    //     },
+    // );
+    scene.original.point_lights.insert(
+        Uuid::new_v4(),
+        GpuPointLight {
+            // transform: Transform {
+            //     translation: Vec3 {
+            //         x: -2.,
+            //         y: 1.5,
+            //         z: 0.,
+            //     },
+            //     ..Default::default()
             // },
-            translation: Vec3::ZERO,
-            rotation: Quat::from_axis_angle(Vec3::X, std::f32::consts::FRAC_PI_3),
-            ..Default::default()
+            position: Vec3::ZERO,
+            color: Srgb::new(0.2, 0.5, 0.8)
+                .into_linear()
+                .into_components()
+                .into(),
+            intensity: 10000.,
         },
-        color: Srgb::new(0., 1., 0.),
-        intensity: 10000.,
-        inner_angle: std::f32::consts::FRAC_PI_6 * 0.75,
-        outer_angle: std::f32::consts::FRAC_PI_4 * 0.75,
-    }));
+    );
+    scene.original.spot_lights.insert(
+        Uuid::new_v4(),
+        GpuSpotLight {
+            // transform: Transform {
+            //     // translation: Vec3 {
+            //     //     x: 2.,
+            //     //     y: 2.,
+            //     //     z: -2.,
+            //     // },
+            //     translation: Vec3::ZERO,
+            //     rotation: ,
+            //     ..Default::default()
+            // },
+            position: Vec3::ZERO,
+            direction: Transform::default()
+                .with_rotation(Quat::from_axis_angle(Vec3::X, std::f32::consts::FRAC_PI_3))
+                .local_neg_z(),
+            color: Srgb::new(0., 1., 0.).into_linear().into_components().into(),
+            intensity: 10000.,
+            inner_angle: std::f32::consts::FRAC_PI_6 * 0.75,
+            outer_angle: std::f32::consts::FRAC_PI_4 * 0.75,
+        },
+    );
 
     scene
 }

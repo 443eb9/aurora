@@ -10,7 +10,6 @@ ddsfile.workspace = true
 encase.workspace = true
 glam.workspace = true
 naga_oil.workspace = true
-once_cell.workspace = true
 palette.workspace = true
 uuid.workspace = true
 wgpu.workspace = true

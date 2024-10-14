@@ -1,7 +1,7 @@
 use aurora_chest::node::{BasicTriangleNode, DepthViewNode, PbrNode, ShadowMappingNode};
-use aurora_core::{
-    render::flow::{GeneralNode, ImageFallbackNode, PostProcessGeneralNode, RenderFlow},
-    scene::entity::StaticMesh,
+use aurora_core::render::{
+    flow::{GeneralNode, ImageFallbackNode, PostProcessGeneralNode, RenderFlow},
+    mesh::StaticMesh,
 };
 use uuid::Uuid;
 
@@ -22,12 +22,6 @@ impl Default for PbrRenderFlow {
         // ids.push(flow.add::<DepthViewNode>());
 
         Self { inner: flow, ids }
-    }
-}
-
-impl PbrRenderFlow {
-    pub fn set_queue(&mut self, meshes: Vec<StaticMesh>) {
-        self.inner.set_queue_global(meshes);
     }
 }
 

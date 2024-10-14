@@ -13,20 +13,22 @@ use wgpu::{
 
 use crate::{
     render::{
+        helper::Camera,
+        mesh::StaticMesh,
         resource::{
-            GpuCamera, GpuDirectionalLight, GpuPointLight, GpuSpotLight, RenderMesh, RenderTargets,
-            CAMERA_UUID, DIR_LIGHT_UUID, DUMMY_2D_TEX, LIGHTS_BIND_GROUP_UUID, POINT_LIGHT_UUID,
-            POST_PROCESS_COLOR_LAYOUT_UUID, POST_PROCESS_DEPTH_LAYOUT_UUID, SPOT_LIGHT_UUID,
+            GpuCamera, GpuDirectionalLight, GpuPointLight, GpuSceneDesc, GpuSpotLight, RenderMesh,
+            RenderTargets, DUMMY_2D_TEX, POST_PROCESS_COLOR_LAYOUT_UUID,
+            POST_PROCESS_DEPTH_LAYOUT_UUID,
         },
         scene::GpuScene,
     },
-    scene::{entity::StaticMesh, Scene},
     WgpuRenderer,
 };
 
 #[derive(Default)]
 pub struct RenderFlow {
-    pub flow: IndexMap<Uuid, (Box<dyn RenderNode>, Vec<RenderMesh>)>,
+    flow: IndexMap<Uuid, (Box<dyn RenderNode>, Vec<RenderMesh>)>,
+    is_built: bool,
 }
 
 impl RenderFlow {
@@ -78,30 +80,37 @@ impl RenderFlow {
     pub fn build(
         &mut self,
         renderer: &WgpuRenderer,
-        scene: &Scene,
-        gpu_scene: &mut GpuScene,
+        scene: &mut GpuScene,
         shader_defs: Option<HashMap<String, ShaderDefValue>>,
         target: &RenderTargets,
     ) {
-        for (node, _) in self.flow.values_mut() {
-            node.build(renderer, scene, gpu_scene, shader_defs.clone(), target);
+        if !self.is_built {
+            self.force_build(renderer, scene, shader_defs, target);
+            self.is_built = true;
         }
     }
 
     #[inline]
-    pub fn run(
+    pub fn force_build(
         &mut self,
         renderer: &WgpuRenderer,
-        scene: &Scene,
-        gpu_scene: &mut GpuScene,
+        scene: &mut GpuScene,
+        shader_defs: Option<HashMap<String, ShaderDefValue>>,
         target: &RenderTargets,
     ) {
+        for (node, _) in self.flow.values_mut() {
+            node.build(renderer, scene, shader_defs.clone(), target);
+        }
+    }
+
+    #[inline]
+    pub fn run(&mut self, renderer: &WgpuRenderer, scene: &mut GpuScene, target: &RenderTargets) {
         for (node, queue) in self.flow.values_mut() {
-            node.prepare(renderer, scene, gpu_scene, queue, target);
+            node.prepare(renderer, scene, queue, target);
         }
 
         for (node, queue) in self.flow.values_mut() {
-            node.draw(renderer, scene, &gpu_scene, queue, target);
+            node.draw(renderer, scene, queue, target);
         }
     }
 }
@@ -111,8 +120,7 @@ pub trait RenderNode {
     fn build(
         &mut self,
         renderer: &WgpuRenderer,
-        scene: &Scene,
-        gpu_scene: &mut GpuScene,
+        scene: &mut GpuScene,
         shader_defs: Option<HashMap<String, ShaderDefValue>>,
         target: &RenderTargets,
     );
@@ -120,8 +128,7 @@ pub trait RenderNode {
     fn prepare(
         &mut self,
         renderer: &WgpuRenderer,
-        scene: &Scene,
-        gpu_scene: &mut GpuScene,
+        scene: &mut GpuScene,
         queue: &mut [RenderMesh],
         target: &RenderTargets,
     );
@@ -129,8 +136,7 @@ pub trait RenderNode {
     fn draw(
         &self,
         renderer: &WgpuRenderer,
-        scene: &Scene,
-        gpu_scene: &GpuScene,
+        scene: &mut GpuScene,
         queue: &[RenderMesh],
         target: &RenderTargets,
     );
@@ -144,17 +150,15 @@ impl RenderNode for GeneralNode {
     fn build(
         &mut self,
         renderer: &WgpuRenderer,
-        _scene: &Scene,
-        gpu_scene: &mut GpuScene,
+        scene: &mut GpuScene,
         _shader_defs: Option<HashMap<String, ShaderDefValue>>,
         _target: &RenderTargets,
     ) {
-        if !gpu_scene.assets.layouts.contains_key(&CAMERA_UUID) {
-            let l_camera = renderer
-                .device
-                .create_bind_group_layout(&BindGroupLayoutDescriptor {
-                    label: Some("camera_layout"),
-                    entries: &[BindGroupLayoutEntry {
+        scene.assets.common_layout = Some(renderer.device.create_bind_group_layout(
+            &BindGroupLayoutDescriptor {
+                label: Some("common_layout"),
+                entries: &[
+                    BindGroupLayoutEntry {
                         binding: 0,
                         visibility: ShaderStages::VERTEX_FRAGMENT,
                         ty: BindingType::Buffer {
@@ -163,126 +167,173 @@ impl RenderNode for GeneralNode {
                             min_binding_size: Some(GpuCamera::min_size()),
                         },
                         count: None,
-                    }],
-                });
-
-            gpu_scene.assets.layouts.insert(CAMERA_UUID, l_camera);
-        }
-
-        if !gpu_scene
-            .assets
-            .layouts
-            .contains_key(&LIGHTS_BIND_GROUP_UUID)
-        {
-            let l_lights = renderer
-                .device
-                .create_bind_group_layout(&BindGroupLayoutDescriptor {
-                    label: Some("lights_layout"),
-                    entries: &[
-                        // Directional
-                        BindGroupLayoutEntry {
-                            binding: 0,
-                            visibility: ShaderStages::FRAGMENT,
-                            ty: BindingType::Buffer {
-                                ty: BufferBindingType::Storage { read_only: true },
-                                has_dynamic_offset: false,
-                                min_binding_size: Some(GpuDirectionalLight::min_size()),
-                            },
-                            count: None,
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: ShaderStages::VERTEX_FRAGMENT,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: Some(GpuSceneDesc::min_size()),
                         },
-                        // Point
-                        BindGroupLayoutEntry {
-                            binding: 1,
-                            visibility: ShaderStages::FRAGMENT,
-                            ty: BindingType::Buffer {
-                                ty: BufferBindingType::Storage { read_only: true },
-                                has_dynamic_offset: false,
-                                min_binding_size: Some(GpuPointLight::min_size()),
-                            },
-                            count: None,
-                        },
-                        // Spot
-                        BindGroupLayoutEntry {
-                            binding: 2,
-                            visibility: ShaderStages::FRAGMENT,
-                            ty: BindingType::Buffer {
-                                ty: BufferBindingType::Storage { read_only: true },
-                                has_dynamic_offset: false,
-                                min_binding_size: Some(GpuSpotLight::min_size()),
-                            },
-                            count: None,
-                        },
-                    ],
-                });
+                        count: None,
+                    },
+                ],
+            },
+        ));
 
-            gpu_scene
-                .assets
-                .layouts
-                .insert(LIGHTS_BIND_GROUP_UUID, l_lights);
-        }
+        scene.assets.lights_layout = Some(renderer.device.create_bind_group_layout(
+            &BindGroupLayoutDescriptor {
+                label: Some("lights_layout"),
+                entries: &[
+                    // Directional
+                    BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: ShaderStages::FRAGMENT,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: false,
+                            min_binding_size: Some(GpuDirectionalLight::min_size()),
+                        },
+                        count: None,
+                    },
+                    // Point
+                    BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: ShaderStages::FRAGMENT,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: false,
+                            min_binding_size: Some(GpuPointLight::min_size()),
+                        },
+                        count: None,
+                    },
+                    // Spot
+                    BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: ShaderStages::FRAGMENT,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: false,
+                            min_binding_size: Some(GpuSpotLight::min_size()),
+                        },
+                        count: None,
+                    },
+                ],
+            },
+        ));
     }
 
     fn prepare(
         &mut self,
         renderer: &WgpuRenderer,
-        _scene: &Scene,
-        gpu_scene: &mut GpuScene,
+        scene: &mut GpuScene,
         _queue: &mut [RenderMesh],
         _target: &RenderTargets,
     ) {
-        let assets = &mut gpu_scene.assets;
+        let GpuScene {
+            assets, original, ..
+        } = scene;
 
-        let (Some(bf_camera), Some(bf_dir_lights), Some(bf_point_lights), Some(bf_spot_lights)) = (
-            assets.buffers[&CAMERA_UUID].entire_binding(),
-            assets.buffers[&DIR_LIGHT_UUID].entire_binding(),
-            assets.buffers[&POINT_LIGHT_UUID].entire_binding(),
-            assets.buffers[&SPOT_LIGHT_UUID].entire_binding(),
-        ) else {
+        assets.directional_light_uniforms.clear();
+        assets.point_light_uniforms.clear();
+        assets.spot_light_uniforms.clear();
+
+        for light in original.directional_lights.values() {
+            assets.directional_light_uniforms.push(light);
+        }
+
+        for light in original.point_lights.values() {
+            assets.point_light_uniforms.push(light);
+        }
+
+        for light in original.spot_lights.values() {
+            assets.spot_light_uniforms.push(light);
+        }
+
+        assets.camera_uniform.clear();
+        assets
+            .camera_uniform
+            .push(&<Camera as Into<GpuCamera>>::into(original.camera));
+        assets.scene_desc_uniform.clear();
+        assets.scene_desc_uniform.push(&GpuSceneDesc {
+            dir_lights: original.directional_lights.len() as u32,
+            point_lights: original.point_lights.len() as u32,
+            spot_lights: original.spot_lights.len() as u32,
+        });
+
+        assets
+            .camera_uniform
+            .write::<GpuCamera>(&renderer.device, &renderer.queue);
+        assets
+            .scene_desc_uniform
+            .write::<GpuSceneDesc>(&renderer.device, &renderer.queue);
+        assets
+            .directional_light_uniforms
+            .write::<GpuDirectionalLight>(&renderer.device, &renderer.queue);
+        assets
+            .point_light_uniforms
+            .write::<GpuPointLight>(&renderer.device, &renderer.queue);
+        assets
+            .spot_light_uniforms
+            .write::<GpuSpotLight>(&renderer.device, &renderer.queue);
+
+        let (
+            Some(bf_camera),
+            Some(bf_gpu_scene_desc),
+            Some(bf_dir_lights),
+            Some(bf_point_lights),
+            Some(bf_spot_lights),
+        ) = (
+            assets.camera_uniform.entire_binding(),
+            assets.scene_desc_uniform.entire_binding(),
+            assets.directional_light_uniforms.entire_binding(),
+            assets.point_light_uniforms.entire_binding(),
+            assets.spot_light_uniforms.entire_binding(),
+        )
+        else {
             return;
         };
 
-        let l_camera = &assets.layouts[&CAMERA_UUID];
-        assets.bind_groups.insert(
-            CAMERA_UUID,
-            renderer.device.create_bind_group(&BindGroupDescriptor {
-                label: Some("camera_bind_group"),
-                layout: &l_camera,
-                entries: &[BindGroupEntry {
+        assets.common_bind_group = Some(renderer.device.create_bind_group(&BindGroupDescriptor {
+            label: Some("common_bind_group"),
+            layout: assets.common_layout.as_ref().unwrap(),
+            entries: &[
+                BindGroupEntry {
                     binding: 0,
                     resource: bf_camera,
-                }],
-            }),
-        );
+                },
+                BindGroupEntry {
+                    binding: 1,
+                    resource: bf_gpu_scene_desc,
+                },
+            ],
+        }));
 
-        let l_lights = &assets.layouts[&LIGHTS_BIND_GROUP_UUID];
-        assets.bind_groups.insert(
-            LIGHTS_BIND_GROUP_UUID,
-            renderer.device.create_bind_group(&BindGroupDescriptor {
-                label: Some("lights_bind_group"),
-                layout: &l_lights,
-                entries: &[
-                    BindGroupEntry {
-                        binding: 0,
-                        resource: bf_dir_lights,
-                    },
-                    BindGroupEntry {
-                        binding: 1,
-                        resource: bf_point_lights,
-                    },
-                    BindGroupEntry {
-                        binding: 2,
-                        resource: bf_spot_lights,
-                    },
-                ],
-            }),
-        );
+        assets.light_bind_group = Some(renderer.device.create_bind_group(&BindGroupDescriptor {
+            label: Some("lights_bind_group"),
+            layout: assets.lights_layout.as_ref().unwrap(),
+            entries: &[
+                BindGroupEntry {
+                    binding: 0,
+                    resource: bf_dir_lights,
+                },
+                BindGroupEntry {
+                    binding: 1,
+                    resource: bf_point_lights,
+                },
+                BindGroupEntry {
+                    binding: 2,
+                    resource: bf_spot_lights,
+                },
+            ],
+        }));
     }
 
     fn draw(
         &self,
         _renderer: &WgpuRenderer,
-        _scene: &Scene,
-        _gpu_scene: &GpuScene,
+        _scene: &mut GpuScene,
         _queue: &[RenderMesh],
         _target: &RenderTargets,
     ) {
@@ -297,83 +348,69 @@ impl RenderNode for PostProcessGeneralNode {
     fn build(
         &mut self,
         renderer: &WgpuRenderer,
-        _scene: &Scene,
-        gpu_scene: &mut GpuScene,
+        scene: &mut GpuScene,
         _shader_defs: Option<HashMap<String, ShaderDefValue>>,
         _target: &RenderTargets,
     ) {
-        if !gpu_scene
-            .assets
-            .layouts
-            .contains_key(&POST_PROCESS_COLOR_LAYOUT_UUID)
-        {
-            gpu_scene.assets.layouts.insert(
-                POST_PROCESS_COLOR_LAYOUT_UUID,
-                renderer
-                    .device
-                    .create_bind_group_layout(&BindGroupLayoutDescriptor {
-                        label: Some("post_process_color_layout"),
-                        entries: &[
-                            BindGroupLayoutEntry {
-                                binding: 0,
-                                visibility: ShaderStages::FRAGMENT,
-                                ty: BindingType::Texture {
-                                    sample_type: TextureSampleType::Float { filterable: true },
-                                    view_dimension: TextureViewDimension::D2,
-                                    multisampled: false,
-                                },
-                                count: None,
+        scene.assets.material_layouts.insert(
+            POST_PROCESS_COLOR_LAYOUT_UUID,
+            renderer
+                .device
+                .create_bind_group_layout(&BindGroupLayoutDescriptor {
+                    label: Some("post_process_color_layout"),
+                    entries: &[
+                        BindGroupLayoutEntry {
+                            binding: 0,
+                            visibility: ShaderStages::FRAGMENT,
+                            ty: BindingType::Texture {
+                                sample_type: TextureSampleType::Float { filterable: true },
+                                view_dimension: TextureViewDimension::D2,
+                                multisampled: false,
                             },
-                            BindGroupLayoutEntry {
-                                binding: 1,
-                                visibility: ShaderStages::FRAGMENT,
-                                ty: BindingType::Sampler(SamplerBindingType::Filtering),
-                                count: None,
-                            },
-                        ],
-                    }),
-            );
-        }
+                            count: None,
+                        },
+                        BindGroupLayoutEntry {
+                            binding: 1,
+                            visibility: ShaderStages::FRAGMENT,
+                            ty: BindingType::Sampler(SamplerBindingType::Filtering),
+                            count: None,
+                        },
+                    ],
+                }),
+        );
 
-        if !gpu_scene
-            .assets
-            .layouts
-            .contains_key(&POST_PROCESS_DEPTH_LAYOUT_UUID)
-        {
-            gpu_scene.assets.layouts.insert(
-                POST_PROCESS_DEPTH_LAYOUT_UUID,
-                renderer
-                    .device
-                    .create_bind_group_layout(&BindGroupLayoutDescriptor {
-                        label: Some("post_process_depth_layout"),
-                        entries: &[
-                            BindGroupLayoutEntry {
-                                binding: 0,
-                                visibility: ShaderStages::FRAGMENT,
-                                ty: BindingType::Texture {
-                                    sample_type: TextureSampleType::Depth,
-                                    view_dimension: TextureViewDimension::D2,
-                                    multisampled: false,
-                                },
-                                count: None,
+        scene.assets.material_layouts.insert(
+            POST_PROCESS_DEPTH_LAYOUT_UUID,
+            renderer
+                .device
+                .create_bind_group_layout(&BindGroupLayoutDescriptor {
+                    label: Some("post_process_depth_layout"),
+                    entries: &[
+                        BindGroupLayoutEntry {
+                            binding: 0,
+                            visibility: ShaderStages::FRAGMENT,
+                            ty: BindingType::Texture {
+                                sample_type: TextureSampleType::Depth,
+                                view_dimension: TextureViewDimension::D2,
+                                multisampled: false,
                             },
-                            BindGroupLayoutEntry {
-                                binding: 1,
-                                visibility: ShaderStages::FRAGMENT,
-                                ty: BindingType::Sampler(SamplerBindingType::Filtering),
-                                count: None,
-                            },
-                        ],
-                    }),
-            );
-        }
+                            count: None,
+                        },
+                        BindGroupLayoutEntry {
+                            binding: 1,
+                            visibility: ShaderStages::FRAGMENT,
+                            ty: BindingType::Sampler(SamplerBindingType::Filtering),
+                            count: None,
+                        },
+                    ],
+                }),
+        );
     }
 
     fn prepare(
         &mut self,
         _renderer: &WgpuRenderer,
-        _scene: &Scene,
-        _gpu_scene: &mut GpuScene,
+        _scene: &mut GpuScene,
         _queue: &mut [RenderMesh],
         _target: &RenderTargets,
     ) {
@@ -382,8 +419,7 @@ impl RenderNode for PostProcessGeneralNode {
     fn draw(
         &self,
         _renderer: &WgpuRenderer,
-        _scene: &Scene,
-        _gpu_scene: &GpuScene,
+        _scene: &mut GpuScene,
         _queue: &[RenderMesh],
         _target: &RenderTargets,
     ) {
@@ -397,42 +433,38 @@ impl RenderNode for ImageFallbackNode {
     fn build(
         &mut self,
         renderer: &WgpuRenderer,
-        _scene: &Scene,
-        gpu_scene: &mut GpuScene,
+        scene: &mut GpuScene,
         _shader_defs: Option<HashMap<String, ShaderDefValue>>,
         _target: &RenderTargets,
     ) {
-        if !gpu_scene.assets.textures.contains_key(&DUMMY_2D_TEX) {
-            gpu_scene.assets.textures.insert(
-                DUMMY_2D_TEX,
-                renderer.device.create_texture_with_data(
-                    &renderer.queue,
-                    &TextureDescriptor {
-                        label: Some("dummy_2d"),
-                        size: Extent3d {
-                            width: 1,
-                            height: 1,
-                            depth_or_array_layers: 1,
-                        },
-                        mip_level_count: 1,
-                        sample_count: 1,
-                        dimension: TextureDimension::D2,
-                        format: TextureFormat::Rgba8Unorm,
-                        usage: TextureUsages::TEXTURE_BINDING,
-                        view_formats: &[TextureFormat::Rgba8Unorm],
+        scene.assets.textures.insert(
+            DUMMY_2D_TEX,
+            renderer.device.create_texture_with_data(
+                &renderer.queue,
+                &TextureDescriptor {
+                    label: Some("dummy_2d"),
+                    size: Extent3d {
+                        width: 1,
+                        height: 1,
+                        depth_or_array_layers: 1,
                     },
-                    TextureDataOrder::MipMajor,
-                    &[255; 4],
-                ),
-            );
-        }
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    dimension: TextureDimension::D2,
+                    format: TextureFormat::Rgba8Unorm,
+                    usage: TextureUsages::TEXTURE_BINDING,
+                    view_formats: &[TextureFormat::Rgba8Unorm],
+                },
+                TextureDataOrder::MipMajor,
+                &[255; 4],
+            ),
+        );
     }
 
     fn prepare(
         &mut self,
         _renderer: &WgpuRenderer,
-        _scene: &Scene,
-        _gpu_scene: &mut GpuScene,
+        _scene: &mut GpuScene,
         _queue: &mut [RenderMesh],
         _target: &RenderTargets,
     ) {
@@ -441,8 +473,7 @@ impl RenderNode for ImageFallbackNode {
     fn draw(
         &self,
         _renderer: &WgpuRenderer,
-        _scene: &Scene,
-        _gpu_scene: &GpuScene,
+        _scene: &mut GpuScene,
         _queue: &[RenderMesh],
         _target: &RenderTargets,
     ) {

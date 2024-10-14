@@ -1,16 +1,17 @@
-use std::any::Any;
+use std::any::TypeId;
 
 use aurora_core::{
-    render::{resource::DUMMY_2D_TEX, scene::GpuAssets, Transferable},
-    scene::resource::Material,
+    render::{
+        mesh::{CreateBindGroupLayout, Material},
+        resource::DUMMY_2D_TEX,
+        scene::{GpuAssets, MaterialInstanceId, MaterialTypeId, TextureId},
+    },
     util::ext::{RgbToVec3, TypeIdAsUuid},
     WgpuRenderer,
 };
-use aurora_derive::MaterialObject;
 use encase::ShaderType;
 use glam::Vec3;
 use palette::Srgb;
-use uuid::Uuid;
 use wgpu::{
     BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor, BindGroupLayoutEntry,
     BindingResource, BindingType, BufferBindingType, FilterMode, SamplerBindingType,
@@ -20,11 +21,11 @@ use wgpu::{
 
 use crate::node::TONY_MC_MAPFACE_LUT;
 
-#[derive(MaterialObject, Clone)]
+#[derive(Clone)]
 pub struct PbrMaterial {
     pub base_color: Srgb,
-    pub tex_base_color: Option<Uuid>,
-    pub tex_normal: Option<Uuid>,
+    pub tex_base_color: Option<TextureId>,
+    pub tex_normal: Option<TextureId>,
     pub roughness: f32,
     pub metallic: f32,
     pub reflectance: f32,
@@ -51,10 +52,10 @@ pub struct PbrMaterialUniform {
     pub ior: f32,
 }
 
-impl Material for PbrMaterial {
-    fn create_layout(&self, renderer: &WgpuRenderer, assets: &mut GpuAssets) {
-        assets.layouts.insert(
-            self.type_id().to_uuid(),
+impl CreateBindGroupLayout for PbrMaterial {
+    fn create_layout(renderer: &WgpuRenderer, assets: &mut GpuAssets) {
+        assets.material_layouts.insert(
+            MaterialTypeId(TypeId::of::<Self>().to_uuid()),
             renderer
                 .device
                 .create_bind_group_layout(&BindGroupLayoutDescriptor {
@@ -122,91 +123,90 @@ impl Material for PbrMaterial {
                 }),
         );
     }
+}
 
-    fn create_bind_group(&self, renderer: &WgpuRenderer, assets: &mut GpuAssets, uuid: Uuid) {
-        let ty = self.type_id().to_uuid();
+impl Material for PbrMaterial {
+    fn create_bind_group(
+        &self,
+        renderer: &WgpuRenderer,
+        assets: &mut GpuAssets,
+        material: MaterialInstanceId,
+    ) {
         let Some(buffer) = assets
-            .buffers
-            .get(&ty)
+            .material_uniforms
+            .get(&self.id())
             .and_then(|b| b.binding::<PbrMaterialUniform>())
         else {
             return;
         };
-        let layout = assets.layouts.get(&ty).unwrap();
 
-        assets.bind_groups.insert(
-            uuid,
-            renderer.device.create_bind_group(&BindGroupDescriptor {
-                label: Some("pbr_material_bind_group"),
-                layout: &layout,
-                entries: &[
-                    BindGroupEntry {
-                        binding: 0,
-                        resource: buffer,
-                    },
-                    BindGroupEntry {
-                        binding: 1,
-                        resource: BindingResource::TextureView(
-                            &assets.textures[&self.tex_base_color.unwrap_or(DUMMY_2D_TEX)]
-                                .create_view(&TextureViewDescriptor::default()),
-                        ),
-                    },
-                    BindGroupEntry {
-                        binding: 2,
-                        resource: BindingResource::TextureView(
-                            &assets.textures[&self.tex_normal.unwrap_or(DUMMY_2D_TEX)]
-                                .create_view(&TextureViewDescriptor::default()),
-                        ),
-                    },
-                    BindGroupEntry {
-                        binding: 3,
-                        resource: BindingResource::Sampler(&renderer.device.create_sampler(
-                            &SamplerDescriptor {
-                                mag_filter: FilterMode::Linear,
-                                min_filter: FilterMode::Linear,
-                                mipmap_filter: FilterMode::Linear,
-                                ..Default::default()
-                            },
-                        )),
-                    },
-                    BindGroupEntry {
-                        binding: 4,
-                        resource: BindingResource::TextureView(
-                            &assets.textures[&TONY_MC_MAPFACE_LUT]
-                                .create_view(&TextureViewDescriptor::default()),
-                        ),
-                    },
-                    BindGroupEntry {
-                        binding: 5,
-                        resource: BindingResource::Sampler(&renderer.device.create_sampler(
-                            &SamplerDescriptor {
-                                mag_filter: FilterMode::Linear,
-                                min_filter: FilterMode::Linear,
-                                mipmap_filter: FilterMode::Linear,
-                                ..Default::default()
-                            },
-                        )),
-                    },
-                ],
-            }),
-        );
+        let layout = assets.material_layouts.get(&self.id()).unwrap();
+        let pbr_material_bind_group = renderer.device.create_bind_group(&BindGroupDescriptor {
+            label: Some("pbr_material_bind_group"),
+            layout: &layout,
+            entries: &[
+                BindGroupEntry {
+                    binding: 0,
+                    resource: buffer,
+                },
+                BindGroupEntry {
+                    binding: 1,
+                    resource: BindingResource::TextureView(
+                        &assets.textures[&self.tex_base_color.unwrap_or(DUMMY_2D_TEX)]
+                            .create_view(&TextureViewDescriptor::default()),
+                    ),
+                },
+                BindGroupEntry {
+                    binding: 2,
+                    resource: BindingResource::TextureView(
+                        &assets.textures[&self.tex_normal.unwrap_or(DUMMY_2D_TEX)]
+                            .create_view(&TextureViewDescriptor::default()),
+                    ),
+                },
+                BindGroupEntry {
+                    binding: 3,
+                    resource: BindingResource::Sampler(&renderer.device.create_sampler(
+                        &SamplerDescriptor {
+                            mag_filter: FilterMode::Linear,
+                            min_filter: FilterMode::Linear,
+                            mipmap_filter: FilterMode::Linear,
+                            ..Default::default()
+                        },
+                    )),
+                },
+                BindGroupEntry {
+                    binding: 4,
+                    resource: BindingResource::TextureView(
+                        &assets.textures[&TONY_MC_MAPFACE_LUT]
+                            .create_view(&TextureViewDescriptor::default()),
+                    ),
+                },
+                BindGroupEntry {
+                    binding: 5,
+                    resource: BindingResource::Sampler(&renderer.device.create_sampler(
+                        &SamplerDescriptor {
+                            mag_filter: FilterMode::Linear,
+                            min_filter: FilterMode::Linear,
+                            mipmap_filter: FilterMode::Linear,
+                            ..Default::default()
+                        },
+                    )),
+                },
+            ],
+        });
+
+        assets
+            .material_bind_groups
+            .insert(material, pbr_material_bind_group);
     }
 
-    fn prepare(&self, renderer: &WgpuRenderer, assets: &mut GpuAssets) -> u32 {
-        let buffer = assets.buffers.get_mut(&self.type_id().to_uuid()).unwrap();
-        buffer.push(&self.transfer(renderer))
-    }
-}
-
-impl Transferable for PbrMaterial {
-    type GpuRepr = PbrMaterialUniform;
-
-    fn transfer(&self, _renderer: &WgpuRenderer) -> Self::GpuRepr {
-        PbrMaterialUniform {
+    fn prepare(&self, _renderer: &WgpuRenderer, assets: &mut GpuAssets) -> u32 {
+        let buffer = assets.material_uniforms.get_mut(&self.id()).unwrap();
+        buffer.push(&PbrMaterialUniform {
             base_color: self.base_color.into_linear().to_vec3(),
             roughness: self.roughness,
             metallic: self.metallic,
             ior: self.reflectance,
-        }
+        })
     }
 }

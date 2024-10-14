@@ -1,6 +1,6 @@
 #define_import_path aurora::pbr::pbr
 #import aurora::{
-    common_binding::camera,
+    common_binding::{camera, scene},
     common_type::VertexInput,
     math::PI,
     pbr::{
@@ -36,7 +36,7 @@ fn fragment(in: PbrVertexOutput) -> @location(0) vec4f {
 
     // Subtract array length by one as there're dummy data.
 
-    for (var i_light = 0u; i_light < arrayLength(&dir_lights) - 1u; i_light += 1u) {
+    for (var i_light = 0u; i_light < scene.dir_lights; i_light += 1u) {
         let light = &dir_lights[i_light];
         
         let irradiated = pbr_function::apply_lighting((*light).direction, (*light).intensity, (*light).color, &unlit);
@@ -45,7 +45,7 @@ fn fragment(in: PbrVertexOutput) -> @location(0) vec4f {
         color += irradiated * shadow;
     }
 
-    for (var i_light = 0u; i_light < arrayLength(&point_lights) - 1u; i_light += 1u) {
+    for (var i_light = 0u; i_light < scene.point_lights; i_light += 1u) {
         let light = &point_lights[i_light];
         let position_rel = (*light).position - in.position_ws;
         let direction = normalize(position_rel);
@@ -59,7 +59,7 @@ fn fragment(in: PbrVertexOutput) -> @location(0) vec4f {
         color += irradiated * shadow;
     }
 
-    for (var i_light = 0u; i_light < arrayLength(&spot_lights) - 1u; i_light += 1u) {
+    for (var i_light = 0u; i_light < scene.spot_lights; i_light += 1u) {
         let light = &spot_lights[i_light];
         let position_rel = (*light).position - in.position_ws;
         let direction = normalize(position_rel);

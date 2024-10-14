@@ -7,7 +7,6 @@
 // @group(3) @binding(1) var shadow_map_sampler: sampler;
 @group(3) @binding(2) var directional_shadow_map: texture_depth_2d_array;
 @group(3) @binding(3) var point_shadow_map: texture_depth_cube_array;
-@group(3) @binding(4) var spot_shadow_map: texture_depth_cube_array;
 
 fn sample_directional_shadow_map(light: u32, position_ws: vec3f) -> f32 {
     // Project the mesh point on to light view.
