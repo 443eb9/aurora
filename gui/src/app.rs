@@ -106,7 +106,7 @@ impl<'a> Application<'a> {
         let shader_defs = [
             PbrSpecular::GGX.to_def(),
             PbrDiffuse::Lambert.to_def(),
-            "TEX_NORMAL".to_def(),
+            // "TEX_NORMAL".to_def(),
         ]
         .into();
 
