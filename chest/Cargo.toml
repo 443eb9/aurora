@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 aurora_core = { version = "0.1", path = "../core" }
 aurora_derive = { version = "0.1", path = "../macros" }
+bytemuck.workspace = true
 ddsfile.workspace = true
 encase.workspace = true
 glam.workspace = true

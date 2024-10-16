@@ -16,7 +16,8 @@
 fn vertex(in: VertexInput) -> PbrVertexOutput {
     var output: PbrVertexOutput;
     output.position_ws = in.position;
-    output.position_cs = camera.proj * camera.view * vec4f(in.position, 1.);
+    output.position_vs = camera.view * vec4f(in.position, 1.);
+    output.position_cs = camera.proj * output.position_vs;
     output.normal = in.normal;
     output.uv = in.uv.xy;
     output.tangent = in.tangent;
@@ -30,19 +31,20 @@ fn fragment(in: PbrVertexOutput) -> @location(0) vec4f {
 #else
     let normal = in.normal;
 #endif
+
     var unlit = pbr_function::construct_surface_unlit(in.position_ws, normal, in.uv, material);
 
     var color = vec3f(0.);
-
-    // Subtract array length by one as there're dummy data.
 
     for (var i_light = 0u; i_light < scene.dir_lights; i_light += 1u) {
         let light = &dir_lights[i_light];
         
         let irradiated = pbr_function::apply_lighting((*light).direction, (*light).intensity, (*light).color, &unlit);
-        let shadow = shadow_mapping::sample_directional_shadow_map(i_light, in.position_ws);
+        let shadow = shadow_mapping::sample_cascaded_shadow_map(i_light, in.position_ws, in.position_vs);
+        let cascade_color = shadow_mapping::debug_cascade_color(i_light, in.position_vs);
 
-        color += irradiated * shadow;
+        color += irradiated * shadow + cascade_color * (*light).intensity;
+        // color += cascade_color;
     }
 
     for (var i_light = 0u; i_light < scene.point_lights; i_light += 1u) {
@@ -80,4 +82,5 @@ fn fragment(in: PbrVertexOutput) -> @location(0) vec4f {
 
     color = pbr_function::apply_exposure(color * unlit.base_color);
     return vec4f(tonemapping::tonemapping_tony_mc_mapface(color), 1.);
+    // return vec4f(color, 1.);
 }

@@ -42,11 +42,18 @@ pub struct PbrNode {
 }
 
 impl RenderNode for PbrNode {
+    fn require_shader_defs(&self, shader_defs: &mut HashMap<String, ShaderDefValue>) {
+        shader_defs.extend([
+            ("LUT_TEX_BINDING".to_string(), ShaderDefValue::UInt(4)),
+            ("LUT_SAMPLER_BINDING".to_string(), ShaderDefValue::UInt(5)),
+        ]);
+    }
+
     fn build(
         &mut self,
         renderer: &WgpuRenderer,
         scene: &mut GpuScene,
-        shader_defs: Option<HashMap<String, ShaderDefValue>>,
+        shader_defs: HashMap<String, ShaderDefValue>,
         target: &RenderTargets,
     ) {
         scene.assets.textures.insert(
@@ -118,11 +125,6 @@ impl RenderNode for PbrNode {
             shader_defs.clone(),
         );
 
-        let mut shader_defs = shader_defs.unwrap_or_default();
-        shader_defs.extend([
-            ("LUT_TEX_BINDING".to_string(), ShaderDefValue::UInt(4)),
-            ("LUT_SAMPLER_BINDING".to_string(), ShaderDefValue::UInt(5)),
-        ]);
         let shader = composer
             .make_naga_module(NagaModuleDescriptor {
                 source: include_str!("../shader/pbr/pbr.wgsl"),
@@ -299,7 +301,7 @@ impl RenderNode for PbrNode {
             pass.set_pipeline(pipeline);
             pass.set_bind_group(0, b_camera, &[]);
             pass.set_bind_group(1, b_lights, &[]);
-            pass.set_bind_group(3, &b_shadow_maps, &[]);
+            pass.set_bind_group(3, b_shadow_maps, &[]);
 
             for mesh in queue {
                 let (Some(b_material), Some((vertices, count))) = (

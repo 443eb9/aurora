@@ -34,7 +34,7 @@ impl RenderNode for DepthViewNode {
         &mut self,
         renderer: &WgpuRenderer,
         scene: &mut GpuScene,
-        _shader_defs: Option<HashMap<String, ShaderDefValue>>,
+        _shader_defs: HashMap<String, ShaderDefValue>,
         target: &RenderTargets,
     ) {
         let Some(l_post_process) = scene

@@ -26,7 +26,7 @@ impl RenderNode for BasicTriangleNode {
         &mut self,
         renderer: &WgpuRenderer,
         _scene: &mut GpuScene,
-        _shader_defs: Option<HashMap<String, ShaderDefValue>>,
+        _shader_defs: HashMap<String, ShaderDefValue>,
         target: &RenderTargets,
     ) {
         let shader_module = renderer

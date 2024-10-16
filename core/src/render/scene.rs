@@ -30,17 +30,17 @@ pub struct ExtraLayoutId(pub Uuid);
 pub struct ExtraBindGroupId(pub Uuid);
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct ExtraUniformBufferId(pub Uuid);
+pub struct ExtraBufferId(pub Uuid);
 
 pub struct GpuAssets {
     pub camera_uniform: DynamicGpuBuffer,
     pub scene_desc_uniform: DynamicGpuBuffer,
-    pub directional_light_uniforms: DynamicGpuBuffer,
-    pub point_light_uniforms: DynamicGpuBuffer,
-    pub spot_light_uniforms: DynamicGpuBuffer,
+    pub directional_light_buffer: DynamicGpuBuffer,
+    pub point_light_buffer: DynamicGpuBuffer,
+    pub spot_light_buffer: DynamicGpuBuffer,
     pub material_uniforms: HashMap<MaterialTypeId, DynamicGpuBuffer>,
     pub vertex_buffers: HashMap<MeshInstanceId, (DynamicGpuBuffer, u32)>,
-    pub extra_uniforms: HashMap<ExtraUniformBufferId, DynamicGpuBuffer>,
+    pub extra_buffers: HashMap<ExtraBufferId, DynamicGpuBuffer>,
 
     pub textures: HashMap<TextureId, Texture>,
     pub texture_views: HashMap<TextureViewId, TextureView>,
@@ -62,9 +62,9 @@ impl Default for GpuAssets {
         Self {
             camera_uniform: DynamicGpuBuffer::new(BufferUsages::UNIFORM),
             scene_desc_uniform: DynamicGpuBuffer::new(BufferUsages::UNIFORM),
-            directional_light_uniforms: DynamicGpuBuffer::new(BufferUsages::STORAGE),
-            point_light_uniforms: DynamicGpuBuffer::new(BufferUsages::STORAGE),
-            spot_light_uniforms: DynamicGpuBuffer::new(BufferUsages::STORAGE),
+            directional_light_buffer: DynamicGpuBuffer::new(BufferUsages::STORAGE),
+            point_light_buffer: DynamicGpuBuffer::new(BufferUsages::STORAGE),
+            spot_light_buffer: DynamicGpuBuffer::new(BufferUsages::STORAGE),
             material_uniforms: Default::default(),
             vertex_buffers: Default::default(),
             textures: Default::default(),
@@ -77,7 +77,7 @@ impl Default for GpuAssets {
             extra_bind_groups: Default::default(),
             extra_layouts: Default::default(),
             texture_views: Default::default(),
-            extra_uniforms: Default::default(),
+            extra_buffers: Default::default(),
             samplers: Default::default(),
         }
     }

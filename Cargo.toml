@@ -10,6 +10,7 @@ opt-level = 3
 
 [workspace.dependencies]
 aurora_derive = { version = "0.1", path = "../macros" }
+bytemuck = { version = "1", features = ["derive"] }
 ddsfile = "0.5"
 dyn-clone = "1"
 encase = { version = "0.10", features = ["glam"] }

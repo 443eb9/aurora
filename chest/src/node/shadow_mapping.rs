@@ -3,14 +3,16 @@ use std::{borrow::Cow, collections::HashMap};
 use aurora_core::{
     render::{
         flow::RenderNode,
+        helper::{CameraProjection, Transform},
         resource::{DynamicGpuBuffer, GpuCamera, RenderMesh, RenderTargets, Vertex},
         scene::{
-            ExtraBindGroupId, ExtraLayoutId, ExtraUniformBufferId, GpuScene, SamplerId, TextureId,
+            ExtraBindGroupId, ExtraBufferId, ExtraLayoutId, GpuScene, SamplerId, TextureId,
             TextureViewId,
         },
     },
     WgpuRenderer,
 };
+use glam::{Mat4, Vec3};
 use naga_oil::compose::{Composer, NagaModuleDescriptor, ShaderDefValue};
 use uuid::Uuid;
 use wgpu::{
@@ -26,12 +28,13 @@ use wgpu::{
     VertexState, VertexStepMode,
 };
 
-use crate::util;
+use crate::util::{self, frustum_slice, Aabb};
 
 pub struct ShadowMapping {
-    pub light_view_uniform: ExtraUniformBufferId,
-    pub light_view_layout: ExtraLayoutId,
-    pub light_view_bind_group: ExtraBindGroupId,
+    pub light_views: ExtraBufferId,
+    pub cascade_views: ExtraBufferId,
+    pub point_light_views: ExtraBufferId,
+
     pub directional_shadow_map: TextureId,
     pub directional_shadow_map_view: TextureViewId,
     pub point_shadow_map: TextureId,
@@ -39,13 +42,18 @@ pub struct ShadowMapping {
     pub shadow_map_sampler: SamplerId,
 
     pub shadow_maps_layout: ExtraLayoutId,
+    pub light_view_layout: ExtraLayoutId,
+
     pub shadow_maps_bind_group: ExtraBindGroupId,
+    pub light_views_bind_group: ExtraBindGroupId,
 }
 
 pub const SHADOW_MAPPING: ShadowMapping = ShadowMapping {
-    light_view_uniform: ExtraUniformBufferId(Uuid::from_u128(8794041105348641631856410231)),
+    light_views: ExtraBufferId(Uuid::from_u128(89413211065410340136548487101523115648)),
+    cascade_views: ExtraBufferId(Uuid::from_u128(894132906465410168465132984653696845)),
+    point_light_views: ExtraBufferId(Uuid::from_u128(8794041105348641631856410231)),
     light_view_layout: ExtraLayoutId(Uuid::from_u128(7513015631563408941231)),
-    light_view_bind_group: ExtraBindGroupId(Uuid::from_u128(123056463804784103210324847)),
+    light_views_bind_group: ExtraBindGroupId(Uuid::from_u128(135648640640653130645120465123)),
     directional_shadow_map: TextureId(Uuid::from_u128(7861046541564897045132508964132)),
     directional_shadow_map_view: TextureViewId(Uuid::from_u128(10264856487964101541231456531)),
     point_shadow_map: TextureId(Uuid::from_u128(204153435154865423112313232)),
@@ -58,21 +66,89 @@ pub const SHADOW_MAPPING: ShadowMapping = ShadowMapping {
 #[derive(Default)]
 pub struct ShadowMappingNode {
     pipeline: Option<RenderPipeline>,
-    directional_views: HashMap<Uuid, TextureViewId>,
+    directional_views: HashMap<Uuid, [TextureViewId; Self::CASCADE_COUNT]>,
     point_views: HashMap<Uuid, [TextureViewId; 6]>,
     offsets: Vec<u32>,
 }
 
 impl ShadowMappingNode {
-    pub const CASCADE_COUNT: u32 = 3;
+    pub const CASCADE_COUNT: usize = 3;
+
+    pub fn calculate_cascade_view(
+        camera_transform: Transform,
+        camera_proj_slice: CameraProjection,
+        light_dir: Vec3,
+    ) -> GpuCamera {
+        let view_proj =
+            camera_proj_slice.compute_matrix() * camera_transform.compute_matrix().inverse();
+        // Frustum corners in world space.
+        let mut frustum_corners = util::calculate_frustum_corners(view_proj);
+
+        // The transform of this cascade should at center of that frustum.
+        let center = frustum_corners.into_iter().reduce(|v, c| v + c).unwrap()
+            / frustum_corners.len() as f32;
+
+        // And looking at the light_dir.
+        // As we are having the inverse direction, which is only use for light calculation,
+        // inverse it back.
+        let cascade_view = Mat4::look_to_rh(center, -light_dir, Vec3::Y);
+
+        // Convert frustum into cascade view space.
+        frustum_corners
+            .iter_mut()
+            .for_each(|c| *c = (cascade_view * c.extend(1.)).truncate());
+
+        // Calculate the bounding box of the frustum in cascade view space.
+        let cascade_proj_aabb = frustum_corners.into_iter().fold(
+            Aabb {
+                min: Vec3::MAX,
+                max: Vec3::MIN,
+            },
+            |mut aabb, c| {
+                aabb.min = aabb.min.min(c);
+                aabb.max = aabb.max.max(c);
+                aabb
+            },
+        );
+        let half_aabb_size = (cascade_proj_aabb.max - cascade_proj_aabb.min) * 0.5;
+        // dbg!(half_aabb_size * 2.);
+        // println!("{} {}", cascade_proj_aabb.min, cascade_proj_aabb.max);
+
+        let cascade_proj = Mat4::orthographic_rh(
+            -half_aabb_size.x,
+            half_aabb_size.x,
+            -half_aabb_size.y,
+            half_aabb_size.y,
+            -half_aabb_size.z,
+            half_aabb_size.z,
+        );
+
+        GpuCamera {
+            view: cascade_view,
+            proj: cascade_proj,
+            position_ws: center,
+            // SPECIAL USE CASE!!
+            exposure: match camera_proj_slice {
+                CameraProjection::Perspective(proj) => proj.near,
+                CameraProjection::Orthographic(proj) => proj.near,
+            },
+        }
+    }
 }
 
 impl RenderNode for ShadowMappingNode {
+    fn require_shader_defs(&self, shader_defs: &mut HashMap<String, ShaderDefValue>) {
+        shader_defs.insert(
+            "SHADOW_CASCADES".to_owned(),
+            ShaderDefValue::UInt(Self::CASCADE_COUNT as u32),
+        );
+    }
+
     fn build(
         &mut self,
         renderer: &WgpuRenderer,
         scene: &mut GpuScene,
-        shader_defs: Option<HashMap<String, ShaderDefValue>>,
+        shader_defs: HashMap<String, ShaderDefValue>,
         target: &RenderTargets,
     ) {
         let mut composer = Composer::default();
@@ -89,7 +165,7 @@ impl RenderNode for ShadowMappingNode {
         let shader = composer
             .make_naga_module(NagaModuleDescriptor {
                 source: include_str!("../shader/shadow/shadow_render.wgsl"),
-                shader_defs: shader_defs.unwrap_or_default(),
+                shader_defs,
                 ..Default::default()
             })
             .unwrap();
@@ -180,12 +256,14 @@ impl RenderNode for ShadowMappingNode {
                 }),
         );
 
-        let directional_shadow_map = renderer.device.create_texture(&TextureDescriptor {
-            label: Some("directional_shadow_map"),
+        let cascade_directional_shadow_map = renderer.device.create_texture(&TextureDescriptor {
+            label: Some("cascade_directional_shadow_map"),
             size: Extent3d {
                 width: 1024,
                 height: 1024,
-                depth_or_array_layers: (scene.original.directional_lights.len() as u32).max(1),
+                depth_or_array_layers: ((scene.original.directional_lights.len()
+                    * Self::CASCADE_COUNT) as u32)
+                    .max(1),
             },
             mip_level_count: 1,
             sample_count: 1,
@@ -195,9 +273,9 @@ impl RenderNode for ShadowMappingNode {
             view_formats: &[],
         });
 
-        let directional_shadow_map_view =
-            directional_shadow_map.create_view(&TextureViewDescriptor {
-                label: Some("directional_shadow_map_view"),
+        let cascade_directional_shadow_map_view =
+            cascade_directional_shadow_map.create_view(&TextureViewDescriptor {
+                label: Some("cascade_directional_shadow_map_view"),
                 dimension: Some(TextureViewDimension::D2Array),
                 ..Default::default()
             });
@@ -240,9 +318,9 @@ impl RenderNode for ShadowMappingNode {
             renderer
                 .device
                 .create_bind_group_layout(&BindGroupLayoutDescriptor {
-                    label: Some("shadow_layout"),
+                    label: Some("shadow_maps_layout"),
                     entries: &[
-                        // Light Views
+                        // Cascade Views
                         BindGroupLayoutEntry {
                             binding: 0,
                             visibility: ShaderStages::FRAGMENT,
@@ -255,16 +333,29 @@ impl RenderNode for ShadowMappingNode {
                             },
                             count: None,
                         },
-                        // Shadow Map Sampler
+                        // Point Light Views
                         BindGroupLayoutEntry {
                             binding: 1,
+                            visibility: ShaderStages::FRAGMENT,
+                            ty: BindingType::Buffer {
+                                ty: BufferBindingType::Storage { read_only: true },
+                                has_dynamic_offset: false,
+                                min_binding_size: Some(
+                                    <GpuCamera as encase::ShaderType>::min_size(),
+                                ),
+                            },
+                            count: None,
+                        },
+                        // Shadow Map Sampler
+                        BindGroupLayoutEntry {
+                            binding: 2,
                             visibility: ShaderStages::FRAGMENT,
                             ty: BindingType::Sampler(SamplerBindingType::Comparison),
                             count: None,
                         },
                         // Directional Light Shaodow Maps
                         BindGroupLayoutEntry {
-                            binding: 2,
+                            binding: 3,
                             visibility: ShaderStages::FRAGMENT,
                             ty: BindingType::Texture {
                                 sample_type: TextureSampleType::Depth,
@@ -275,7 +366,7 @@ impl RenderNode for ShadowMappingNode {
                         },
                         // Point Light Shaodow Maps
                         BindGroupLayoutEntry {
-                            binding: 3,
+                            binding: 4,
                             visibility: ShaderStages::FRAGMENT,
                             ty: BindingType::Texture {
                                 sample_type: TextureSampleType::Depth,
@@ -297,11 +388,11 @@ impl RenderNode for ShadowMappingNode {
             .insert(SHADOW_MAPPING.shadow_map_sampler, shadow_map_sampler);
         scene.assets.textures.insert(
             SHADOW_MAPPING.directional_shadow_map,
-            directional_shadow_map,
+            cascade_directional_shadow_map,
         );
         scene.assets.texture_views.insert(
             SHADOW_MAPPING.directional_shadow_map_view,
-            directional_shadow_map_view,
+            cascade_directional_shadow_map_view,
         );
         scene
             .assets
@@ -323,8 +414,8 @@ impl RenderNode for ShadowMappingNode {
         let mut directional_index = 0;
         let mut point_index = 0;
 
-        let mut directional_desc = TextureViewDescriptor {
-            label: Some("directional_shadow_map_render_view"),
+        let mut cascade_directional_desc = TextureViewDescriptor {
+            label: Some("cascade_directional_shadow_map_render_view"),
             format: Some(TextureFormat::Depth32Float),
             dimension: Some(TextureViewDimension::D2),
             aspect: TextureAspect::DepthOnly,
@@ -343,25 +434,41 @@ impl RenderNode for ShadowMappingNode {
             ..Default::default()
         };
 
-        let mut bf_light_view =
-            DynamicGpuBuffer::new(BufferUsages::UNIFORM | BufferUsages::STORAGE);
+        let mut raw_cascade_views = Vec::new();
+        let mut bf_point_light_view = DynamicGpuBuffer::new(BufferUsages::STORAGE);
+        let mut bf_light_views = DynamicGpuBuffer::new(BufferUsages::UNIFORM);
 
         let directional_shadow_maps =
             &scene.assets.textures[&SHADOW_MAPPING.directional_shadow_map];
         let point_shadow_maps = &scene.assets.textures[&SHADOW_MAPPING.point_shadow_map];
 
+        let sliced_frustums =
+            frustum_slice(scene.original.camera.projection, Self::CASCADE_COUNT as u32);
+
         for (id, light) in &scene.original.directional_lights {
-            directional_desc.base_array_layer = directional_index;
-            let texture_view_id = TextureViewId(Uuid::new_v4());
+            let cascade_views = sliced_frustums.clone().into_iter().map(|proj| {
+                Self::calculate_cascade_view(scene.original.camera.transform, proj, light.direction)
+            });
 
-            self.directional_views.insert(*id, texture_view_id);
-            scene.assets.texture_views.insert(
-                texture_view_id,
-                directional_shadow_maps.create_view(&directional_desc),
-            );
+            let mut cascade_maps = [TextureViewId::default(); Self::CASCADE_COUNT];
 
-            self.offsets.push(bf_light_view.push(&light.light_view()));
-            directional_index += 1;
+            for (i_cascade, cascade_view) in cascade_views.enumerate() {
+                cascade_directional_desc.base_array_layer = directional_index;
+                let texture_view_id = TextureViewId(Uuid::new_v4());
+                cascade_maps[i_cascade] = texture_view_id;
+
+                scene.assets.texture_views.insert(
+                    texture_view_id,
+                    directional_shadow_maps.create_view(&cascade_directional_desc),
+                );
+
+                // bf_cascade_views.push(&cascade_view);
+                raw_cascade_views.extend_from_slice(bytemuck::bytes_of(&cascade_view));
+                self.offsets.push(bf_light_views.push(&cascade_view));
+                directional_index += 1;
+            }
+
+            self.directional_views.insert(*id, cascade_maps);
         }
 
         for (id, light) in &scene.original.point_lights {
@@ -376,7 +483,10 @@ impl RenderNode for ShadowMappingNode {
                     .assets
                     .texture_views
                     .insert(texture_view_id, point_shadow_maps.create_view(&point_desc));
-                self.offsets.push(bf_light_view.push(&light_views[i_face]));
+
+                bf_point_light_view.push(&light_views[i_face].proj);
+                self.offsets
+                    .push(bf_light_views.push(&light_views[i_face].proj));
             }
 
             self.point_views.insert(*id, texture_views);
@@ -395,68 +505,90 @@ impl RenderNode for ShadowMappingNode {
                     .assets
                     .texture_views
                     .insert(texture_view_id, point_shadow_maps.create_view(&point_desc));
-                self.offsets.push(bf_light_view.push(&light_views[i_face]));
+
+                bf_point_light_view.push(&light_views[i_face].proj);
+                self.offsets
+                    .push(bf_light_views.push(&light_views[i_face].proj));
             }
 
             self.point_views.insert(*id, texture_views);
             point_index += 1;
         }
 
-        bf_light_view.write::<GpuCamera>(&renderer.device, &renderer.queue);
+        let mut bf_cascade_views = DynamicGpuBuffer::new(BufferUsages::STORAGE);
+        bf_cascade_views.set(raw_cascade_views);
+
+        bf_cascade_views.write::<GpuCamera>(&renderer.device, &renderer.queue);
+        bf_point_light_view.write::<GpuCamera>(&renderer.device, &renderer.queue);
+        bf_light_views.write::<GpuCamera>(&renderer.device, &renderer.queue);
+
         scene
             .assets
-            .extra_uniforms
-            .insert(SHADOW_MAPPING.light_view_uniform, bf_light_view);
+            .extra_buffers
+            .insert(SHADOW_MAPPING.cascade_views, bf_cascade_views);
+        scene
+            .assets
+            .extra_buffers
+            .insert(SHADOW_MAPPING.point_light_views, bf_point_light_view);
+        scene
+            .assets
+            .extra_buffers
+            .insert(SHADOW_MAPPING.light_views, bf_light_views);
 
         scene.assets.extra_bind_groups.insert(
-            SHADOW_MAPPING.light_view_bind_group,
+            SHADOW_MAPPING.light_views_bind_group,
             renderer.device.create_bind_group(&BindGroupDescriptor {
-                label: Some("light_view_bind_group"),
+                label: Some("light_views_bind_group"),
                 layout: &scene.assets.extra_layouts[&SHADOW_MAPPING.light_view_layout],
                 entries: &[BindGroupEntry {
                     binding: 0,
-                    resource: scene.assets.extra_uniforms[&SHADOW_MAPPING.light_view_uniform]
+                    resource: scene.assets.extra_buffers[&SHADOW_MAPPING.light_views]
                         .binding::<GpuCamera>()
                         .unwrap(),
                 }],
             }),
         );
 
-        let shadow_map_bind_group = renderer.device.create_bind_group(&BindGroupDescriptor {
-            label: Some("shadow_map_bind_group"),
-            layout: &scene.assets.extra_layouts[&SHADOW_MAPPING.shadow_maps_layout],
-            entries: &[
-                BindGroupEntry {
-                    binding: 0,
-                    resource: scene.assets.extra_uniforms[&SHADOW_MAPPING.light_view_uniform]
-                        .entire_binding()
-                        .unwrap(),
-                },
-                BindGroupEntry {
-                    binding: 1,
-                    resource: BindingResource::Sampler(
-                        &scene.assets.samplers[&SHADOW_MAPPING.shadow_map_sampler],
-                    ),
-                },
-                BindGroupEntry {
-                    binding: 2,
-                    resource: BindingResource::TextureView(
-                        &scene.assets.texture_views[&SHADOW_MAPPING.directional_shadow_map_view],
-                    ),
-                },
-                BindGroupEntry {
-                    binding: 3,
-                    resource: BindingResource::TextureView(
-                        &scene.assets.texture_views[&SHADOW_MAPPING.point_shadow_map_view],
-                    ),
-                },
-            ],
-        });
-
-        scene
-            .assets
-            .extra_bind_groups
-            .insert(SHADOW_MAPPING.shadow_maps_bind_group, shadow_map_bind_group);
+        scene.assets.extra_bind_groups.insert(
+            SHADOW_MAPPING.shadow_maps_bind_group,
+            renderer.device.create_bind_group(&BindGroupDescriptor {
+                label: Some("shadow_map_bind_group"),
+                layout: &scene.assets.extra_layouts[&SHADOW_MAPPING.shadow_maps_layout],
+                entries: &[
+                    BindGroupEntry {
+                        binding: 0,
+                        resource: scene.assets.extra_buffers[&SHADOW_MAPPING.cascade_views]
+                            .entire_binding()
+                            .unwrap(),
+                    },
+                    BindGroupEntry {
+                        binding: 1,
+                        resource: scene.assets.extra_buffers[&SHADOW_MAPPING.point_light_views]
+                            .entire_binding()
+                            .unwrap(),
+                    },
+                    BindGroupEntry {
+                        binding: 2,
+                        resource: BindingResource::Sampler(
+                            &scene.assets.samplers[&SHADOW_MAPPING.shadow_map_sampler],
+                        ),
+                    },
+                    BindGroupEntry {
+                        binding: 3,
+                        resource: BindingResource::TextureView(
+                            &scene.assets.texture_views
+                                [&SHADOW_MAPPING.directional_shadow_map_view],
+                        ),
+                    },
+                    BindGroupEntry {
+                        binding: 4,
+                        resource: BindingResource::TextureView(
+                            &scene.assets.texture_views[&SHADOW_MAPPING.point_shadow_map_view],
+                        ),
+                    },
+                ],
+            }),
+        );
     }
 
     fn draw(
@@ -470,7 +602,7 @@ impl RenderNode for ShadowMappingNode {
 
         let Some(light_view_bind_groups) = assets
             .extra_bind_groups
-            .get(&SHADOW_MAPPING.light_view_bind_group)
+            .get(&SHADOW_MAPPING.light_views_bind_group)
         else {
             return;
         };
@@ -512,8 +644,9 @@ impl RenderNode for ShadowMappingNode {
         };
 
         for id in scene.original.directional_lights.keys() {
-            let texture_view_id = &self.directional_views[id];
-            _draw(&scene.assets.texture_views[&texture_view_id]);
+            for texture_view_id in &self.directional_views[id] {
+                _draw(&scene.assets.texture_views[&texture_view_id]);
+            }
         }
 
         for id in scene.original.point_lights.keys() {

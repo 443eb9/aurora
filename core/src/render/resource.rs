@@ -1,3 +1,4 @@
+use bytemuck::NoUninit;
 use encase::{internal::WriteInto, DynamicStorageBuffer, ShaderType};
 use glam::{Mat4, Vec2, Vec3, Vec4};
 use uuid::Uuid;
@@ -37,6 +38,15 @@ impl DynamicGpuBuffer {
     pub fn new(usage: BufferUsages) -> Self {
         Self {
             raw: DynamicStorageBuffer::new(Vec::new()),
+            buffer: None,
+            changed: true,
+            usage: usage | BufferUsages::COPY_DST,
+        }
+    }
+
+    pub fn new_with_alignment(usage: BufferUsages, alignment: u64) -> Self {
+        Self {
+            raw: DynamicStorageBuffer::new_with_alignment(Vec::new(), alignment),
             buffer: None,
             changed: true,
             usage: usage | BufferUsages::COPY_DST,
@@ -127,7 +137,8 @@ pub struct RenderMesh {
     pub offset: Option<u32>,
 }
 
-#[derive(ShaderType, Default, Clone, Copy)]
+#[derive(ShaderType, NoUninit, Default, Debug, Clone, Copy)]
+#[repr(C)]
 pub struct GpuCamera {
     pub view: Mat4,
     pub proj: Mat4,

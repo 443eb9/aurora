@@ -10,7 +10,7 @@ use aurora_core::{
     },
     WgpuRenderer,
 };
-use glam::{EulerRot, Quat, Vec3};
+use glam::{EulerRot, Mat4, Quat, Vec3};
 use palette::Srgb;
 use uuid::Uuid;
 
@@ -32,8 +32,11 @@ pub fn load_primitives(renderer: &WgpuRenderer) -> GpuScene {
             .to_texture(renderer),
     );
 
-    let meshes = Mesh::from_obj("gui/assets/large_primitives.obj")
+    let meshes =
+    // Mesh::from_obj("gui/assets/large_primitives_offseted.obj")
         // Mesh::from_obj("gui/assets/Room.obj")
+        // Mesh::from_obj("gui/assets/large_primitives_vertical_ground.obj")
+        Mesh::from_obj("gui/assets/large_scene_cascade_test.obj")
         .into_iter()
         .map(|m| {
             let instance_id = MeshInstanceId(Uuid::new_v4());
@@ -68,11 +71,13 @@ pub fn load_primitives(renderer: &WgpuRenderer) -> GpuScene {
     scene.original.directional_lights.insert(
         Uuid::new_v4(),
         GpuDirectionalLight {
-            direction: Transform {
-                rotation: Quat::from_euler(EulerRot::XYZ, -0.5, -0.2, 0.),
-                ..Default::default()
-            }
-            .local_z(),
+            // direction: Transform {
+            //     rotation: Quat::from_euler(EulerRot::XYZ, -0.5, -0.2, 0.),
+            //     ..Default::default()
+            // }
+            // .local_z(),
+            direction: Quat::from_rotation_x(-std::f32::consts::FRAC_PI_4) * Vec3::Z,
+            // direction: Vec3::Z,
             color: Srgb::new(1., 1., 1.).into_linear().into_components().into(),
             intensity: 2000.,
         },

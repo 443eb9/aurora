@@ -82,20 +82,24 @@ impl<'a> Application<'a> {
             Camera {
                 transform: Transform {
                     translation: Vec3::new(0., 0., 0.),
-                    rotation: Quat::from_euler(EulerRot::XYZ, -0.8, 0.5, 0.4),
+                    // rotation: Quat::from_euler(EulerRot::XYZ, -0.8, 0.5, 0.4),
                     ..Default::default()
                 },
+                // transform: Transform {
+                //     rotation: Quat::from_rotation_x(-std::f32::consts::FRAC_PI_4),
+                //     ..Default::default()
+                // },
                 projection: CameraProjection::Perspective(
                     aurora_core::render::helper::PerspectiveProjection {
                         aspect_ratio: dim.x as f32 / dim.y as f32,
                         fov: std::f32::consts::FRAC_PI_4,
-                        near: 0.1,
-                        far: 1000.,
+                        near: 2.,
+                        far: 500.,
                     },
                 ),
                 // projection: CameraProjection::Orthographic(
-                //     aurora_core::scene::entity::OrthographicProjection::symmetric(
-                //         32., 32., -20., 20.,
+                //     aurora_core::render::helper::OrthographicProjection::symmetric(
+                //         160., 160., 1., 500.,
                 //     ),
                 // ),
                 exposure: Exposure { ev100: 9.7 },

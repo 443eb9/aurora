@@ -11,15 +11,17 @@ pub struct CameraConfig {
     pub rot_sensi: Vec2,
     pub move_smoothness: f32,
     pub rot_smoothness: f32,
+    pub boost: f32,
 }
 
 impl Default for CameraConfig {
     fn default() -> Self {
         Self {
-            tranl_sensi: 2.,
+            tranl_sensi: 5.,
             rot_sensi: Vec2::splat(50.),
             move_smoothness: 20.,
             rot_smoothness: 20.,
+            boost: 5.,
         }
     }
 }
@@ -29,6 +31,7 @@ pub struct ControllableCamera {
     target_camera: Transform,
     current_vel: Vec3,
     on_rotate: bool,
+    on_boost: bool,
     pub config: CameraConfig,
 }
 
@@ -39,33 +42,42 @@ impl ControllableCamera {
             camera,
             current_vel: Vec3::ZERO,
             on_rotate: false,
+            on_boost: false,
             config,
         }
     }
 
     pub fn keyboard_control(&mut self, key: KeyCode, state: ElementState) {
+        if key == KeyCode::ShiftLeft {
+            self.on_boost = match state {
+                ElementState::Pressed => true,
+                ElementState::Released => false,
+            };
+        }
+
         let t = match state {
             ElementState::Pressed => 1.,
             ElementState::Released => 0.,
         };
 
         match key {
-            KeyCode::KeyW => self.current_vel.z = self.config.tranl_sensi * -t,
-            KeyCode::KeyS => self.current_vel.z = self.config.tranl_sensi * t,
-            KeyCode::KeyA => self.current_vel.x = self.config.tranl_sensi * -t,
-            KeyCode::KeyD => self.current_vel.x = self.config.tranl_sensi * t,
-            KeyCode::KeyQ => self.current_vel.y = self.config.tranl_sensi * -t,
-            KeyCode::KeyE => self.current_vel.y = self.config.tranl_sensi * t,
+            KeyCode::KeyW => self.current_vel.z = -t,
+            KeyCode::KeyS => self.current_vel.z = t,
+            KeyCode::KeyA => self.current_vel.x = -t,
+            KeyCode::KeyD => self.current_vel.x = t,
+            KeyCode::KeyQ => self.current_vel.y = -t,
+            KeyCode::KeyE => self.current_vel.y = t,
             _ => {}
         }
     }
 
     pub fn update(&mut self, delta: f32) {
+        let boost = if self.on_boost { self.config.boost } else { 1. };
         self.target_camera.translation += self
             .camera
             .transform
             .rotation
-            .mul_vec3(self.current_vel * self.config.tranl_sensi * delta);
+            .mul_vec3(self.current_vel * self.config.tranl_sensi * boost * delta);
 
         self.camera.transform.translation = self.camera.transform.translation.lerp(
             self.target_camera.translation,

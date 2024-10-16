@@ -98,6 +98,11 @@ impl RenderFlow {
         shader_defs: Option<HashMap<String, ShaderDefValue>>,
         target: &RenderTargets,
     ) {
+        let mut shader_defs = shader_defs.unwrap_or_default();
+        for (node, _) in self.flow.values() {
+            node.require_shader_defs(&mut shader_defs);
+        }
+
         for (node, _) in self.flow.values_mut() {
             node.build(renderer, scene, shader_defs.clone(), target);
         }
@@ -116,12 +121,14 @@ impl RenderFlow {
 }
 
 pub trait RenderNode {
+    /// Add required shader defs.
+    fn require_shader_defs(&self, _shader_defs: &mut HashMap<String, ShaderDefValue>) {}
     /// Build the node.
     fn build(
         &mut self,
         renderer: &WgpuRenderer,
         scene: &mut GpuScene,
-        shader_defs: Option<HashMap<String, ShaderDefValue>>,
+        shader_defs: HashMap<String, ShaderDefValue>,
         target: &RenderTargets,
     );
     /// Prepare bind groups and other assets for rendering.
@@ -151,7 +158,7 @@ impl RenderNode for GeneralNode {
         &mut self,
         renderer: &WgpuRenderer,
         scene: &mut GpuScene,
-        _shader_defs: Option<HashMap<String, ShaderDefValue>>,
+        _shader_defs: HashMap<String, ShaderDefValue>,
         _target: &RenderTargets,
     ) {
         scene.assets.common_layout = Some(renderer.device.create_bind_group_layout(
@@ -235,20 +242,20 @@ impl RenderNode for GeneralNode {
             assets, original, ..
         } = scene;
 
-        assets.directional_light_uniforms.clear();
-        assets.point_light_uniforms.clear();
-        assets.spot_light_uniforms.clear();
+        assets.directional_light_buffer.clear();
+        assets.point_light_buffer.clear();
+        assets.spot_light_buffer.clear();
 
         for light in original.directional_lights.values() {
-            assets.directional_light_uniforms.push(light);
+            assets.directional_light_buffer.push(light);
         }
 
         for light in original.point_lights.values() {
-            assets.point_light_uniforms.push(light);
+            assets.point_light_buffer.push(light);
         }
 
         for light in original.spot_lights.values() {
-            assets.spot_light_uniforms.push(light);
+            assets.spot_light_buffer.push(light);
         }
 
         assets.camera_uniform.clear();
@@ -269,13 +276,13 @@ impl RenderNode for GeneralNode {
             .scene_desc_uniform
             .write::<GpuSceneDesc>(&renderer.device, &renderer.queue);
         assets
-            .directional_light_uniforms
+            .directional_light_buffer
             .write::<GpuDirectionalLight>(&renderer.device, &renderer.queue);
         assets
-            .point_light_uniforms
+            .point_light_buffer
             .write::<GpuPointLight>(&renderer.device, &renderer.queue);
         assets
-            .spot_light_uniforms
+            .spot_light_buffer
             .write::<GpuSpotLight>(&renderer.device, &renderer.queue);
 
         let (
@@ -287,9 +294,9 @@ impl RenderNode for GeneralNode {
         ) = (
             assets.camera_uniform.entire_binding(),
             assets.scene_desc_uniform.entire_binding(),
-            assets.directional_light_uniforms.entire_binding(),
-            assets.point_light_uniforms.entire_binding(),
-            assets.spot_light_uniforms.entire_binding(),
+            assets.directional_light_buffer.entire_binding(),
+            assets.point_light_buffer.entire_binding(),
+            assets.spot_light_buffer.entire_binding(),
         )
         else {
             return;
@@ -349,7 +356,7 @@ impl RenderNode for PostProcessGeneralNode {
         &mut self,
         renderer: &WgpuRenderer,
         scene: &mut GpuScene,
-        _shader_defs: Option<HashMap<String, ShaderDefValue>>,
+        _shader_defs: HashMap<String, ShaderDefValue>,
         _target: &RenderTargets,
     ) {
         scene.assets.material_layouts.insert(
@@ -434,7 +441,7 @@ impl RenderNode for ImageFallbackNode {
         &mut self,
         renderer: &WgpuRenderer,
         scene: &mut GpuScene,
-        _shader_defs: Option<HashMap<String, ShaderDefValue>>,
+        _shader_defs: HashMap<String, ShaderDefValue>,
         _target: &RenderTargets,
     ) {
         scene.assets.textures.insert(

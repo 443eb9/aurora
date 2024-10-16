@@ -10,9 +10,10 @@ struct PbrMaterial {
 struct PbrVertexOutput {
     @builtin(position) position_cs: vec4f,
     @location(0) position_ws: vec3f,
-    @location(1) normal: vec3f,
-    @location(2) uv: vec2f,
-    @location(3) tangent: vec4f,
+    @location(1) position_vs: vec4f,
+    @location(2) normal: vec3f,
+    @location(3) uv: vec2f,
+    @location(4) tangent: vec4f,
 }
 
 struct BrdfSurfaceUnlit {
