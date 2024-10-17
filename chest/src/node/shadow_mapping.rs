@@ -9,10 +9,11 @@ use aurora_core::{
             ExtraBindGroupId, ExtraBufferId, ExtraLayoutId, GpuScene, SamplerId, TextureId,
             TextureViewId,
         },
+        ShaderDefEnum,
     },
     WgpuRenderer,
 };
-use glam::{Mat4, Vec3};
+use glam::{Mat4, Vec2, Vec3};
 use naga_oil::compose::{Composer, NagaModuleDescriptor, ShaderDefValue};
 use uuid::Uuid;
 use wgpu::{
@@ -28,12 +29,16 @@ use wgpu::{
     VertexState, VertexStepMode,
 };
 
-use crate::util::{self, frustum_slice, Aabb};
+use crate::{
+    shader_defs::ShadowFilter,
+    util::{self, frustum_slice, Aabb},
+};
 
 pub struct ShadowMapping {
     pub light_views: ExtraBufferId,
     pub cascade_views: ExtraBufferId,
     pub point_light_views: ExtraBufferId,
+    pub poisson_disk: ExtraBufferId,
 
     pub directional_shadow_map: TextureId,
     pub directional_shadow_map_view: TextureViewId,
@@ -52,6 +57,8 @@ pub const SHADOW_MAPPING: ShadowMapping = ShadowMapping {
     light_views: ExtraBufferId(Uuid::from_u128(89413211065410340136548487101523115648)),
     cascade_views: ExtraBufferId(Uuid::from_u128(894132906465410168465132984653696845)),
     point_light_views: ExtraBufferId(Uuid::from_u128(8794041105348641631856410231)),
+    poisson_disk: ExtraBufferId(Uuid::from_u128(1687846160641318676894156310604693)),
+
     light_view_layout: ExtraLayoutId(Uuid::from_u128(7513015631563408941231)),
     light_views_bind_group: ExtraBindGroupId(Uuid::from_u128(135648640640653130645120465123)),
     directional_shadow_map: TextureId(Uuid::from_u128(7861046541564897045132508964132)),
@@ -72,7 +79,9 @@ pub struct ShadowMappingNode {
 }
 
 impl ShadowMappingNode {
-    pub const CASCADE_COUNT: usize = 3;
+    pub const CASCADE_COUNT: usize = 2;
+    pub const SHADOW_SAMPLE_COUNT: usize = 8;
+    pub const SHADOW_SAMPLE_RADIUS: f32 = 2.;
 
     pub fn calculate_cascade_view(
         camera_transform: Transform,
@@ -111,8 +120,6 @@ impl ShadowMappingNode {
             },
         );
         let half_aabb_size = (cascade_proj_aabb.max - cascade_proj_aabb.min) * 0.5;
-        // dbg!(half_aabb_size * 2.);
-        // println!("{} {}", cascade_proj_aabb.min, cascade_proj_aabb.max);
 
         let cascade_proj = Mat4::orthographic_rh(
             -half_aabb_size.x,
@@ -138,16 +145,28 @@ impl ShadowMappingNode {
 
 impl RenderNode for ShadowMappingNode {
     fn require_shader_defs(&self, shader_defs: &mut HashMap<String, ShaderDefValue>) {
-        shader_defs.insert(
-            "SHADOW_CASCADES".to_owned(),
-            ShaderDefValue::UInt(Self::CASCADE_COUNT as u32),
-        );
+        shader_defs.extend([
+            (
+                "SHADOW_CASCADES".to_owned(),
+                ShaderDefValue::UInt(Self::CASCADE_COUNT as u32),
+            ),
+            (
+                "SHADOW_SAMPLE_COUNT".to_owned(),
+                ShaderDefValue::UInt(Self::SHADOW_SAMPLE_COUNT as u32),
+            ),
+            ("SHOW_CASCADES".to_owned(), ShaderDefValue::Bool(true)),
+            ShadowFilter::Pcf.to_def(),
+        ]);
     }
 
     fn build(
         &mut self,
         renderer: &WgpuRenderer,
-        scene: &mut GpuScene,
+        GpuScene {
+            original,
+            assets,
+            static_meshes: _,
+        }: &mut GpuScene,
         shader_defs: HashMap<String, ShaderDefValue>,
         target: &RenderTargets,
     ) {
@@ -202,8 +221,7 @@ impl RenderNode for ShadowMappingNode {
                 push_constant_ranges: &[],
             });
 
-        scene
-            .assets
+        assets
             .extra_layouts
             .insert(SHADOW_MAPPING.light_view_layout, light_view_layout);
 
@@ -261,8 +279,8 @@ impl RenderNode for ShadowMappingNode {
             size: Extent3d {
                 width: 1024,
                 height: 1024,
-                depth_or_array_layers: ((scene.original.directional_lights.len()
-                    * Self::CASCADE_COUNT) as u32)
+                depth_or_array_layers: ((original.directional_lights.len() * Self::CASCADE_COUNT)
+                    as u32)
                     .max(1),
             },
             mip_level_count: 1,
@@ -285,8 +303,8 @@ impl RenderNode for ShadowMappingNode {
             size: Extent3d {
                 width: 512,
                 height: 512,
-                depth_or_array_layers: ((scene.original.point_lights.len() as u32
-                    + scene.original.spot_lights.len() as u32)
+                depth_or_array_layers: ((original.point_lights.len() as u32
+                    + original.spot_lights.len() as u32)
                     * 6)
                 .max(6),
             },
@@ -375,39 +393,66 @@ impl RenderNode for ShadowMappingNode {
                             },
                             count: None,
                         },
+                        // Poisson Disk
+                        BindGroupLayoutEntry {
+                            binding: 5,
+                            visibility: ShaderStages::FRAGMENT,
+                            ty: BindingType::Buffer {
+                                ty: BufferBindingType::Storage { read_only: true },
+                                has_dynamic_offset: false,
+                                min_binding_size: Some(<Vec2 as encase::ShaderType>::min_size()),
+                            },
+                            count: None,
+                        },
                     ],
                 });
 
-        scene
-            .assets
+        assets
             .extra_layouts
             .insert(SHADOW_MAPPING.shadow_maps_layout, shadow_maps_layout);
-        scene
-            .assets
+        assets
             .samplers
             .insert(SHADOW_MAPPING.shadow_map_sampler, shadow_map_sampler);
-        scene.assets.textures.insert(
+        assets.textures.insert(
             SHADOW_MAPPING.directional_shadow_map,
             cascade_directional_shadow_map,
         );
-        scene.assets.texture_views.insert(
+        assets.texture_views.insert(
             SHADOW_MAPPING.directional_shadow_map_view,
             cascade_directional_shadow_map_view,
         );
-        scene
-            .assets
+        assets
             .textures
             .insert(SHADOW_MAPPING.point_shadow_map, point_shadow_map);
-        scene
-            .assets
+        assets
             .texture_views
             .insert(SHADOW_MAPPING.point_shadow_map_view, point_shadow_map_view);
+
+        let mut bf_poisson_disk = DynamicGpuBuffer::new(BufferUsages::STORAGE);
+        let mut raw_poisson_disk = Vec::with_capacity(Self::SHADOW_SAMPLE_COUNT * 2);
+        fast_poisson::Poisson2D::new()
+            .into_iter()
+            .for_each(|mut x| {
+                x[0] = (x[0] * 2. - 1.) * Self::SHADOW_SAMPLE_RADIUS;
+                x[1] = (x[1] * 2. - 1.) * Self::SHADOW_SAMPLE_RADIUS;
+                raw_poisson_disk.extend_from_slice(bytemuck::bytes_of(&x));
+            });
+
+        bf_poisson_disk.set(raw_poisson_disk);
+        bf_poisson_disk.write::<Vec2>(&renderer.device, &renderer.queue);
+        assets
+            .extra_buffers
+            .insert(SHADOW_MAPPING.poisson_disk, bf_poisson_disk);
     }
 
     fn prepare(
         &mut self,
         renderer: &WgpuRenderer,
-        scene: &mut GpuScene,
+        GpuScene {
+            original,
+            assets,
+            static_meshes: _,
+        }: &mut GpuScene,
         _queue: &mut [RenderMesh],
         _target: &RenderTargets,
     ) {
@@ -438,16 +483,14 @@ impl RenderNode for ShadowMappingNode {
         let mut bf_point_light_view = DynamicGpuBuffer::new(BufferUsages::STORAGE);
         let mut bf_light_views = DynamicGpuBuffer::new(BufferUsages::UNIFORM);
 
-        let directional_shadow_maps =
-            &scene.assets.textures[&SHADOW_MAPPING.directional_shadow_map];
-        let point_shadow_maps = &scene.assets.textures[&SHADOW_MAPPING.point_shadow_map];
+        let directional_shadow_maps = &assets.textures[&SHADOW_MAPPING.directional_shadow_map];
+        let point_shadow_maps = &assets.textures[&SHADOW_MAPPING.point_shadow_map];
 
-        let sliced_frustums =
-            frustum_slice(scene.original.camera.projection, Self::CASCADE_COUNT as u32);
+        let sliced_frustums = frustum_slice(original.camera.projection, Self::CASCADE_COUNT as u32);
 
-        for (id, light) in &scene.original.directional_lights {
+        for (id, light) in &original.directional_lights {
             let cascade_views = sliced_frustums.clone().into_iter().map(|proj| {
-                Self::calculate_cascade_view(scene.original.camera.transform, proj, light.direction)
+                Self::calculate_cascade_view(original.camera.transform, proj, light.direction)
             });
 
             let mut cascade_maps = [TextureViewId::default(); Self::CASCADE_COUNT];
@@ -457,7 +500,7 @@ impl RenderNode for ShadowMappingNode {
                 let texture_view_id = TextureViewId(Uuid::new_v4());
                 cascade_maps[i_cascade] = texture_view_id;
 
-                scene.assets.texture_views.insert(
+                assets.texture_views.insert(
                     texture_view_id,
                     directional_shadow_maps.create_view(&cascade_directional_desc),
                 );
@@ -471,7 +514,7 @@ impl RenderNode for ShadowMappingNode {
             self.directional_views.insert(*id, cascade_maps);
         }
 
-        for (id, light) in &scene.original.point_lights {
+        for (id, light) in &original.point_lights {
             let light_views = light.light_view();
             let mut texture_views = [TextureViewId::default(); 6];
 
@@ -479,8 +522,7 @@ impl RenderNode for ShadowMappingNode {
                 point_desc.base_array_layer = point_index * 6 + i_face as u32;
                 let texture_view_id = TextureViewId(Uuid::new_v4());
                 texture_views[i_face] = texture_view_id;
-                scene
-                    .assets
+                assets
                     .texture_views
                     .insert(texture_view_id, point_shadow_maps.create_view(&point_desc));
 
@@ -493,7 +535,7 @@ impl RenderNode for ShadowMappingNode {
             point_index += 1;
         }
 
-        for (id, light) in &scene.original.spot_lights {
+        for (id, light) in &original.spot_lights {
             let light_views = light.light_view();
             let mut texture_views = [TextureViewId::default(); 6];
 
@@ -501,8 +543,7 @@ impl RenderNode for ShadowMappingNode {
                 point_desc.base_array_layer = point_index * 6 + i_face as u32;
                 let texture_view_id = TextureViewId(Uuid::new_v4());
                 texture_views[i_face] = texture_view_id;
-                scene
-                    .assets
+                assets
                     .texture_views
                     .insert(texture_view_id, point_shadow_maps.create_view(&point_desc));
 
@@ -522,69 +563,71 @@ impl RenderNode for ShadowMappingNode {
         bf_point_light_view.write::<GpuCamera>(&renderer.device, &renderer.queue);
         bf_light_views.write::<GpuCamera>(&renderer.device, &renderer.queue);
 
-        scene
-            .assets
+        assets
             .extra_buffers
             .insert(SHADOW_MAPPING.cascade_views, bf_cascade_views);
-        scene
-            .assets
+        assets
             .extra_buffers
             .insert(SHADOW_MAPPING.point_light_views, bf_point_light_view);
-        scene
-            .assets
+        assets
             .extra_buffers
             .insert(SHADOW_MAPPING.light_views, bf_light_views);
 
-        scene.assets.extra_bind_groups.insert(
+        assets.extra_bind_groups.insert(
             SHADOW_MAPPING.light_views_bind_group,
             renderer.device.create_bind_group(&BindGroupDescriptor {
                 label: Some("light_views_bind_group"),
-                layout: &scene.assets.extra_layouts[&SHADOW_MAPPING.light_view_layout],
+                layout: &assets.extra_layouts[&SHADOW_MAPPING.light_view_layout],
                 entries: &[BindGroupEntry {
                     binding: 0,
-                    resource: scene.assets.extra_buffers[&SHADOW_MAPPING.light_views]
+                    resource: assets.extra_buffers[&SHADOW_MAPPING.light_views]
                         .binding::<GpuCamera>()
                         .unwrap(),
                 }],
             }),
         );
 
-        scene.assets.extra_bind_groups.insert(
+        assets.extra_bind_groups.insert(
             SHADOW_MAPPING.shadow_maps_bind_group,
             renderer.device.create_bind_group(&BindGroupDescriptor {
                 label: Some("shadow_map_bind_group"),
-                layout: &scene.assets.extra_layouts[&SHADOW_MAPPING.shadow_maps_layout],
+                layout: &assets.extra_layouts[&SHADOW_MAPPING.shadow_maps_layout],
                 entries: &[
                     BindGroupEntry {
                         binding: 0,
-                        resource: scene.assets.extra_buffers[&SHADOW_MAPPING.cascade_views]
+                        resource: assets.extra_buffers[&SHADOW_MAPPING.cascade_views]
                             .entire_binding()
                             .unwrap(),
                     },
                     BindGroupEntry {
                         binding: 1,
-                        resource: scene.assets.extra_buffers[&SHADOW_MAPPING.point_light_views]
+                        resource: assets.extra_buffers[&SHADOW_MAPPING.point_light_views]
                             .entire_binding()
                             .unwrap(),
                     },
                     BindGroupEntry {
                         binding: 2,
                         resource: BindingResource::Sampler(
-                            &scene.assets.samplers[&SHADOW_MAPPING.shadow_map_sampler],
+                            &assets.samplers[&SHADOW_MAPPING.shadow_map_sampler],
                         ),
                     },
                     BindGroupEntry {
                         binding: 3,
                         resource: BindingResource::TextureView(
-                            &scene.assets.texture_views
-                                [&SHADOW_MAPPING.directional_shadow_map_view],
+                            &assets.texture_views[&SHADOW_MAPPING.directional_shadow_map_view],
                         ),
                     },
                     BindGroupEntry {
                         binding: 4,
                         resource: BindingResource::TextureView(
-                            &scene.assets.texture_views[&SHADOW_MAPPING.point_shadow_map_view],
+                            &assets.texture_views[&SHADOW_MAPPING.point_shadow_map_view],
                         ),
+                    },
+                    BindGroupEntry {
+                        binding: 5,
+                        resource: assets.extra_buffers[&SHADOW_MAPPING.poisson_disk]
+                            .entire_binding()
+                            .unwrap(),
                     },
                 ],
             }),

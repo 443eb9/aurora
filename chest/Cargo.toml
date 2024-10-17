@@ -12,5 +12,6 @@ encase.workspace = true
 glam.workspace = true
 naga_oil.workspace = true
 palette.workspace = true
+fast_poisson.workspace = true
 uuid.workspace = true
 wgpu.workspace = true

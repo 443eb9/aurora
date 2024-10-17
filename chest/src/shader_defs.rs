@@ -15,3 +15,8 @@ pub enum PbrDiffuse {
     Lambert,
     Burley,
 }
+
+#[derive(ShaderDefEnum)]
+pub enum ShadowFilter {
+    Pcf,
+}

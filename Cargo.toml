@@ -24,7 +24,8 @@ naga_oil = "0.15"
 log = "0.4"
 obj = "0.10"
 palette = "0.7"
+fast_poisson = { version = "1", features = ["single_precision"] }
 pollster = "0.3"
-uuid = { version = "1.10", features = ["v4"] }
+uuid = { version = "1", features = ["v4"] }
 wgpu = { version = "22.1", features = ["naga-ir"] }
 winit = "0.30"
