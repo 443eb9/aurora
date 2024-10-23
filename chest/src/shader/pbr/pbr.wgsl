@@ -40,7 +40,7 @@ fn fragment(in: PbrVertexOutput) -> @location(0) vec4f {
         let light = &dir_lights[i_light];
         
         let irradiated = pbr_function::apply_lighting((*light).direction, (*light).intensity, (*light).color, &unlit);
-        let shadow = shadow_mapping::sample_cascaded_shadow_map(i_light, in.position_ws, in.position_vs);
+        let shadow = shadow_mapping::sample_cascaded_shadow_map(i_light, in.position_ws, in.position_vs, (*light).radius * 2.);
 
         color += irradiated * shadow;
 #ifdef SHOW_CASCADES

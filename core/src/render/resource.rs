@@ -158,6 +158,7 @@ pub struct GpuDirectionalLight {
     pub direction: Vec3,
     pub color: Vec3,
     pub intensity: f32,
+    pub radius: f32,
 }
 
 #[derive(ShaderType)]

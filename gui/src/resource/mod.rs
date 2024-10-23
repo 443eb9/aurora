@@ -80,6 +80,7 @@ pub fn load_primitives(renderer: &WgpuRenderer) -> GpuScene {
             // direction: Vec3::Z,
             color: Srgb::new(1., 1., 1.).into_linear().into_components().into(),
             intensity: 2000.,
+            radius: 1.,
         },
     );
     // scene.original.point_lights.insert(

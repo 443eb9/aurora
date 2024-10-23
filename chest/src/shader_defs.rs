@@ -18,5 +18,8 @@ pub enum PbrDiffuse {
 
 #[derive(ShaderDefEnum)]
 pub enum ShadowFilter {
-    Pcf,
+    #[def_name = "PCF"]
+    PCF,
+    #[def_name = "PCSS"]
+    PCSS,
 }

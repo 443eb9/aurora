@@ -17,6 +17,7 @@ struct DirectionalLight {
     direction: vec3f,
     color: vec3f,
     intensity: f32,
+    radius: f32,
 }
 
 struct PointLight {
