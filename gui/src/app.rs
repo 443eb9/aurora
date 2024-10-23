@@ -178,12 +178,15 @@ impl<'a> Application<'a> {
             TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
         );
 
-        self.redraw(Some(RenderTargets {
-            color_format: TextureFormat::Rgba8UnormSrgb,
-            color: screenshot.create_view(&TextureViewDescriptor::default()),
-            depth_format: Some(TextureFormat::Depth32Float),
-            depth: Some(depth.create_view(&TextureViewDescriptor::default())),
-        }));
+        self.redraw(
+            Some(RenderTargets {
+                color_format: TextureFormat::Rgba8UnormSrgb,
+                color: screenshot.create_view(&TextureViewDescriptor::default()),
+                depth_format: Some(TextureFormat::Depth32Float),
+                depth: Some(depth.create_view(&TextureViewDescriptor::default())),
+            }),
+            true,
+        );
 
         aurora_core::util::save_color_texture_as_image(
             "generated/screenshot.png",
@@ -192,9 +195,11 @@ impl<'a> Application<'a> {
             &self.renderer.queue,
         )
         .await;
+
+        self.redraw(None, true);
     }
 
-    pub fn redraw(&mut self, target_override: Option<RenderTargets>) {
+    pub fn redraw(&mut self, target_override: Option<RenderTargets>, force_build: bool) {
         let (Ok(frame), Ok(camera)) = (self.surface.get_current_texture(), self.main_camera.lock())
         else {
             return;
@@ -202,35 +207,31 @@ impl<'a> Application<'a> {
 
         self.scene.original.camera = camera.camera;
 
-        let targets = if let Some(new_target) = target_override {
+        let targets = target_override.unwrap_or_else(|| RenderTargets {
+            color_format: TextureFormat::Bgra8UnormSrgb,
+            color: frame.texture.create_view(&TextureViewDescriptor::default()),
+            depth_format: Some(TextureFormat::Depth32Float),
+            depth: Some(
+                self.depth_texture
+                    .create_view(&TextureViewDescriptor::default()),
+            ),
+        });
+
+        if force_build {
             self.flow.inner.force_build(
                 &self.renderer,
                 &mut self.scene,
                 Some(self.shader_defs.clone()),
-                &new_target,
+                &targets,
             );
-
-            new_target
         } else {
-            let screen = RenderTargets {
-                color_format: TextureFormat::Bgra8UnormSrgb,
-                color: frame.texture.create_view(&TextureViewDescriptor::default()),
-                depth_format: Some(TextureFormat::Depth32Float),
-                depth: Some(
-                    self.depth_texture
-                        .create_view(&TextureViewDescriptor::default()),
-                ),
-            };
-
-            screen
-        };
-
-        self.flow.inner.build(
-            &self.renderer,
-            &mut self.scene,
-            Some(self.shader_defs.clone()),
-            &targets,
-        );
+            self.flow.inner.build(
+                &self.renderer,
+                &mut self.scene,
+                Some(self.shader_defs.clone()),
+                &targets,
+            );
+        }
 
         self.flow
             .inner
@@ -277,7 +278,7 @@ impl<'a> ApplicationHandler for Application<'a> {
     ) {
         match event {
             WindowEvent::RedrawRequested => {
-                self.redraw(None);
+                self.redraw(None, false);
             }
             WindowEvent::Resized(size) => self.resize(UVec2 {
                 x: size.width,

@@ -60,7 +60,7 @@ fn pcss_filtering(position_cs: vec4f, uv: vec2f, cascade: u32, light_width: f32,
 }
 
 fn no_filtering(position_cs: vec4f, uv: vec2f, cascade: u32) -> f32 {
-    let frag_depth = saturate(position_cs.z / position_cs.w) - 0.002;
+    let frag_depth = saturate(position_cs.z / position_cs.w) - 0.001;
     return textureSampleCompare(directional_shadow_map, shadow_map_sampler, uv, cascade, frag_depth);
 }
 
@@ -86,7 +86,7 @@ fn sample_cascaded_shadow_map(light: u32, position_ws: vec3f, position_vs: vec4f
                     return no_filtering(position_cs, uv, cascade);
                 #endif
             } else {
-                return 0.;
+                return 1.;
             }
         }
     }

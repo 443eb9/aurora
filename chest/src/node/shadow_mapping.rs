@@ -35,6 +35,13 @@ use crate::{
     util::{self, frustum_slice, Aabb},
 };
 
+bitflags::bitflags! {
+    pub struct ShadowMapEnhancement : u32 {
+        const CSM   = 1 << 0;
+        const SDSM  = 1 << 1;
+    }
+}
+
 #[derive(ShaderType)]
 pub struct ShadowMappingConfig {
     pub dir_map_resolution: u32,
@@ -103,6 +110,7 @@ impl ShadowMappingNode {
         pcf_radius: 4.,
         pcss_radius: 4.,
     };
+    pub const ENHANCEMENT: ShadowMapEnhancement = ShadowMapEnhancement::CSM;
 
     pub fn calculate_cascade_view(
         camera_transform: Transform,
@@ -147,14 +155,17 @@ impl ShadowMappingNode {
             half_aabb_size.x,
             -half_aabb_size.y,
             half_aabb_size.y,
-            -half_aabb_size.z * 10.,
+            -half_aabb_size.z,
             half_aabb_size.z,
         );
 
         GpuCamera {
             view: cascade_view,
             proj: cascade_proj,
-            position_ws: center,
+            position_ws: match camera_proj_slice {
+                CameraProjection::Perspective(_) => center,
+                CameraProjection::Orthographic(_) => light_dir,
+            },
             // SPECIAL USE CASE!!
             exposure: match camera_proj_slice {
                 CameraProjection::Perspective(proj) => proj.near,
@@ -166,12 +177,22 @@ impl ShadowMappingNode {
 
 impl RenderNode for ShadowMappingNode {
     fn require_shader_defs(&self, shader_defs: &mut HashMap<String, ShaderDefValue>) {
+        assert!(
+            !(Self::ENHANCEMENT.contains(ShadowMapEnhancement::CSM)
+                && Self::ENHANCEMENT.contains(ShadowMapEnhancement::SDSM)),
+            "It's not allowed to enable CSM and SDSM at the same time."
+        );
+
         shader_defs.extend([
             (
                 "SHADOW_CASCADES".to_owned(),
-                ShaderDefValue::UInt(Self::CASCADE_COUNT as u32),
+                ShaderDefValue::UInt(if Self::ENHANCEMENT.contains(ShadowMapEnhancement::CSM) {
+                    Self::CASCADE_COUNT as u32
+                } else {
+                    1
+                }),
             ),
-            ("SHOW_CASCADES".to_owned(), ShaderDefValue::Bool(true)),
+            // ("SHOW_CASCADES".to_owned(), ShaderDefValue::Bool(true)),
             // ShadowFilter::PCF.to_def(),
         ]);
     }
@@ -188,6 +209,11 @@ impl RenderNode for ShadowMappingNode {
         target: &RenderTargets,
     ) {
         let mut composer = Composer::default();
+        util::add_shader_module(
+            &mut composer,
+            include_str!("../shader/math.wgsl"),
+            shader_defs.clone(),
+        );
         util::add_shader_module(
             &mut composer,
             include_str!("../shader/common/common_type.wgsl"),
@@ -291,14 +317,17 @@ impl RenderNode for ShadowMappingNode {
                 }),
         );
 
-        let cascade_directional_shadow_map = renderer.device.create_texture(&TextureDescriptor {
-            label: Some("cascade_directional_shadow_map"),
+        let n_dirs = if Self::ENHANCEMENT.contains(ShadowMapEnhancement::CSM) {
+            (original.directional_lights.len() * Self::CASCADE_COUNT) as u32
+        } else {
+            original.directional_lights.len() as u32
+        };
+        let directional_shadow_map = renderer.device.create_texture(&TextureDescriptor {
+            label: Some("directional_shadow_map"),
             size: Extent3d {
                 width: Self::CONFIG.dir_map_resolution,
                 height: Self::CONFIG.dir_map_resolution,
-                depth_or_array_layers: ((original.directional_lights.len() * Self::CASCADE_COUNT)
-                    as u32)
-                    .max(1),
+                depth_or_array_layers: n_dirs.max(1),
             },
             mip_level_count: 1,
             sample_count: 1,
@@ -308,9 +337,9 @@ impl RenderNode for ShadowMappingNode {
             view_formats: &[],
         });
 
-        let cascade_directional_shadow_map_view =
-            cascade_directional_shadow_map.create_view(&TextureViewDescriptor {
-                label: Some("cascade_directional_shadow_map_view"),
+        let directional_shadow_map_view =
+            directional_shadow_map.create_view(&TextureViewDescriptor {
+                label: Some("directional_shadow_map_view"),
                 dimension: Some(TextureViewDimension::D2Array),
                 ..Default::default()
             });
@@ -363,7 +392,7 @@ impl RenderNode for ShadowMappingNode {
                 .create_bind_group_layout(&BindGroupLayoutDescriptor {
                     label: Some("shadow_maps_layout"),
                     entries: &[
-                        // Cascade Views
+                        // Directional/Cascade Views
                         BindGroupLayoutEntry {
                             binding: 0,
                             visibility: ShaderStages::FRAGMENT,
@@ -464,11 +493,11 @@ impl RenderNode for ShadowMappingNode {
         );
         assets.textures.insert(
             SHADOW_MAPPING.directional_shadow_map,
-            cascade_directional_shadow_map,
+            directional_shadow_map,
         );
         assets.texture_views.insert(
             SHADOW_MAPPING.directional_shadow_map_view,
-            cascade_directional_shadow_map_view,
+            directional_shadow_map_view,
         );
         assets
             .textures
@@ -515,8 +544,8 @@ impl RenderNode for ShadowMappingNode {
         let mut directional_index = 0;
         let mut point_index = 0;
 
-        let mut cascade_directional_desc = TextureViewDescriptor {
-            label: Some("cascade_directional_shadow_map_render_view"),
+        let mut directional_desc = TextureViewDescriptor {
+            label: Some("directional_shadow_map_render_view"),
             format: Some(TextureFormat::Depth32Float),
             dimension: Some(TextureViewDimension::D2),
             aspect: TextureAspect::DepthOnly,
@@ -542,7 +571,11 @@ impl RenderNode for ShadowMappingNode {
         let directional_shadow_maps = &assets.textures[&SHADOW_MAPPING.directional_shadow_map];
         let point_shadow_maps = &assets.textures[&SHADOW_MAPPING.point_shadow_map];
 
-        let sliced_frustums = frustum_slice(original.camera.projection, Self::CASCADE_COUNT as u32);
+        let sliced_frustums = if Self::ENHANCEMENT.contains(ShadowMapEnhancement::CSM) {
+            frustum_slice(original.camera.projection, Self::CASCADE_COUNT as u32)
+        } else {
+            vec![original.camera.projection]
+        };
 
         for (id, light) in &original.directional_lights {
             let cascade_views = sliced_frustums.clone().into_iter().map(|proj| {
@@ -552,13 +585,13 @@ impl RenderNode for ShadowMappingNode {
             let mut cascade_maps = [TextureViewId::default(); Self::CASCADE_COUNT];
 
             for (i_cascade, cascade_view) in cascade_views.enumerate() {
-                cascade_directional_desc.base_array_layer = directional_index;
+                directional_desc.base_array_layer = directional_index;
                 let texture_view_id = TextureViewId(Uuid::new_v4());
                 cascade_maps[i_cascade] = texture_view_id;
 
                 assets.texture_views.insert(
                     texture_view_id,
-                    directional_shadow_maps.create_view(&cascade_directional_desc),
+                    directional_shadow_maps.create_view(&directional_desc),
                 );
 
                 // bf_cascade_views.push(&cascade_view);
@@ -755,8 +788,14 @@ impl RenderNode for ShadowMappingNode {
         };
 
         for id in scene.original.directional_lights.keys() {
-            for texture_view_id in &self.directional_views[id] {
-                _draw(&scene.assets.texture_views[&texture_view_id]);
+            if Self::ENHANCEMENT.contains(ShadowMapEnhancement::CSM) {
+                for texture_view_id in &self.directional_views[id] {
+                    _draw(&scene.assets.texture_views[&texture_view_id]);
+                }
+            } else {
+                _draw(
+                    &scene.assets.texture_views[&self.directional_views[id].iter().next().unwrap()],
+                );
             }
         }
 
