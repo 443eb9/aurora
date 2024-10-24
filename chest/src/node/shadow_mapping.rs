@@ -107,7 +107,7 @@ impl ShadowMappingNode {
         dir_map_resolution: 2048,
         point_map_resolution: 512,
         samples: 64,
-        pcf_radius: 4.,
+        pcf_radius: 1.,
         pcss_radius: 4.,
     };
     pub const PARTITIONING: ShadowMapPartitioning = ShadowMapPartitioning::PSSM;
@@ -190,7 +190,7 @@ impl RenderNode for ShadowMappingNode {
                     Self::CASCADE_COUNT as u32
                 }),
             ),
-            // ("SHOW_CASCADES".to_owned(), ShaderDefValue::Bool(true)),
+            ("SHOW_CASCADES".to_owned(), ShaderDefValue::Bool(true)),
             ShadowFilter::PCF.to_def(),
         ]);
     }

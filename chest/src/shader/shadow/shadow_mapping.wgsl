@@ -1,6 +1,6 @@
 #define_import_path aurora::shadow_mapping
 
-#import aurora::common_type::Camera
+#import aurora::{common_type::Camera, math}
 
 struct ShadowMappingConfig {
     dir_map_resolution: u32,
@@ -19,15 +19,15 @@ struct ShadowMappingConfig {
 @group(3) @binding(6) var<storage> poisson_disk: array<vec2f>;
 @group(3) @binding(7) var<uniform> config: ShadowMappingConfig;
 
-fn pcf_filtering(position_cs: vec4f, uv: vec2f, cascade: u32, radius: f32) -> f32 {
-    let texel = 1. / f32(config.dir_map_resolution);
+fn pcf_filtering(position_vs: vec4f, cascade: u32, radius: f32) -> f32 {
     var shadow = 0.;
     for (var iteration = 0u; iteration < config.samples; iteration += 1u) {
-        var offseted = uv + poisson_disk[iteration] * radius * texel;
+        let view = position_vs + vec4f(poisson_disk[iteration] * radius, 0., 0.);
+        var offseted = math::view_to_uv_and_depth(view, cascade_views[cascade].proj);
 
         if (offseted.x > 0. && offseted.x < 1. && offseted.y > 0. && offseted.y < 1.) {
-            let frag_depth = saturate(position_cs.z / position_cs.w) - 0.005;
-            shadow += textureSampleCompare(directional_shadow_map, shadow_map_sampler, offseted, cascade, frag_depth);
+            let frag_depth = saturate(offseted.z) - 0.005;
+            shadow += textureSampleCompare(directional_shadow_map, shadow_map_sampler, offseted.xy, cascade, frag_depth);
         } else {
             shadow += 1.;
         }
@@ -35,32 +35,32 @@ fn pcf_filtering(position_cs: vec4f, uv: vec2f, cascade: u32, radius: f32) -> f3
     return shadow / f32(config.samples);
 }
 
-fn pcss_filtering(position_cs: vec4f, uv: vec2f, cascade: u32, light_width: f32, radius: f32) -> f32 {
-    var avg_blocker_depth = 0.;
-    let texel = 1. / f32(config.dir_map_resolution);
-    let frag_depth = saturate(position_cs.z / position_cs.w) - 0.002;
-    var cnt = 0;
-    for (var iteration = 0u; iteration < config.samples; iteration += 1u) {
-        let offseted = uv + poisson_disk[iteration] * radius * texel;
+// fn pcss_filtering(position_cs: vec4f, uv: vec2f, cascade: u32, light_width: f32, radius: f32) -> f32 {
+//     var avg_blocker_depth = 0.;
+//     let texel = 1. / f32(config.dir_map_resolution);
+//     let frag_depth = saturate(position_cs.z / position_cs.w) - 0.002;
+//     var cnt = 0;
+//     for (var iteration = 0u; iteration < config.samples; iteration += 1u) {
+//         let offseted = uv + poisson_disk[iteration] * radius * texel;
 
-        if (uv.x > 0. && uv.x < 1. && uv.y > 0. && uv.y < 1.) {
-            let shadow_depth = textureSample(directional_shadow_map, shadow_texture_sampler, offseted, cascade);
-            if (frag_depth > shadow_depth) {
-                avg_blocker_depth += shadow_depth;
-                cnt += 1;
-            }
-        }
-    }
-    avg_blocker_depth /= f32(max(cnt, 1));
+//         if (uv.x > 0. && uv.x < 1. && uv.y > 0. && uv.y < 1.) {
+//             let shadow_depth = textureSample(directional_shadow_map, shadow_texture_sampler, offseted, cascade);
+//             if (frag_depth > shadow_depth) {
+//                 avg_blocker_depth += shadow_depth;
+//                 cnt += 1;
+//             }
+//         }
+//     }
+//     avg_blocker_depth /= f32(max(cnt, 1));
 
-    let receiver_depth = position_cs.z / position_cs.w;
-    let penumbra = max(receiver_depth - avg_blocker_depth, 0.) / avg_blocker_depth * light_width;
+//     let receiver_depth = position_cs.z / position_cs.w;
+//     let penumbra = max(receiver_depth - avg_blocker_depth, 0.) / avg_blocker_depth * light_width;
 
-    return pcf_filtering(position_cs, uv, cascade, penumbra);
-}
+//     return pcf_filtering(position_cs, uv, cascade, penumbra);
+// }
 
-fn no_filtering(position_cs: vec4f, uv: vec2f, cascade: u32) -> f32 {
-    let frag_depth = saturate(position_cs.z / position_cs.w) - 0.001;
+fn no_filtering(uv: vec2f, depth: f32, cascade: u32) -> f32 {
+    let frag_depth = saturate(depth) - 0.001;
     return textureSampleCompare(directional_shadow_map, shadow_map_sampler, uv, cascade, frag_depth);
 }
 
@@ -72,18 +72,15 @@ fn sample_cascaded_shadow_map(light: u32, position_ws: vec3f, position_vs: vec4f
         // If this point is inside this frustum slice.
         if abs(position_vs.z) > abs(cascade_views[index].exposure) {
             let position_vs = cascade_views[index].view * vec4f(position_ws, 1.);
-            let position_cs = cascade_views[cascade].proj * position_vs;
-            let ndc = position_cs.xy / position_cs.w;
-            var uv = (ndc + 1.) / 2.;
-            uv.y = 1. - uv.y;
+            let uv_and_depth = math::view_to_uv_and_depth(position_vs, cascade_views[index].proj);
 
-            if (uv.x > 0. && uv.x < 1. && uv.y > 0. && uv.y < 1.) {
+            if (uv_and_depth.x > 0. && uv_and_depth.x < 1. && uv_and_depth.y > 0. && uv_and_depth.y < 1.) {
                 #ifdef PCF
-                    return pcf_filtering(position_cs, uv, cascade, config.pcf_radius);
-                #else ifdef PCSS
-                    return pcss_filtering(position_cs, uv, cascade, light_width, config.pcss_radius);
+                    return pcf_filtering(position_vs, cascade, config.pcf_radius);
+                // #else ifdef PCSS
+                //     return pcss_filtering(position_cs, uv, cascade, light_width, config.pcss_radius);
                 #else
-                    return no_filtering(position_cs, uv, cascade);
+                    return no_filtering(uv_and_depth.xy, uv_and_depth.z, cascade);
                 #endif
             } else {
                 return 1.;
