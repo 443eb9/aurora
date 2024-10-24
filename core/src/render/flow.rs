@@ -7,8 +7,9 @@ use uuid::Uuid;
 use wgpu::{
     util::{DeviceExt, TextureDataOrder},
     BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor, BindGroupLayoutEntry,
-    BindingType, BufferBindingType, Extent3d, SamplerBindingType, ShaderStages, TextureDescriptor,
-    TextureDimension, TextureFormat, TextureSampleType, TextureUsages, TextureViewDimension,
+    BindingType, BufferBindingType, Extent3d, Features, Limits, SamplerBindingType, ShaderStages,
+    TextureDescriptor, TextureDimension, TextureFormat, TextureSampleType, TextureUsages,
+    TextureViewDimension,
 };
 
 use crate::{
@@ -32,6 +33,18 @@ pub struct RenderFlow {
 }
 
 impl RenderFlow {
+    pub async fn request_renderer(&self) -> WgpuRenderer {
+        let (features, limits) = self.flow.values().fold(
+            (Default::default(), Default::default()),
+            |(mut feat, mut lim), (node, _)| {
+                node.require_renderer_features(&mut feat);
+                node.require_renderer_limits(&mut lim);
+                (feat, lim)
+            },
+        );
+        WgpuRenderer::new(Some(features), Some(limits)).await
+    }
+
     #[inline]
     pub fn add<T: RenderNode + Default + 'static>(&mut self) -> Uuid {
         let uuid = Uuid::new_v4();
@@ -121,6 +134,10 @@ impl RenderFlow {
 }
 
 pub trait RenderNode {
+    /// Add required features
+    fn require_renderer_features(&self, _features: &mut Features) {}
+    /// Add required limits
+    fn require_renderer_limits(&self, _limits: &mut Limits) {}
     /// Add required shader defs.
     fn require_shader_defs(&self, _shader_defs: &mut HashMap<String, ShaderDefValue>) {}
     /// Build the node.

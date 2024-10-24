@@ -58,7 +58,8 @@ impl<'a> Application<'a> {
                 .unwrap(),
         );
 
-        let renderer = WgpuRenderer::new().await;
+        let flow: crate::render::PbrRenderFlow = Default::default();
+        let renderer = flow.inner.request_renderer().await;
         let surface = renderer.instance.create_surface(window.clone()).unwrap();
         surface.configure(
             &renderer.device,
@@ -122,7 +123,7 @@ impl<'a> Application<'a> {
             dim,
 
             scene,
-            flow: Default::default(),
+            flow,
             shader_defs,
 
             main_camera: Arc::new(Mutex::new(main_camera)),

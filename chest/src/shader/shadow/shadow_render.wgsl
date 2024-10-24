@@ -14,7 +14,7 @@ fn vertex(in: VertexInput) -> @builtin(position) vec4f {
         light_dir = normalize(camera.position - in.position); // Perspective
     }
     let offset = math::sin_between(light_dir, in.normal);
-    return camera.proj * camera.view * vec4f(in.position - in.normal * offset, 1.);
+    return camera.proj * camera.view * vec4f(in.position - in.normal * offset * 0.5, 1.);
 }
 
 @fragment

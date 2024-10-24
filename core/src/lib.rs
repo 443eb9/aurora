@@ -14,7 +14,7 @@ pub struct WgpuRenderer {
 }
 
 impl WgpuRenderer {
-    pub async fn new() -> Self {
+    pub async fn new(required_features: Option<Features>, required_limits: Option<Limits>) -> Self {
         let instance = Instance::default();
         let adapter = instance
             .request_adapter(&RequestAdapterOptions::default())
@@ -24,8 +24,8 @@ impl WgpuRenderer {
             .request_device(
                 &DeviceDescriptor {
                     label: None,
-                    required_features: Features::empty(),
-                    required_limits: Limits::default(),
+                    required_features: required_features.unwrap_or_default(),
+                    required_limits: required_limits.unwrap_or_default(),
                     memory_hints: MemoryHints::Performance,
                 },
                 None,

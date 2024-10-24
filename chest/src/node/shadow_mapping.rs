@@ -20,8 +20,8 @@ use uuid::Uuid;
 use wgpu::{
     vertex_attr_array, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor,
     BindGroupLayoutEntry, BindingResource, BindingType, BufferAddress, BufferBindingType,
-    BufferUsages, CompareFunction, DepthBiasState, DepthStencilState, Extent3d, FilterMode,
-    FragmentState, LoadOp, MultisampleState, Operations, PipelineCompilationOptions,
+    BufferUsages, CompareFunction, DepthBiasState, DepthStencilState, Extent3d, Face, Features,
+    FilterMode, FragmentState, LoadOp, MultisampleState, Operations, PipelineCompilationOptions,
     PipelineLayoutDescriptor, PrimitiveState, RenderPassDepthStencilAttachment,
     RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, SamplerBindingType,
     SamplerDescriptor, ShaderModuleDescriptor, ShaderSource, ShaderStages, StencilState, StoreOp,
@@ -30,14 +30,11 @@ use wgpu::{
     VertexState, VertexStepMode,
 };
 
-use crate::{
-    shader_defs::ShadowFilter,
-    util::{self, frustum_slice, Aabb},
-};
+use crate::util::{self, frustum_slice, Aabb};
 
 bitflags::bitflags! {
     pub struct ShadowMapEnhancement : u32 {
-        const CSM   = 1 << 0;
+        const PSSM  = 1 << 0;
         const SDSM  = 1 << 1;
     }
 }
@@ -110,7 +107,7 @@ impl ShadowMappingNode {
         pcf_radius: 4.,
         pcss_radius: 4.,
     };
-    pub const ENHANCEMENT: ShadowMapEnhancement = ShadowMapEnhancement::CSM;
+    pub const ENHANCEMENT: ShadowMapEnhancement = ShadowMapEnhancement::PSSM;
 
     pub fn calculate_cascade_view(
         camera_transform: Transform,
@@ -148,7 +145,7 @@ impl ShadowMappingNode {
                 aabb
             },
         );
-        let half_aabb_size = (cascade_proj_aabb.max - cascade_proj_aabb.min) * 0.5;
+        let half_aabb_size = (cascade_proj_aabb.max - cascade_proj_aabb.min) * 0.6;
 
         let cascade_proj = Mat4::orthographic_rh(
             -half_aabb_size.x,
@@ -176,9 +173,13 @@ impl ShadowMappingNode {
 }
 
 impl RenderNode for ShadowMappingNode {
+    fn require_renderer_features(&self, features: &mut wgpu::Features) {
+        *features |= Features::DEPTH_CLIP_CONTROL;
+    }
+
     fn require_shader_defs(&self, shader_defs: &mut HashMap<String, ShaderDefValue>) {
         assert!(
-            !(Self::ENHANCEMENT.contains(ShadowMapEnhancement::CSM)
+            !(Self::ENHANCEMENT.contains(ShadowMapEnhancement::PSSM)
                 && Self::ENHANCEMENT.contains(ShadowMapEnhancement::SDSM)),
             "It's not allowed to enable CSM and SDSM at the same time."
         );
@@ -186,13 +187,13 @@ impl RenderNode for ShadowMappingNode {
         shader_defs.extend([
             (
                 "SHADOW_CASCADES".to_owned(),
-                ShaderDefValue::UInt(if Self::ENHANCEMENT.contains(ShadowMapEnhancement::CSM) {
+                ShaderDefValue::UInt(if Self::ENHANCEMENT.contains(ShadowMapEnhancement::PSSM) {
                     Self::CASCADE_COUNT as u32
                 } else {
                     1
                 }),
             ),
-            // ("SHOW_CASCADES".to_owned(), ShaderDefValue::Bool(true)),
+            ("SHOW_CASCADES".to_owned(), ShaderDefValue::Bool(true)),
             // ShadowFilter::PCF.to_def(),
         ]);
     }
@@ -301,7 +302,6 @@ impl RenderNode for ShadowMappingNode {
                         compilation_options: PipelineCompilationOptions::default(),
                         targets: &[None],
                     }),
-                    // fragment: None,
                     depth_stencil: Some(DepthStencilState {
                         format: target.depth_format.unwrap(),
                         depth_write_enabled: true,
@@ -310,14 +310,14 @@ impl RenderNode for ShadowMappingNode {
                         bias: DepthBiasState::default(),
                     }),
                     primitive: PrimitiveState {
-                        // cull_mode: Some(Face::Back),
+                        unclipped_depth: true,
                         ..Default::default()
                     },
                     multiview: None,
                 }),
         );
 
-        let n_dirs = if Self::ENHANCEMENT.contains(ShadowMapEnhancement::CSM) {
+        let n_dirs = if Self::ENHANCEMENT.contains(ShadowMapEnhancement::PSSM) {
             (original.directional_lights.len() * Self::CASCADE_COUNT) as u32
         } else {
             original.directional_lights.len() as u32
@@ -571,8 +571,8 @@ impl RenderNode for ShadowMappingNode {
         let directional_shadow_maps = &assets.textures[&SHADOW_MAPPING.directional_shadow_map];
         let point_shadow_maps = &assets.textures[&SHADOW_MAPPING.point_shadow_map];
 
-        let sliced_frustums = if Self::ENHANCEMENT.contains(ShadowMapEnhancement::CSM) {
-            frustum_slice(original.camera.projection, Self::CASCADE_COUNT as u32)
+        let sliced_frustums = if Self::ENHANCEMENT.contains(ShadowMapEnhancement::PSSM) {
+            frustum_slice(original.camera.projection, Self::CASCADE_COUNT as u32, 0.5)
         } else {
             vec![original.camera.projection]
         };
@@ -788,7 +788,7 @@ impl RenderNode for ShadowMappingNode {
         };
 
         for id in scene.original.directional_lights.keys() {
-            if Self::ENHANCEMENT.contains(ShadowMapEnhancement::CSM) {
+            if Self::ENHANCEMENT.contains(ShadowMapEnhancement::PSSM) {
                 for texture_view_id in &self.directional_views[id] {
                     _draw(&scene.assets.texture_views[&texture_view_id]);
                 }

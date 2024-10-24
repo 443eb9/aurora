@@ -26,36 +26,47 @@ pub struct Aabb {
     pub max: Vec3,
 }
 
-pub fn frustum_slice(proj: CameraProjection, count: u32) -> Vec<CameraProjection> {
+pub fn frustum_slice(proj: CameraProjection, count: u32, lambda: f32) -> Vec<CameraProjection> {
     match proj {
         CameraProjection::Perspective(proj) => {
             let r = (proj.far / proj.near).powf(1. / count as f32);
+            let d = proj.far - proj.near;
             let mut near = proj.near;
 
             (0..count)
-                .map(|_| {
-                    let far = near * r;
-                    let p =
-                        CameraProjection::Perspective(PerspectiveProjection { near, far, ..proj });
-                    near = far;
-                    p
+                .map(|x| {
+                    let x = x as f32;
+                    let d_log = proj.near * r.powf(x);
+                    let d_uni = proj.near + d / count as f32 * (x + 1.);
+                    let d_slice = lambda * d_log + (1. - lambda) * d_uni;
+                    near += d_slice;
+
+                    CameraProjection::Perspective(PerspectiveProjection {
+                        near: near - d_slice,
+                        far: near,
+                        ..proj
+                    })
                 })
                 .collect()
         }
         CameraProjection::Orthographic(proj) => {
             let r = (proj.far / proj.near).powf(1. / count as f32);
+            let d = proj.far - proj.near;
             let mut near = proj.near;
 
             (0..count)
-                .map(|_| {
-                    let far = near * r;
-                    let p = CameraProjection::Orthographic(OrthographicProjection {
-                        near,
-                        far,
+                .map(|x| {
+                    let x = x as f32;
+                    let d_log = proj.near * r.powf(x);
+                    let d_uni = proj.near + d / count as f32 * (x + 1.);
+                    let d_slice = lambda * d_log + (1. - lambda) * d_uni;
+                    near += d_slice;
+
+                    CameraProjection::Orthographic(OrthographicProjection {
+                        near: near - d_slice,
+                        far: near,
                         ..proj
-                    });
-                    near = far;
-                    p
+                    })
                 })
                 .collect()
         }
