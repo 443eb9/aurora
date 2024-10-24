@@ -81,20 +81,16 @@ impl<'a> Application<'a> {
 
         let main_camera = ControllableCamera::new(
             Camera {
-                transform: Transform {
-                    translation: Vec3::new(0., 0., 0.),
-                    // rotation: Quat::from_euler(EulerRot::XYZ, -0.8, 0.5, 0.4),
-                    ..Default::default()
-                },
                 // transform: Transform {
-                //     rotation: Quat::from_rotation_x(-std::f32::consts::FRAC_PI_4),
+                //     translation: Vec3::new(-85., 69., -42.),
+                //     rotation: Quat::from_array([-0.183, -0.765, -0.247, 0.566]),
                 //     ..Default::default()
                 // },
                 projection: CameraProjection::Perspective(
                     aurora_core::render::helper::PerspectiveProjection {
                         aspect_ratio: dim.x as f32 / dim.y as f32,
                         fov: std::f32::consts::FRAC_PI_4,
-                        near: 2.,
+                        near: 0.1,
                         far: 500.,
                     },
                 ),
@@ -104,6 +100,7 @@ impl<'a> Application<'a> {
                 //     ),
                 // ),
                 exposure: Exposure { ev100: 9.7 },
+                ..Default::default()
             },
             CameraConfig::default(),
         );

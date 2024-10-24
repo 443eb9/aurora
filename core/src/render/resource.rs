@@ -166,6 +166,7 @@ pub struct GpuPointLight {
     pub position: Vec3,
     pub color: Vec3,
     pub intensity: f32,
+    pub radius: f32,
 }
 
 #[derive(ShaderType)]
@@ -174,6 +175,7 @@ pub struct GpuSpotLight {
     pub direction: Vec3,
     pub color: Vec3,
     pub intensity: f32,
+    pub radius: f32,
     pub inner_angle: f32,
     pub outer_angle: f32,
 }

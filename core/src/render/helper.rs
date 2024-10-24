@@ -161,6 +161,7 @@ impl GpuSpotLight {
             position: self.position,
             color: self.color,
             intensity: self.intensity,
+            radius: 0.,
         }
         .light_view()
     }

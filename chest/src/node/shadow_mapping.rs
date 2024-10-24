@@ -14,7 +14,7 @@ use aurora_core::{
     WgpuRenderer,
 };
 use encase::ShaderType;
-use glam::{Mat4, Vec2, Vec3};
+use glam::{Mat4, Vec2, Vec3, Vec4};
 use naga_oil::compose::{Composer, NagaModuleDescriptor, ShaderDefValue};
 use uuid::Uuid;
 use wgpu::{
@@ -47,8 +47,10 @@ pub struct ShadowMappingConfig {
     pub dir_map_resolution: u32,
     pub point_map_resolution: u32,
     pub samples: u32,
-    pub pcf_radius: f32,
-    pub pcss_radius: f32,
+    pub dir_pcf_radius: f32,
+    pub dir_pcss_radius: f32,
+    pub point_pcf_radius: f32,
+    pub point_pcss_radius: f32,
 }
 
 pub struct ShadowMapping {
@@ -107,8 +109,10 @@ impl ShadowMappingNode {
         dir_map_resolution: 2048,
         point_map_resolution: 512,
         samples: 64,
-        pcf_radius: 1.,
-        pcss_radius: 4.,
+        dir_pcf_radius: 1.,
+        dir_pcss_radius: 1.,
+        point_pcf_radius: 0.2,
+        point_pcss_radius: 1.,
     };
     pub const PARTITIONING: ShadowMapPartitioning = ShadowMapPartitioning::PSSM;
 
@@ -190,8 +194,8 @@ impl RenderNode for ShadowMappingNode {
                     Self::CASCADE_COUNT as u32
                 }),
             ),
-            ("SHOW_CASCADES".to_owned(), ShaderDefValue::Bool(true)),
-            ShadowFilter::PCF.to_def(),
+            // ("SHOW_CASCADES".to_owned(), ShaderDefValue::Bool(true)),
+            ShadowFilter::PCSS.to_def(),
         ]);
     }
 
@@ -222,6 +226,11 @@ impl RenderNode for ShadowMappingNode {
             include_str!("../shader/common/common_binding.wgsl"),
             shader_defs.clone(),
         );
+        util::add_shader_module(
+            &mut composer,
+            include_str!("../shader/shadow/shadow_type.wgsl"),
+            shader_defs.clone(),
+        );
         let shader = composer
             .make_naga_module(NagaModuleDescriptor {
                 source: include_str!("../shader/shadow/shadow_render.wgsl"),
@@ -242,16 +251,32 @@ impl RenderNode for ShadowMappingNode {
                 .device
                 .create_bind_group_layout(&BindGroupLayoutDescriptor {
                     label: None,
-                    entries: &[BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: ShaderStages::VERTEX_FRAGMENT,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Uniform,
-                            has_dynamic_offset: true,
-                            min_binding_size: Some(<GpuCamera as encase::ShaderType>::min_size()),
+                    entries: &[
+                        BindGroupLayoutEntry {
+                            binding: 0,
+                            visibility: ShaderStages::VERTEX_FRAGMENT,
+                            ty: BindingType::Buffer {
+                                ty: BufferBindingType::Uniform,
+                                has_dynamic_offset: true,
+                                min_binding_size: Some(
+                                    <GpuCamera as encase::ShaderType>::min_size(),
+                                ),
+                            },
+                            count: None,
                         },
-                        count: None,
-                    }],
+                        BindGroupLayoutEntry {
+                            binding: 1,
+                            visibility: ShaderStages::VERTEX_FRAGMENT,
+                            ty: BindingType::Buffer {
+                                ty: BufferBindingType::Uniform,
+                                has_dynamic_offset: false,
+                                min_binding_size: Some(
+                                    <ShadowMappingConfig as encase::ShaderType>::min_size(),
+                                ),
+                            },
+                            count: None,
+                        },
+                    ],
                 });
 
         let layout = renderer
@@ -458,7 +483,7 @@ impl RenderNode for ShadowMappingNode {
                             ty: BindingType::Buffer {
                                 ty: BufferBindingType::Storage { read_only: true },
                                 has_dynamic_offset: false,
-                                min_binding_size: Some(<Vec2 as encase::ShaderType>::min_size()),
+                                min_binding_size: Some(<Vec4 as encase::ShaderType>::min_size()),
                             },
                             count: None,
                         },
@@ -504,17 +529,26 @@ impl RenderNode for ShadowMappingNode {
             .insert(SHADOW_MAPPING.point_shadow_map_view, point_shadow_map_view);
 
         let mut bf_poisson_disk = DynamicGpuBuffer::new(BufferUsages::STORAGE);
-        let mut raw_poisson_disk = Vec::with_capacity(Self::CONFIG.samples as usize * 2);
+        let mut raw_poisson_disk = Vec::new();
         fast_poisson::Poisson2D::new()
             .into_iter()
-            .for_each(|mut x| {
-                x[0] = x[0] * 2. - 1.;
-                x[1] = x[1] * 2. - 1.;
-                raw_poisson_disk.extend_from_slice(bytemuck::bytes_of(&x));
+            .take(Self::CONFIG.samples as usize)
+            .for_each(|x| {
+                raw_poisson_disk.extend_from_slice(bytemuck::bytes_of(
+                    &(Vec2::from_array(x) * 2. - 1.).extend(0.).extend(0.),
+                ));
+            });
+
+        fast_poisson::Poisson3D::new()
+            .into_iter()
+            .take(Self::CONFIG.samples as usize)
+            .for_each(|x| {
+                let p = Vec3::from_array(x) * 2. - 1.;
+                raw_poisson_disk.extend_from_slice(bytemuck::bytes_of(&p.extend(0.)));
             });
 
         bf_poisson_disk.set(raw_poisson_disk);
-        bf_poisson_disk.write::<Vec2>(&renderer.device, &renderer.queue);
+        bf_poisson_disk.write::<Vec4>(&renderer.device, &renderer.queue);
         assets
             .extra_buffers
             .insert(SHADOW_MAPPING.poisson_disk, bf_poisson_disk);
@@ -612,9 +646,8 @@ impl RenderNode for ShadowMappingNode {
                     .texture_views
                     .insert(texture_view_id, point_shadow_maps.create_view(&point_desc));
 
-                bf_point_light_view.push(&light_views[i_face].proj);
-                self.offsets
-                    .push(bf_light_views.push(&light_views[i_face].proj));
+                bf_point_light_view.push(&light_views[i_face]);
+                self.offsets.push(bf_light_views.push(&light_views[i_face]));
             }
 
             self.point_views.insert(*id, texture_views);
@@ -633,9 +666,8 @@ impl RenderNode for ShadowMappingNode {
                     .texture_views
                     .insert(texture_view_id, point_shadow_maps.create_view(&point_desc));
 
-                bf_point_light_view.push(&light_views[i_face].proj);
-                self.offsets
-                    .push(bf_light_views.push(&light_views[i_face].proj));
+                bf_point_light_view.push(&light_views[i_face]);
+                self.offsets.push(bf_light_views.push(&light_views[i_face]));
             }
 
             self.point_views.insert(*id, texture_views);
@@ -664,12 +696,20 @@ impl RenderNode for ShadowMappingNode {
             renderer.device.create_bind_group(&BindGroupDescriptor {
                 label: Some("light_views_bind_group"),
                 layout: &assets.extra_layouts[&SHADOW_MAPPING.light_view_layout],
-                entries: &[BindGroupEntry {
-                    binding: 0,
-                    resource: assets.extra_buffers[&SHADOW_MAPPING.light_views]
-                        .binding::<GpuCamera>()
-                        .unwrap(),
-                }],
+                entries: &[
+                    BindGroupEntry {
+                        binding: 0,
+                        resource: assets.extra_buffers[&SHADOW_MAPPING.light_views]
+                            .binding::<GpuCamera>()
+                            .unwrap(),
+                    },
+                    BindGroupEntry {
+                        binding: 1,
+                        resource: assets.extra_buffers[&SHADOW_MAPPING.config]
+                            .entire_binding()
+                            .unwrap(),
+                    },
+                ],
             }),
         );
 
@@ -735,12 +775,14 @@ impl RenderNode for ShadowMappingNode {
     fn draw(
         &self,
         renderer: &WgpuRenderer,
-        scene: &mut GpuScene,
+        GpuScene {
+            original,
+            assets,
+            static_meshes: _,
+        }: &mut GpuScene,
         queue: &[RenderMesh],
         _target: &RenderTargets,
     ) {
-        let assets = &scene.assets;
-
         let Some(light_view_bind_groups) = assets
             .extra_bind_groups
             .get(&SHADOW_MAPPING.light_views_bind_group)
@@ -784,21 +826,23 @@ impl RenderNode for ShadowMappingNode {
             view_index += 1;
         };
 
-        for id in scene.original.directional_lights.keys() {
+        for id in original.directional_lights.keys() {
             if Self::PARTITIONING == ShadowMapPartitioning::None {
-                _draw(
-                    &scene.assets.texture_views[&self.directional_views[id].iter().next().unwrap()],
-                );
+                _draw(&assets.texture_views[&self.directional_views[id].iter().next().unwrap()]);
             } else {
                 for texture_view_id in &self.directional_views[id] {
-                    _draw(&scene.assets.texture_views[&texture_view_id]);
+                    _draw(&assets.texture_views[&texture_view_id]);
                 }
             }
         }
 
-        for id in scene.original.point_lights.keys() {
+        for id in original
+            .point_lights
+            .keys()
+            .chain(original.spot_lights.keys())
+        {
             for texture_view_id in &self.point_views[id] {
-                _draw(&scene.assets.texture_views[&texture_view_id]);
+                _draw(&assets.texture_views[&texture_view_id]);
             }
         }
 

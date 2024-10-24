@@ -87,6 +87,11 @@ impl ControllableCamera {
             self.target_camera.rotation,
             self.config.rot_smoothness * delta,
         );
+
+        // println!(
+        //     "{} {}",
+        //     self.camera.transform.translation, self.camera.transform.rotation
+        // );
     }
 
     pub fn mouse_control(&mut self, button: MouseButton, state: ElementState) {

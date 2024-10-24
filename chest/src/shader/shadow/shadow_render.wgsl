@@ -3,18 +3,20 @@
     common_binding::camera,
     common_type::VertexInput,
     math,
+    shadow_type::ShadowMappingConfig,
 }
+
+@group(0) @binding(1) var<uniform> config: ShadowMappingConfig;
 
 @vertex
 fn vertex(in: VertexInput) -> @builtin(position) vec4f {
-    var light_dir = vec3f(0.);
+    var offset = 0.;
     if (camera.proj[3][3] == 1.) {
-        light_dir = camera.position; // Orthographic
+        offset = math::sin_between(camera.position, in.normal) * (204.8 / f32(config.dir_map_resolution));
     } else {
-        light_dir = normalize(camera.position - in.position); // Perspective
+        offset = math::sin_between(camera.position - in.position, in.normal) * (12.8 / f32(config.point_map_resolution));
     }
-    let offset = math::sin_between(light_dir, in.normal);
-    return camera.proj * camera.view * vec4f(in.position - in.normal * offset * 0.5, 1.);
+    return camera.proj * camera.view * vec4f(in.position - offset * in.normal, 1.);
 }
 
 @fragment

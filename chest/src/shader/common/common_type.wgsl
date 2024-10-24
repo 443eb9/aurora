@@ -24,6 +24,7 @@ struct PointLight {
     position: vec3f,
     color: vec3f,
     intensity: f32,
+    radius: f32,
 }
 
 struct SpotLight {
@@ -31,6 +32,7 @@ struct SpotLight {
     direction: vec3f,
     color: vec3f,
     intensity: f32,
+    radius: f32,
     inner: f32,
     outer: f32,
 }

@@ -96,6 +96,11 @@ impl RenderNode for PbrNode {
         );
         util::add_shader_module(
             &mut composer,
+            include_str!("../shader/shadow/shadow_type.wgsl"),
+            shader_defs.clone(),
+        );
+        util::add_shader_module(
+            &mut composer,
             include_str!("../shader/shadow/shadow_mapping.wgsl"),
             shader_defs.clone(),
         );
