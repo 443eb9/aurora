@@ -20,7 +20,7 @@ use uuid::Uuid;
 use wgpu::{
     vertex_attr_array, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor,
     BindGroupLayoutEntry, BindingResource, BindingType, BufferAddress, BufferBindingType,
-    BufferUsages, CompareFunction, DepthBiasState, DepthStencilState, Extent3d, Face, Features,
+    BufferUsages, CompareFunction, DepthBiasState, DepthStencilState, Extent3d, Features,
     FilterMode, FragmentState, LoadOp, MultisampleState, Operations, PipelineCompilationOptions,
     PipelineLayoutDescriptor, PrimitiveState, RenderPassDepthStencilAttachment,
     RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, SamplerBindingType,
@@ -30,13 +30,16 @@ use wgpu::{
     VertexState, VertexStepMode,
 };
 
-use crate::util::{self, frustum_slice, Aabb};
+use crate::{
+    shader_defs::ShadowFilter,
+    util::{self, frustum_slice, Aabb},
+};
 
-bitflags::bitflags! {
-    pub struct ShadowMapEnhancement : u32 {
-        const PSSM  = 1 << 0;
-        const SDSM  = 1 << 1;
-    }
+#[derive(PartialEq, Eq)]
+pub enum ShadowMapPartitioning {
+    None,
+    PSSM,
+    SDSM,
 }
 
 #[derive(ShaderType)]
@@ -107,7 +110,7 @@ impl ShadowMappingNode {
         pcf_radius: 4.,
         pcss_radius: 4.,
     };
-    pub const ENHANCEMENT: ShadowMapEnhancement = ShadowMapEnhancement::PSSM;
+    pub const PARTITIONING: ShadowMapPartitioning = ShadowMapPartitioning::PSSM;
 
     pub fn calculate_cascade_view(
         camera_transform: Transform,
@@ -178,23 +181,17 @@ impl RenderNode for ShadowMappingNode {
     }
 
     fn require_shader_defs(&self, shader_defs: &mut HashMap<String, ShaderDefValue>) {
-        assert!(
-            !(Self::ENHANCEMENT.contains(ShadowMapEnhancement::PSSM)
-                && Self::ENHANCEMENT.contains(ShadowMapEnhancement::SDSM)),
-            "It's not allowed to enable CSM and SDSM at the same time."
-        );
-
         shader_defs.extend([
             (
                 "SHADOW_CASCADES".to_owned(),
-                ShaderDefValue::UInt(if Self::ENHANCEMENT.contains(ShadowMapEnhancement::PSSM) {
-                    Self::CASCADE_COUNT as u32
-                } else {
+                ShaderDefValue::UInt(if Self::PARTITIONING == ShadowMapPartitioning::None {
                     1
+                } else {
+                    Self::CASCADE_COUNT as u32
                 }),
             ),
-            ("SHOW_CASCADES".to_owned(), ShaderDefValue::Bool(true)),
-            // ShadowFilter::PCF.to_def(),
+            // ("SHOW_CASCADES".to_owned(), ShaderDefValue::Bool(true)),
+            ShadowFilter::PCF.to_def(),
         ]);
     }
 
@@ -317,10 +314,10 @@ impl RenderNode for ShadowMappingNode {
                 }),
         );
 
-        let n_dirs = if Self::ENHANCEMENT.contains(ShadowMapEnhancement::PSSM) {
-            (original.directional_lights.len() * Self::CASCADE_COUNT) as u32
-        } else {
+        let n_dirs = if Self::PARTITIONING == ShadowMapPartitioning::None {
             original.directional_lights.len() as u32
+        } else {
+            (original.directional_lights.len() * Self::CASCADE_COUNT) as u32
         };
         let directional_shadow_map = renderer.device.create_texture(&TextureDescriptor {
             label: Some("directional_shadow_map"),
@@ -571,10 +568,10 @@ impl RenderNode for ShadowMappingNode {
         let directional_shadow_maps = &assets.textures[&SHADOW_MAPPING.directional_shadow_map];
         let point_shadow_maps = &assets.textures[&SHADOW_MAPPING.point_shadow_map];
 
-        let sliced_frustums = if Self::ENHANCEMENT.contains(ShadowMapEnhancement::PSSM) {
-            frustum_slice(original.camera.projection, Self::CASCADE_COUNT as u32, 0.5)
-        } else {
+        let sliced_frustums = if Self::PARTITIONING == ShadowMapPartitioning::None {
             vec![original.camera.projection]
+        } else {
+            frustum_slice(original.camera.projection, Self::CASCADE_COUNT as u32, 0.5)
         };
 
         for (id, light) in &original.directional_lights {
@@ -788,14 +785,14 @@ impl RenderNode for ShadowMappingNode {
         };
 
         for id in scene.original.directional_lights.keys() {
-            if Self::ENHANCEMENT.contains(ShadowMapEnhancement::PSSM) {
-                for texture_view_id in &self.directional_views[id] {
-                    _draw(&scene.assets.texture_views[&texture_view_id]);
-                }
-            } else {
+            if Self::PARTITIONING == ShadowMapPartitioning::None {
                 _draw(
                     &scene.assets.texture_views[&self.directional_views[id].iter().next().unwrap()],
                 );
+            } else {
+                for texture_view_id in &self.directional_views[id] {
+                    _draw(&scene.assets.texture_views[&texture_view_id]);
+                }
             }
         }
 
