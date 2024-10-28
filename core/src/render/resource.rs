@@ -1,6 +1,6 @@
 use bytemuck::NoUninit;
 use encase::{internal::WriteInto, DynamicStorageBuffer, ShaderType};
-use glam::{Mat4, Vec2, Vec3, Vec4};
+use glam::{Mat4, Vec3};
 use uuid::Uuid;
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
@@ -120,15 +120,6 @@ impl DynamicGpuBuffer {
     pub fn len_bytes(&self) -> usize {
         self.raw.as_ref().len()
     }
-}
-
-#[derive(Debug, ShaderType, Default, Clone, Copy)]
-#[repr(C)]
-pub struct Vertex {
-    pub position: Vec3,
-    pub normal: Vec3,
-    pub uv: Vec2,
-    pub tangent: Vec4,
 }
 
 #[derive(Clone)]

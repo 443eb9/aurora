@@ -215,6 +215,10 @@ impl<'a> Application<'a> {
             ),
         });
 
+        self.flow
+            .inner
+            .set_queue(self.scene.static_meshes.clone());
+
         if force_build {
             self.flow.inner.force_build(
                 &self.renderer,
@@ -230,10 +234,6 @@ impl<'a> Application<'a> {
                 &targets,
             );
         }
-
-        self.flow
-            .inner
-            .set_queue_global(self.scene.static_meshes.clone());
 
         self.flow
             .inner

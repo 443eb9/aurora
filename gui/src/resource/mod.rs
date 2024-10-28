@@ -34,15 +34,15 @@ pub fn load_primitives(renderer: &WgpuRenderer) -> GpuScene {
 
     let meshes =
     // Mesh::from_obj("gui/assets/large_primitives_offseted.obj")
-        Mesh::from_obj("gui/assets/Room.obj")
-        // Mesh::from_obj("gui/assets/large_primitives_vertical_ground.obj")
-        // Mesh::from_obj("gui/assets/large_scene_cascade_test.obj")
+        // Mesh::from_obj("gui/assets/Room.obj")
+        // Mesh::from_obj("gui/assets/cube.obj")
+        Mesh::from_obj("gui/assets/large_scene_cascade_test.obj")
         .into_iter()
         .map(|m| {
             let instance_id = MeshInstanceId(Uuid::new_v4());
-            scene.assets.vertex_buffers.insert(
+            scene.assets.meshes.insert(
                 instance_id,
-                (m.to_vertex_buffer(renderer), m.vertices_count()),
+                m
             );
             instance_id
         })
@@ -68,65 +68,65 @@ pub fn load_primitives(renderer: &WgpuRenderer) -> GpuScene {
     });
     scene.static_meshes.extend(static_meshes);
 
-    // scene.original.directional_lights.insert(
+    scene.original.directional_lights.insert(
+        Uuid::new_v4(),
+        GpuDirectionalLight {
+            // direction: Transform {
+            //     rotation: Quat::from_euler(EulerRot::XYZ, -0.5, -0.2, 0.),
+            //     ..Default::default()
+            // }
+            // .local_z(),
+            direction: Quat::from_rotation_x(-std::f32::consts::FRAC_PI_4) * Vec3::Z,
+            // direction: Vec3::Z,
+            color: Srgb::new(1., 1., 1.).into_linear().into_components().into(),
+            intensity: 2000.,
+            radius: 1.,
+        },
+    );
+    // scene.original.point_lights.insert(
     //     Uuid::new_v4(),
-    //     GpuDirectionalLight {
-    //         // direction: Transform {
-    //         //     rotation: Quat::from_euler(EulerRot::XYZ, -0.5, -0.2, 0.),
+    //     GpuPointLight {
+    //         // transform: Transform {
+    //         //     translation: Vec3 {
+    //         //         x: -2.,
+    //         //         y: 1.5,
+    //         //         z: 0.,
+    //         //     },
     //         //     ..Default::default()
-    //         // }
-    //         // .local_z(),
-    //         direction: Quat::from_rotation_x(-std::f32::consts::FRAC_PI_4) * Vec3::Z,
-    //         // direction: Vec3::Z,
-    //         color: Srgb::new(1., 1., 1.).into_linear().into_components().into(),
-    //         intensity: 2000.,
-    //         radius: 1.,
+    //         // },
+    //         position: Vec3::ZERO,
+    //         color: Srgb::new(0.2, 0.5, 0.8)
+    //             .into_linear()
+    //             .into_components()
+    //             .into(),
+    //         intensity: 10000.,
+    //         radius: 2.,
     //     },
     // );
-    scene.original.point_lights.insert(
-        Uuid::new_v4(),
-        GpuPointLight {
-            // transform: Transform {
-            //     translation: Vec3 {
-            //         x: -2.,
-            //         y: 1.5,
-            //         z: 0.,
-            //     },
-            //     ..Default::default()
-            // },
-            position: Vec3::ZERO,
-            color: Srgb::new(0.2, 0.5, 0.8)
-                .into_linear()
-                .into_components()
-                .into(),
-            intensity: 10000.,
-            radius: 2.,
-        },
-    );
-    scene.original.spot_lights.insert(
-        Uuid::new_v4(),
-        GpuSpotLight {
-            // transform: Transform {
-            //     // translation: Vec3 {
-            //     //     x: 2.,
-            //     //     y: 2.,
-            //     //     z: -2.,
-            //     // },
-            //     translation: Vec3::ZERO,
-            //     rotation: ,
-            //     ..Default::default()
-            // },
-            position: Vec3::ZERO,
-            direction: Transform::default()
-                .with_rotation(Quat::from_axis_angle(Vec3::X, std::f32::consts::FRAC_PI_3))
-                .local_neg_z(),
-            color: Srgb::new(0., 1., 0.).into_linear().into_components().into(),
-            intensity: 10000.,
-            radius: 2.,
-            inner_angle: std::f32::consts::FRAC_PI_6 * 0.75,
-            outer_angle: std::f32::consts::FRAC_PI_4 * 0.75,
-        },
-    );
+    // scene.original.spot_lights.insert(
+    //     Uuid::new_v4(),
+    //     GpuSpotLight {
+    //         // transform: Transform {
+    //         //     // translation: Vec3 {
+    //         //     //     x: 2.,
+    //         //     //     y: 2.,
+    //         //     //     z: -2.,
+    //         //     // },
+    //         //     translation: Vec3::ZERO,
+    //         //     rotation: ,
+    //         //     ..Default::default()
+    //         // },
+    //         position: Vec3::ZERO,
+    //         direction: Transform::default()
+    //             .with_rotation(Quat::from_axis_angle(Vec3::X, std::f32::consts::FRAC_PI_3))
+    //             .local_neg_z(),
+    //         color: Srgb::new(0., 1., 0.).into_linear().into_components().into(),
+    //         intensity: 10000.,
+    //         radius: 2.,
+    //         inner_angle: std::f32::consts::FRAC_PI_6 * 0.75,
+    //         outer_angle: std::f32::consts::FRAC_PI_4 * 0.75,
+    //     },
+    // );
 
     scene
 }

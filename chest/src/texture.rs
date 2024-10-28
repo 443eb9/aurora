@@ -1,13 +1,13 @@
 use std::{io::Cursor, path::Path};
 
-use aurora_core::WgpuRenderer;
 use ddsfile::{Dds, DxgiFormat};
 use wgpu::{
     util::{DeviceExt, TextureDataOrder},
-    Extent3d, Texture, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
+    Device, Extent3d, Queue, Texture, TextureDescriptor, TextureDimension, TextureFormat,
+    TextureUsages,
 };
 
-pub fn load_dds_texture(renderer: &WgpuRenderer, path: impl AsRef<Path>) -> Texture {
+pub fn load_dds_texture(device: &Device, queue: &Queue, path: impl AsRef<Path>) -> Texture {
     let dds = Dds::read(&mut Cursor::new(std::fs::read(path).unwrap())).unwrap();
     assert_eq!(
         dds.get_dxgi_format().unwrap(),
@@ -17,8 +17,8 @@ pub fn load_dds_texture(renderer: &WgpuRenderer, path: impl AsRef<Path>) -> Text
     let dds_data = dds.get_data(0).unwrap();
     assert_eq!(dds_data.as_ptr() as usize % 4, 0);
 
-    renderer.device.create_texture_with_data(
-        &renderer.queue,
+    device.create_texture_with_data(
+        &queue,
         &TextureDescriptor {
             label: None,
             size: Extent3d {

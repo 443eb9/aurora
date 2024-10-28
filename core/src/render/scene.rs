@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use uuid::Uuid;
 use wgpu::{BindGroup, BindGroupLayout, BufferUsages, Sampler, Texture, TextureView};
 
-use crate::render::{helper::Scene, mesh::StaticMesh, resource::DynamicGpuBuffer};
+use crate::render::{helper::Scene, mesh::{Mesh, StaticMesh}, resource::DynamicGpuBuffer};
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct MaterialInstanceId(pub Uuid);
@@ -33,13 +33,14 @@ pub struct ExtraBindGroupId(pub Uuid);
 pub struct ExtraBufferId(pub Uuid);
 
 pub struct GpuAssets {
+    pub meshes: HashMap<MeshInstanceId, Mesh>,
+
     pub camera_uniform: DynamicGpuBuffer,
     pub scene_desc_uniform: DynamicGpuBuffer,
     pub directional_light_buffer: DynamicGpuBuffer,
     pub point_light_buffer: DynamicGpuBuffer,
     pub spot_light_buffer: DynamicGpuBuffer,
     pub material_uniforms: HashMap<MaterialTypeId, DynamicGpuBuffer>,
-    pub vertex_buffers: HashMap<MeshInstanceId, (DynamicGpuBuffer, u32)>,
     pub extra_buffers: HashMap<ExtraBufferId, DynamicGpuBuffer>,
 
     pub textures: HashMap<TextureId, Texture>,
@@ -60,13 +61,13 @@ pub struct GpuAssets {
 impl Default for GpuAssets {
     fn default() -> Self {
         Self {
+            meshes: Default::default(),
             camera_uniform: DynamicGpuBuffer::new(BufferUsages::UNIFORM),
             scene_desc_uniform: DynamicGpuBuffer::new(BufferUsages::UNIFORM),
             directional_light_buffer: DynamicGpuBuffer::new(BufferUsages::STORAGE),
             point_light_buffer: DynamicGpuBuffer::new(BufferUsages::STORAGE),
             spot_light_buffer: DynamicGpuBuffer::new(BufferUsages::STORAGE),
             material_uniforms: Default::default(),
-            vertex_buffers: Default::default(),
             textures: Default::default(),
             common_bind_group: Default::default(),
             light_bind_group: Default::default(),

@@ -1,15 +1,18 @@
-use std::collections::HashMap;
+use std::{borrow::Cow, collections::HashMap};
 
 use encase::ShaderType;
 use indexmap::IndexMap;
-use naga_oil::compose::ShaderDefValue;
+use naga_oil::compose::{
+    ComposableModuleDescriptor, Composer, NagaModuleDescriptor, ShaderDefValue,
+};
 use uuid::Uuid;
 use wgpu::{
     util::{DeviceExt, TextureDataOrder},
     BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor, BindGroupLayoutEntry,
-    BindingType, BufferBindingType, Extent3d, Features, Limits, SamplerBindingType, ShaderStages,
+    BindingType, BufferBindingType, Device, Extent3d, Features, Limits, Queue, RenderPipeline,
+    SamplerBindingType, ShaderModule, ShaderModuleDescriptor, ShaderSource, ShaderStages,
     TextureDescriptor, TextureDimension, TextureFormat, TextureSampleType, TextureUsages,
-    TextureViewDimension,
+    TextureViewDimension, VertexFormat,
 };
 
 use crate::{
@@ -21,14 +24,41 @@ use crate::{
             RenderTargets, DUMMY_2D_TEX, POST_PROCESS_COLOR_LAYOUT_UUID,
             POST_PROCESS_DEPTH_LAYOUT_UUID,
         },
-        scene::GpuScene,
+        scene::{GpuScene, MeshInstanceId},
     },
     WgpuRenderer,
 };
 
+struct PackedRenderNode {
+    pub node: Box<dyn RenderNode>,
+    pub context: NodeContext,
+}
+
+#[derive(Default)]
+pub struct NodeContext {
+    pub shader: Option<ShaderModule>,
+    pub meshes: Vec<RenderMesh>,
+    pub pipelines: HashMap<MeshInstanceId, RenderPipeline>,
+}
+
+pub struct RenderContext<'a> {
+    pub device: &'a Device,
+    pub queue: &'a Queue,
+    pub node: &'a mut NodeContext,
+    pub targets: &'a RenderTargets,
+}
+
+pub struct PipelineCreationContext<'a> {
+    pub device: &'a Device,
+    pub targets: &'a RenderTargets,
+    pub shader: &'a ShaderModule,
+    pub meshes: &'a Vec<RenderMesh>,
+    pub pipelines: &'a mut HashMap<MeshInstanceId, RenderPipeline>,
+}
+
 #[derive(Default)]
 pub struct RenderFlow {
-    flow: IndexMap<Uuid, (Box<dyn RenderNode>, Vec<RenderMesh>)>,
+    flow: IndexMap<Uuid, PackedRenderNode>,
     is_built: bool,
 }
 
@@ -36,9 +66,9 @@ impl RenderFlow {
     pub async fn request_renderer(&self) -> WgpuRenderer {
         let (features, limits) = self.flow.values().fold(
             (Default::default(), Default::default()),
-            |(mut feat, mut lim), (node, _)| {
-                node.require_renderer_features(&mut feat);
-                node.require_renderer_limits(&mut lim);
+            |(mut feat, mut lim), node| {
+                node.node.require_renderer_features(&mut feat);
+                node.node.require_renderer_limits(&mut lim);
                 (feat, lim)
             },
         );
@@ -48,44 +78,28 @@ impl RenderFlow {
     #[inline]
     pub fn add<T: RenderNode + Default + 'static>(&mut self) -> Uuid {
         let uuid = Uuid::new_v4();
-        self.flow.insert(uuid, (Box::new(T::default()), Vec::new()));
+        self.flow.insert(
+            uuid,
+            PackedRenderNode {
+                node: Box::new(T::default()),
+                context: Default::default(),
+            },
+        );
         uuid
     }
 
     #[inline]
-    pub fn queue_mesh(&mut self, node: Uuid, mesh: StaticMesh) {
-        if let Some((_, queue)) = self.flow.get_mut(&node) {
-            queue.push(RenderMesh { mesh, offset: None });
-        }
-    }
+    pub fn set_queue(&mut self, meshes: Vec<StaticMesh>) {
+        let meshes = meshes
+            .iter()
+            .map(|mesh| RenderMesh {
+                mesh: *mesh,
+                offset: None,
+            })
+            .collect::<Vec<_>>();
 
-    #[inline]
-    pub fn queue_global(&mut self, mesh: StaticMesh) {
-        self.flow
-            .values_mut()
-            .for_each(|(_, queue)| queue.push(RenderMesh { mesh, offset: None }));
-    }
-
-    #[inline]
-    pub fn set_queue(&mut self, node: Uuid, meshes: Vec<StaticMesh>) {
-        if let Some((_, queue)) = self.flow.get_mut(&node) {
-            *queue = meshes
-                .into_iter()
-                .map(|mesh| RenderMesh { mesh, offset: None })
-                .collect();
-        }
-    }
-
-    #[inline]
-    pub fn set_queue_global(&mut self, meshes: Vec<StaticMesh>) {
-        self.flow.values_mut().for_each(|(_, queue)| {
-            *queue = meshes
-                .iter()
-                .map(|mesh| RenderMesh {
-                    mesh: *mesh,
-                    offset: None,
-                })
-                .collect()
+        self.flow.values_mut().for_each(|node| {
+            node.context.meshes = meshes.clone();
         });
     }
 
@@ -95,10 +109,10 @@ impl RenderFlow {
         renderer: &WgpuRenderer,
         scene: &mut GpuScene,
         shader_defs: Option<HashMap<String, ShaderDefValue>>,
-        target: &RenderTargets,
+        targets: &RenderTargets,
     ) {
         if !self.is_built {
-            self.force_build(renderer, scene, shader_defs, target);
+            self.force_build(renderer, scene, shader_defs, targets);
             self.is_built = true;
         }
     }
@@ -109,61 +123,123 @@ impl RenderFlow {
         renderer: &WgpuRenderer,
         scene: &mut GpuScene,
         shader_defs: Option<HashMap<String, ShaderDefValue>>,
-        target: &RenderTargets,
+        targets: &RenderTargets,
     ) {
-        let mut shader_defs = shader_defs.unwrap_or_default();
-        for (node, _) in self.flow.values() {
-            node.require_shader_defs(&mut shader_defs);
+        for node in self.flow.values() {
+            if let Some(restriction) = node.node.restrict_mesh_format() {
+                for mesh in &node.context.meshes {
+                    scene.assets.meshes[&mesh.mesh.mesh].assert_vertex(restriction);
+                }
+            }
         }
 
-        for (node, _) in self.flow.values_mut() {
-            node.build(renderer, scene, shader_defs.clone(), target);
+        let mut shader_defs = shader_defs.unwrap_or_default();
+        for node in self.flow.values() {
+            node.node.require_shader_defs(&mut shader_defs);
+        }
+
+        for PackedRenderNode { node, context } in self.flow.values_mut() {
+            if let Some((deps, main)) = node.require_shader() {
+                let mut composer = Composer::default();
+                for dep in deps {
+                    composer
+                        .add_composable_module(ComposableModuleDescriptor {
+                            source: dep,
+                            shader_defs: shader_defs.clone(),
+                            ..Default::default()
+                        })
+                        .unwrap();
+                }
+                let module = composer
+                    .make_naga_module(NagaModuleDescriptor {
+                        source: &main,
+                        shader_defs: shader_defs.clone(),
+                        ..Default::default()
+                    })
+                    .unwrap();
+
+                context.shader = Some(renderer.device.create_shader_module(
+                    ShaderModuleDescriptor {
+                        label: None,
+                        source: ShaderSource::Naga(Cow::Owned(module)),
+                    },
+                ));
+            }
+
+            if let Some(shader) = &context.shader {
+                node.create_pipelines(
+                    scene,
+                    PipelineCreationContext {
+                        device: &renderer.device,
+                        targets,
+                        shader,
+                        meshes: &context.meshes,
+                        pipelines: &mut context.pipelines,
+                    },
+                );
+            }
+
+            node.build(
+                scene,
+                RenderContext {
+                    device: &renderer.device,
+                    queue: &renderer.queue,
+                    node: context,
+                    targets,
+                },
+            );
         }
     }
 
     #[inline]
-    pub fn run(&mut self, renderer: &WgpuRenderer, scene: &mut GpuScene, target: &RenderTargets) {
-        for (node, queue) in self.flow.values_mut() {
-            node.prepare(renderer, scene, queue, target);
+    pub fn run(&mut self, renderer: &WgpuRenderer, scene: &mut GpuScene, targets: &RenderTargets) {
+        for node in self.flow.values_mut() {
+            node.node.prepare(
+                scene,
+                RenderContext {
+                    device: &renderer.device,
+                    queue: &renderer.queue,
+                    node: &mut node.context,
+                    targets,
+                },
+            );
         }
 
-        for (node, queue) in self.flow.values_mut() {
-            node.draw(renderer, scene, queue, target);
+        for node in self.flow.values_mut() {
+            node.node.draw(
+                scene,
+                RenderContext {
+                    device: &renderer.device,
+                    queue: &renderer.queue,
+                    node: &mut node.context,
+                    targets,
+                },
+            );
         }
     }
 }
 
 pub trait RenderNode {
+    fn restrict_mesh_format(&self) -> Option<&'static [VertexFormat]> {
+        None
+    }
     /// Add required features
     fn require_renderer_features(&self, _features: &mut Features) {}
     /// Add required limits
     fn require_renderer_limits(&self, _limits: &mut Limits) {}
     /// Add required shader defs.
     fn require_shader_defs(&self, _shader_defs: &mut HashMap<String, ShaderDefValue>) {}
+    fn require_shader(&self) -> Option<(&'static [&'static str], &'static str)> {
+        None
+    }
+    /// Create pipeline for meshes.
+    fn create_pipelines(&self, _scene: &mut GpuScene, _context: PipelineCreationContext) {}
     /// Build the node.
-    fn build(
-        &mut self,
-        renderer: &WgpuRenderer,
-        scene: &mut GpuScene,
-        shader_defs: HashMap<String, ShaderDefValue>,
-        target: &RenderTargets,
-    );
+    fn build(&mut self, scene: &mut GpuScene, context: RenderContext);
     /// Prepare bind groups and other assets for rendering.
-    fn prepare(
-        &mut self,
-        renderer: &WgpuRenderer,
-        scene: &mut GpuScene,
-        queue: &mut [RenderMesh],
-        target: &RenderTargets,
-    );
+    fn prepare(&mut self, _scene: &mut GpuScene, _context: RenderContext) {}
     /// Draw meshes.
-    fn draw(
-        &self,
-        renderer: &WgpuRenderer,
-        scene: &mut GpuScene,
-        queue: &[RenderMesh],
-        target: &RenderTargets,
-    );
+    fn draw(&self, _scene: &mut GpuScene, _context: RenderContext) {}
 }
 
 /// Prepares camera, lights and post process bind groups.
@@ -171,15 +247,9 @@ pub trait RenderNode {
 pub struct GeneralNode;
 
 impl RenderNode for GeneralNode {
-    fn build(
-        &mut self,
-        renderer: &WgpuRenderer,
-        scene: &mut GpuScene,
-        _shader_defs: HashMap<String, ShaderDefValue>,
-        _target: &RenderTargets,
-    ) {
-        scene.assets.common_layout = Some(renderer.device.create_bind_group_layout(
-            &BindGroupLayoutDescriptor {
+    fn build(&mut self, scene: &mut GpuScene, RenderContext { device, .. }: RenderContext) {
+        scene.assets.common_layout =
+            Some(device.create_bind_group_layout(&BindGroupLayoutDescriptor {
                 label: Some("common_layout"),
                 entries: &[
                     BindGroupLayoutEntry {
@@ -203,11 +273,10 @@ impl RenderNode for GeneralNode {
                         count: None,
                     },
                 ],
-            },
-        ));
+            }));
 
-        scene.assets.lights_layout = Some(renderer.device.create_bind_group_layout(
-            &BindGroupLayoutDescriptor {
+        scene.assets.lights_layout =
+            Some(device.create_bind_group_layout(&BindGroupLayoutDescriptor {
                 label: Some("lights_layout"),
                 entries: &[
                     // Directional
@@ -244,16 +313,13 @@ impl RenderNode for GeneralNode {
                         count: None,
                     },
                 ],
-            },
-        ));
+            }));
     }
 
     fn prepare(
         &mut self,
-        renderer: &WgpuRenderer,
         scene: &mut GpuScene,
-        _queue: &mut [RenderMesh],
-        _target: &RenderTargets,
+        RenderContext { device, queue, .. }: RenderContext,
     ) {
         let GpuScene {
             assets, original, ..
@@ -286,21 +352,19 @@ impl RenderNode for GeneralNode {
             spot_lights: original.spot_lights.len() as u32,
         });
 
-        assets
-            .camera_uniform
-            .write::<GpuCamera>(&renderer.device, &renderer.queue);
+        assets.camera_uniform.write::<GpuCamera>(&device, &queue);
         assets
             .scene_desc_uniform
-            .write::<GpuSceneDesc>(&renderer.device, &renderer.queue);
+            .write::<GpuSceneDesc>(&device, &queue);
         assets
             .directional_light_buffer
-            .write::<GpuDirectionalLight>(&renderer.device, &renderer.queue);
+            .write::<GpuDirectionalLight>(&device, &queue);
         assets
             .point_light_buffer
-            .write::<GpuPointLight>(&renderer.device, &renderer.queue);
+            .write::<GpuPointLight>(&device, &queue);
         assets
             .spot_light_buffer
-            .write::<GpuSpotLight>(&renderer.device, &renderer.queue);
+            .write::<GpuSpotLight>(&device, &queue);
 
         let (
             Some(bf_camera),
@@ -319,7 +383,7 @@ impl RenderNode for GeneralNode {
             return;
         };
 
-        assets.common_bind_group = Some(renderer.device.create_bind_group(&BindGroupDescriptor {
+        assets.common_bind_group = Some(device.create_bind_group(&BindGroupDescriptor {
             label: Some("common_bind_group"),
             layout: assets.common_layout.as_ref().unwrap(),
             entries: &[
@@ -334,7 +398,7 @@ impl RenderNode for GeneralNode {
             ],
         }));
 
-        assets.light_bind_group = Some(renderer.device.create_bind_group(&BindGroupDescriptor {
+        assets.light_bind_group = Some(device.create_bind_group(&BindGroupDescriptor {
             label: Some("lights_bind_group"),
             layout: assets.lights_layout.as_ref().unwrap(),
             entries: &[
@@ -353,15 +417,6 @@ impl RenderNode for GeneralNode {
             ],
         }));
     }
-
-    fn draw(
-        &self,
-        _renderer: &WgpuRenderer,
-        _scene: &mut GpuScene,
-        _queue: &[RenderMesh],
-        _target: &RenderTargets,
-    ) {
-    }
 }
 
 /// Added the post process related bing group layouts.
@@ -371,82 +426,63 @@ pub struct PostProcessGeneralNode;
 impl RenderNode for PostProcessGeneralNode {
     fn build(
         &mut self,
-        renderer: &WgpuRenderer,
         scene: &mut GpuScene,
-        _shader_defs: HashMap<String, ShaderDefValue>,
-        _target: &RenderTargets,
+        RenderContext {
+            device,
+            queue: _,
+            node: _,
+            targets: _,
+        }: RenderContext,
     ) {
         scene.assets.material_layouts.insert(
             POST_PROCESS_COLOR_LAYOUT_UUID,
-            renderer
-                .device
-                .create_bind_group_layout(&BindGroupLayoutDescriptor {
-                    label: Some("post_process_color_layout"),
-                    entries: &[
-                        BindGroupLayoutEntry {
-                            binding: 0,
-                            visibility: ShaderStages::FRAGMENT,
-                            ty: BindingType::Texture {
-                                sample_type: TextureSampleType::Float { filterable: true },
-                                view_dimension: TextureViewDimension::D2,
-                                multisampled: false,
-                            },
-                            count: None,
+            device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+                label: Some("post_process_color_layout"),
+                entries: &[
+                    BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: ShaderStages::FRAGMENT,
+                        ty: BindingType::Texture {
+                            sample_type: TextureSampleType::Float { filterable: true },
+                            view_dimension: TextureViewDimension::D2,
+                            multisampled: false,
                         },
-                        BindGroupLayoutEntry {
-                            binding: 1,
-                            visibility: ShaderStages::FRAGMENT,
-                            ty: BindingType::Sampler(SamplerBindingType::Filtering),
-                            count: None,
-                        },
-                    ],
-                }),
+                        count: None,
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: ShaderStages::FRAGMENT,
+                        ty: BindingType::Sampler(SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                ],
+            }),
         );
 
         scene.assets.material_layouts.insert(
             POST_PROCESS_DEPTH_LAYOUT_UUID,
-            renderer
-                .device
-                .create_bind_group_layout(&BindGroupLayoutDescriptor {
-                    label: Some("post_process_depth_layout"),
-                    entries: &[
-                        BindGroupLayoutEntry {
-                            binding: 0,
-                            visibility: ShaderStages::FRAGMENT,
-                            ty: BindingType::Texture {
-                                sample_type: TextureSampleType::Depth,
-                                view_dimension: TextureViewDimension::D2,
-                                multisampled: false,
-                            },
-                            count: None,
+            device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+                label: Some("post_process_depth_layout"),
+                entries: &[
+                    BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: ShaderStages::FRAGMENT,
+                        ty: BindingType::Texture {
+                            sample_type: TextureSampleType::Depth,
+                            view_dimension: TextureViewDimension::D2,
+                            multisampled: false,
                         },
-                        BindGroupLayoutEntry {
-                            binding: 1,
-                            visibility: ShaderStages::FRAGMENT,
-                            ty: BindingType::Sampler(SamplerBindingType::Filtering),
-                            count: None,
-                        },
-                    ],
-                }),
+                        count: None,
+                    },
+                    BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: ShaderStages::FRAGMENT,
+                        ty: BindingType::Sampler(SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                ],
+            }),
         );
-    }
-
-    fn prepare(
-        &mut self,
-        _renderer: &WgpuRenderer,
-        _scene: &mut GpuScene,
-        _queue: &mut [RenderMesh],
-        _target: &RenderTargets,
-    ) {
-    }
-
-    fn draw(
-        &self,
-        _renderer: &WgpuRenderer,
-        _scene: &mut GpuScene,
-        _queue: &[RenderMesh],
-        _target: &RenderTargets,
-    ) {
     }
 }
 
@@ -456,15 +492,18 @@ pub struct ImageFallbackNode;
 impl RenderNode for ImageFallbackNode {
     fn build(
         &mut self,
-        renderer: &WgpuRenderer,
         scene: &mut GpuScene,
-        _shader_defs: HashMap<String, ShaderDefValue>,
-        _target: &RenderTargets,
+        RenderContext {
+            device,
+            queue,
+            node: _,
+            targets: _,
+        }: RenderContext,
     ) {
         scene.assets.textures.insert(
             DUMMY_2D_TEX,
-            renderer.device.create_texture_with_data(
-                &renderer.queue,
+            device.create_texture_with_data(
+                &queue,
                 &TextureDescriptor {
                     label: Some("dummy_2d"),
                     size: Extent3d {
@@ -483,23 +522,5 @@ impl RenderNode for ImageFallbackNode {
                 &[255; 4],
             ),
         );
-    }
-
-    fn prepare(
-        &mut self,
-        _renderer: &WgpuRenderer,
-        _scene: &mut GpuScene,
-        _queue: &mut [RenderMesh],
-        _target: &RenderTargets,
-    ) {
-    }
-
-    fn draw(
-        &self,
-        _renderer: &WgpuRenderer,
-        _scene: &mut GpuScene,
-        _queue: &[RenderMesh],
-        _target: &RenderTargets,
-    ) {
     }
 }

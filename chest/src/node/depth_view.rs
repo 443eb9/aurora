@@ -1,16 +1,12 @@
 use std::{borrow::Cow, collections::HashMap};
 
-use aurora_core::{
-    render::{
-        flow::RenderNode,
-        resource::{RenderMesh, RenderTargets, POST_PROCESS_DEPTH_LAYOUT_UUID},
-        scene::GpuScene,
-    },
-    WgpuRenderer,
+use aurora_core::render::{
+    flow::{RenderContext, RenderNode},
+    resource::POST_PROCESS_DEPTH_LAYOUT_UUID,
+    scene::GpuScene,
 };
 use naga_oil::compose::{
-    ComposableModuleDescriptor, Composer, NagaModuleDescriptor, ShaderDefValue, ShaderLanguage,
-    ShaderType,
+    ComposableModuleDescriptor, Composer, NagaModuleDescriptor, ShaderLanguage, ShaderType,
 };
 use wgpu::{
     BindGroupDescriptor, BindGroupEntry, BindingResource, Color, ColorTargetState, ColorWrites,
@@ -32,10 +28,10 @@ pub struct DepthViewNode {
 impl RenderNode for DepthViewNode {
     fn build(
         &mut self,
-        renderer: &WgpuRenderer,
         scene: &mut GpuScene,
-        _shader_defs: HashMap<String, ShaderDefValue>,
-        target: &RenderTargets,
+        RenderContext {
+            device, targets, ..
+        }: RenderContext,
     ) {
         let Some(l_post_process) = scene
             .assets
@@ -45,13 +41,11 @@ impl RenderNode for DepthViewNode {
             return;
         };
 
-        let layout = renderer
-            .device
-            .create_pipeline_layout(&PipelineLayoutDescriptor {
-                label: Some("depth_view_pipeline_layout"),
-                bind_group_layouts: &[l_post_process],
-                push_constant_ranges: &[],
-            });
+        let layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
+            label: Some("depth_view_pipeline_layout"),
+            bind_group_layouts: &[l_post_process],
+            push_constant_ranges: &[],
+        });
 
         let mut composer = Composer::default();
         composer
@@ -74,12 +68,10 @@ impl RenderNode for DepthViewNode {
                 additional_imports: &[],
             })
             .unwrap();
-        let vert_module = renderer
-            .device
-            .create_shader_module(ShaderModuleDescriptor {
-                label: Some("fullscreen_vertex_shader"),
-                source: ShaderSource::Naga(Cow::Owned(vert_shader)),
-            });
+        let vert_module = device.create_shader_module(ShaderModuleDescriptor {
+            label: Some("fullscreen_vertex_shader"),
+            source: ShaderSource::Naga(Cow::Owned(vert_shader)),
+        });
 
         let frag_shader = composer
             .make_naga_module(NagaModuleDescriptor {
@@ -90,44 +82,38 @@ impl RenderNode for DepthViewNode {
                 additional_imports: &[],
             })
             .unwrap();
-        let frag_module = renderer
-            .device
-            .create_shader_module(ShaderModuleDescriptor {
-                label: Some("depth_view_shader"),
-                source: ShaderSource::Naga(Cow::Owned(frag_shader)),
-            });
+        let frag_module = device.create_shader_module(ShaderModuleDescriptor {
+            label: Some("depth_view_shader"),
+            source: ShaderSource::Naga(Cow::Owned(frag_shader)),
+        });
 
-        self.pipeline = Some(
-            renderer
-                .device
-                .create_render_pipeline(&RenderPipelineDescriptor {
-                    label: Some("depth_view_pipeline"),
-                    layout: Some(&layout),
-                    cache: None,
-                    vertex: VertexState {
-                        module: &vert_module,
-                        entry_point: "vertex",
-                        compilation_options: PipelineCompilationOptions::default(),
-                        buffers: &[],
-                    },
-                    fragment: Some(FragmentState {
-                        module: &frag_module,
-                        entry_point: "fragment",
-                        compilation_options: PipelineCompilationOptions::default(),
-                        targets: &[Some(ColorTargetState {
-                            format: target.color_format,
-                            blend: None,
-                            write_mask: ColorWrites::ALL,
-                        })],
-                    }),
-                    primitive: PrimitiveState::default(),
-                    depth_stencil: None,
-                    multisample: MultisampleState::default(),
-                    multiview: None,
-                }),
-        );
+        self.pipeline = Some(device.create_render_pipeline(&RenderPipelineDescriptor {
+            label: Some("depth_view_pipeline"),
+            layout: Some(&layout),
+            cache: None,
+            vertex: VertexState {
+                module: &vert_module,
+                entry_point: "vertex",
+                compilation_options: PipelineCompilationOptions::default(),
+                buffers: &[],
+            },
+            fragment: Some(FragmentState {
+                module: &frag_module,
+                entry_point: "fragment",
+                compilation_options: PipelineCompilationOptions::default(),
+                targets: &[Some(ColorTargetState {
+                    format: targets.color_format,
+                    blend: None,
+                    write_mask: ColorWrites::ALL,
+                })],
+            }),
+            primitive: PrimitiveState::default(),
+            depth_stencil: None,
+            multisample: MultisampleState::default(),
+            multiview: None,
+        }));
 
-        self.sampler = Some(renderer.device.create_sampler(&SamplerDescriptor {
+        self.sampler = Some(device.create_sampler(&SamplerDescriptor {
             mag_filter: FilterMode::Linear,
             min_filter: FilterMode::Linear,
             mipmap_filter: FilterMode::Linear,
@@ -135,25 +121,17 @@ impl RenderNode for DepthViewNode {
         }));
     }
 
-    fn prepare(
-        &mut self,
-        _renderer: &WgpuRenderer,
-        _scene: &mut GpuScene,
-        _queue: &mut [RenderMesh],
-        _target: &RenderTargets,
-    ) {
-    }
-
     fn draw(
         &self,
-        renderer: &WgpuRenderer,
         scene: &mut GpuScene,
-        _queue: &[RenderMesh],
-        target: &RenderTargets,
+        RenderContext {
+            device,
+            targets,
+            queue,
+            ..
+        }: RenderContext,
     ) {
-        let mut encoder = renderer
-            .device
-            .create_command_encoder(&CommandEncoderDescriptor::default());
+        let mut encoder = device.create_command_encoder(&CommandEncoderDescriptor::default());
 
         let (Some(pipeline), Some(l_screen), Some(sampler)) = (
             &self.pipeline,
@@ -167,7 +145,7 @@ impl RenderNode for DepthViewNode {
         };
 
         // As the targets changes every frame, we need to create the bind group for each frame.
-        let b_screen = renderer.device.create_bind_group(&BindGroupDescriptor {
+        let b_screen = device.create_bind_group(&BindGroupDescriptor {
             label: Some("screen_bind_group"),
             layout: l_screen,
             entries: &[
@@ -197,7 +175,7 @@ impl RenderNode for DepthViewNode {
             let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {
                 label: Some("depth_view_pass"),
                 color_attachments: &[Some(RenderPassColorAttachment {
-                    view: &target.color,
+                    view: &targets.color,
                     resolve_target: None,
                     ops: Operations {
                         load: LoadOp::Clear(Color::TRANSPARENT),
@@ -212,6 +190,6 @@ impl RenderNode for DepthViewNode {
             pass.draw(0..3, 0..1);
         }
 
-        renderer.queue.submit(Some(encoder.finish()));
+        queue.submit(Some(encoder.finish()));
     }
 }

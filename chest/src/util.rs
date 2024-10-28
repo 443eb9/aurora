@@ -4,20 +4,29 @@ use aurora_core::render::helper::{
     CameraProjection, OrthographicProjection, PerspectiveProjection,
 };
 use glam::{Mat4, Vec3, Vec4Swizzles};
-use naga_oil::compose::{ComposableModuleDescriptor, Composer, ShaderDefValue};
+use naga_oil::compose::{
+    ComposableModuleDescriptor, Composer, ComposerError, NagaModuleDescriptor, ShaderDefValue,
+};
+use wgpu::naga::Module;
 
-pub fn add_shader_module(
-    composer: &mut Composer,
-    shader: &str,
-    shader_defs: HashMap<String, ShaderDefValue>,
-) {
-    composer
-        .add_composable_module(ComposableModuleDescriptor {
-            source: shader,
-            shader_defs,
+pub fn build_shader<const N: usize>(
+    deps: [&'static str; N],
+    main: &'static str,
+    defs: HashMap<String, ShaderDefValue>,
+) -> Result<Module, ComposerError> {
+    let mut composer = Composer::default();
+    for dep in deps {
+        composer.add_composable_module(ComposableModuleDescriptor {
+            source: &dep,
+            shader_defs: defs.clone(),
             ..Default::default()
-        })
-        .unwrap();
+        })?;
+    }
+    composer.make_naga_module(NagaModuleDescriptor {
+        source: &main,
+        shader_defs: defs.clone(),
+        ..Default::default()
+    })
 }
 
 #[derive(Debug, Clone, Copy)]

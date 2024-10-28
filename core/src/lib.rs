@@ -3,6 +3,7 @@ use wgpu::{
     RequestAdapterOptions,
 };
 
+pub mod import;
 pub mod render;
 pub mod util;
 

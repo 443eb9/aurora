@@ -5,17 +5,21 @@ edition = "2021"
 
 [dependencies]
 aurora_derive = { version = "0.1", path = "../macros" }
+base64.workspace = true
 bytemuck.workspace = true
 dyn-clone.workspace = true
 encase.workspace = true
 flume.workspace = true
 glam.workspace = true
+gltf.workspace = true
 indexmap.workspace = true
 image.workspace = true
 naga_oil.workspace = true
 log.workspace = true
 obj.workspace = true
 palette.workspace = true
+percent-encoding.workspace = true
 pollster.workspace = true
+thiserror.workspace = true
 uuid.workspace = true
 wgpu.workspace = true

@@ -7,14 +7,13 @@ use aurora_core::{
         scene::{GpuAssets, MaterialInstanceId, MaterialTypeId, TextureId},
     },
     util::ext::{RgbToVec3, TypeIdAsUuid},
-    WgpuRenderer,
 };
 use encase::ShaderType;
 use glam::Vec3;
 use palette::Srgb;
 use wgpu::{
     BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor, BindGroupLayoutEntry,
-    BindingResource, BindingType, BufferBindingType, FilterMode, SamplerBindingType,
+    BindingResource, BindingType, BufferBindingType, Device, FilterMode, SamplerBindingType,
     SamplerDescriptor, ShaderStages, TextureSampleType, TextureViewDescriptor,
     TextureViewDimension,
 };
@@ -53,74 +52,72 @@ pub struct PbrMaterialUniform {
 }
 
 impl CreateBindGroupLayout for PbrMaterial {
-    fn create_layout(renderer: &WgpuRenderer, assets: &mut GpuAssets) {
+    fn create_layout(device: &Device, assets: &mut GpuAssets) {
         assets.material_layouts.insert(
             MaterialTypeId(TypeId::of::<Self>().to_uuid()),
-            renderer
-                .device
-                .create_bind_group_layout(&BindGroupLayoutDescriptor {
-                    label: Some("pbr_material_layout"),
-                    entries: &[
-                        // Material Uniform
-                        BindGroupLayoutEntry {
-                            binding: 0,
-                            visibility: ShaderStages::FRAGMENT,
-                            ty: BindingType::Buffer {
-                                ty: BufferBindingType::Uniform,
-                                has_dynamic_offset: true,
-                                min_binding_size: Some(PbrMaterialUniform::min_size()),
-                            },
-                            count: None,
+            device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+                label: Some("pbr_material_layout"),
+                entries: &[
+                    // Material Uniform
+                    BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: ShaderStages::FRAGMENT,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Uniform,
+                            has_dynamic_offset: true,
+                            min_binding_size: Some(PbrMaterialUniform::min_size()),
                         },
-                        // tex_base_color
-                        BindGroupLayoutEntry {
-                            binding: 1,
-                            visibility: ShaderStages::FRAGMENT,
-                            ty: BindingType::Texture {
-                                sample_type: TextureSampleType::Float { filterable: true },
-                                view_dimension: TextureViewDimension::D2,
-                                multisampled: false,
-                            },
-                            count: None,
+                        count: None,
+                    },
+                    // tex_base_color
+                    BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: ShaderStages::FRAGMENT,
+                        ty: BindingType::Texture {
+                            sample_type: TextureSampleType::Float { filterable: true },
+                            view_dimension: TextureViewDimension::D2,
+                            multisampled: false,
                         },
-                        // tex_normal
-                        BindGroupLayoutEntry {
-                            binding: 2,
-                            visibility: ShaderStages::FRAGMENT,
-                            ty: BindingType::Texture {
-                                sample_type: TextureSampleType::Float { filterable: true },
-                                view_dimension: TextureViewDimension::D2,
-                                multisampled: false,
-                            },
-                            count: None,
+                        count: None,
+                    },
+                    // tex_normal
+                    BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: ShaderStages::FRAGMENT,
+                        ty: BindingType::Texture {
+                            sample_type: TextureSampleType::Float { filterable: true },
+                            view_dimension: TextureViewDimension::D2,
+                            multisampled: false,
                         },
-                        // Sampler
-                        BindGroupLayoutEntry {
-                            binding: 3,
-                            visibility: ShaderStages::FRAGMENT,
-                            ty: BindingType::Sampler(SamplerBindingType::Filtering),
-                            count: None,
+                        count: None,
+                    },
+                    // Sampler
+                    BindGroupLayoutEntry {
+                        binding: 3,
+                        visibility: ShaderStages::FRAGMENT,
+                        ty: BindingType::Sampler(SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                    // LUT
+                    BindGroupLayoutEntry {
+                        binding: 4,
+                        visibility: ShaderStages::FRAGMENT,
+                        ty: BindingType::Texture {
+                            sample_type: TextureSampleType::Float { filterable: true },
+                            view_dimension: TextureViewDimension::D3,
+                            multisampled: false,
                         },
-                        // LUT
-                        BindGroupLayoutEntry {
-                            binding: 4,
-                            visibility: ShaderStages::FRAGMENT,
-                            ty: BindingType::Texture {
-                                sample_type: TextureSampleType::Float { filterable: true },
-                                view_dimension: TextureViewDimension::D3,
-                                multisampled: false,
-                            },
-                            count: None,
-                        },
-                        // LUT Sampler
-                        BindGroupLayoutEntry {
-                            binding: 5,
-                            visibility: ShaderStages::FRAGMENT,
-                            ty: BindingType::Sampler(SamplerBindingType::Filtering),
-                            count: None,
-                        },
-                    ],
-                }),
+                        count: None,
+                    },
+                    // LUT Sampler
+                    BindGroupLayoutEntry {
+                        binding: 5,
+                        visibility: ShaderStages::FRAGMENT,
+                        ty: BindingType::Sampler(SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                ],
+            }),
         );
     }
 }
@@ -128,7 +125,7 @@ impl CreateBindGroupLayout for PbrMaterial {
 impl Material for PbrMaterial {
     fn create_bind_group(
         &self,
-        renderer: &WgpuRenderer,
+        device: &Device,
         assets: &mut GpuAssets,
         material: MaterialInstanceId,
     ) {
@@ -141,7 +138,7 @@ impl Material for PbrMaterial {
         };
 
         let layout = assets.material_layouts.get(&self.id()).unwrap();
-        let pbr_material_bind_group = renderer.device.create_bind_group(&BindGroupDescriptor {
+        let pbr_material_bind_group = device.create_bind_group(&BindGroupDescriptor {
             label: Some("pbr_material_bind_group"),
             layout: &layout,
             entries: &[
@@ -165,7 +162,7 @@ impl Material for PbrMaterial {
                 },
                 BindGroupEntry {
                     binding: 3,
-                    resource: BindingResource::Sampler(&renderer.device.create_sampler(
+                    resource: BindingResource::Sampler(&device.create_sampler(
                         &SamplerDescriptor {
                             mag_filter: FilterMode::Linear,
                             min_filter: FilterMode::Linear,
@@ -183,7 +180,7 @@ impl Material for PbrMaterial {
                 },
                 BindGroupEntry {
                     binding: 5,
-                    resource: BindingResource::Sampler(&renderer.device.create_sampler(
+                    resource: BindingResource::Sampler(&device.create_sampler(
                         &SamplerDescriptor {
                             mag_filter: FilterMode::Linear,
                             min_filter: FilterMode::Linear,
@@ -200,7 +197,7 @@ impl Material for PbrMaterial {
             .insert(material, pbr_material_bind_group);
     }
 
-    fn prepare(&self, _renderer: &WgpuRenderer, assets: &mut GpuAssets) -> u32 {
+    fn prepare(&self, _device: &Device, assets: &mut GpuAssets) -> u32 {
         let buffer = assets.material_uniforms.get_mut(&self.id()).unwrap();
         buffer.push(&PbrMaterialUniform {
             base_color: self.base_color.into_linear().to_vec3(),

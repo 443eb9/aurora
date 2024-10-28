@@ -10,23 +10,26 @@ opt-level = 3
 
 [workspace.dependencies]
 aurora_derive = { version = "0.1", path = "../macros" }
+base64 = "0.22"
 bitflags = "2"
 bytemuck = { version = "1", features = ["derive"] }
 ddsfile = "0.5"
 dyn-clone = "1"
 encase = { version = "0.10", features = ["glam"] }
 env_logger = "0.11"
+fast_poisson = { version = "1", features = ["single_precision"] }
 flume = "0.11"
 glam = { version = "0.29", features = ["bytemuck"] }
-gltf = "1.4"
+gltf = { version = "1.4", features = ["KHR_lights_punctual"] }
 image = "0.25"
 indexmap = "2"
 naga_oil = "0.15"
 log = "0.4"
 obj = "0.10"
 palette = "0.7"
-fast_poisson = { version = "1", features = ["single_precision"] }
+percent-encoding = "2"
 pollster = "0.3"
+thiserror = "1"
 uuid = { version = "1", features = ["v4"] }
 wgpu = { version = "22.1", features = ["naga-ir"] }
 winit = "0.30"

@@ -6,6 +6,8 @@
     shadow_type::ShadowMappingConfig,
 }
 
+const CONSTANT_BIAS: f32 = 0.001;
+
 @group(3) @binding(0) var<storage> cascade_views: array<Camera>;
 @group(3) @binding(1) var<storage> point_light_views: array<Camera>;
 @group(3) @binding(2) var shadow_map_sampler: sampler_comparison;
@@ -23,7 +25,7 @@ fn dir_pcf_filtering(position_vs: vec4f, cascade: u32, radius: f32) -> f32 {
         var offseted = math::view_to_uv_and_depth(view, cascade_views[cascade].proj);
 
         if (offseted.x > 0. && offseted.x < 1. && offseted.y > 0. && offseted.y < 1.) {
-            let frag_depth = saturate(offseted.z);
+            let frag_depth = saturate(offseted.z) - CONSTANT_BIAS;
             shadow += textureSampleCompare(directional_shadow_map, shadow_map_sampler, offseted.xy, cascade, frag_depth);
         } else {
             shadow += 1.;
@@ -42,7 +44,7 @@ fn dir_pcss_filtering(position_vs: vec4f, cascade: u32, radius: f32, light_width
 
         if (offseted.x > 0. && offseted.x < 1. && offseted.y > 0. && offseted.y < 1.) {
             let shadow_depth = textureSample(directional_shadow_map, shadow_texture_sampler, offseted.xy, cascade);
-            if (frag_depth > shadow_depth) {
+            if (frag_depth - CONSTANT_BIAS > shadow_depth) {
                 avg_blocker_depth += shadow_depth;
                 cnt += 1;
             }
@@ -56,7 +58,7 @@ fn dir_pcss_filtering(position_vs: vec4f, cascade: u32, radius: f32, light_width
 }
 
 fn dir_no_filtering(uv: vec2f, depth: f32, cascade: u32) -> f32 {
-    let frag_depth = saturate(depth);
+    let frag_depth = saturate(depth) - CONSTANT_BIAS;
     return textureSampleCompare(directional_shadow_map, shadow_map_sampler, uv, cascade, frag_depth);
 }
 
@@ -114,7 +116,7 @@ fn point_pcf_filtering(relative_pos: vec3f, frag_depth: f32, light: u32, radius:
     var shadow = 0.;
     for (var iteration = 0u; iteration < config.samples; iteration += 1u) {
         let offseted = relative_pos + poisson_disk[config.samples + iteration].xyz * radius;
-        shadow += textureSampleCompare(point_shadow_map, shadow_map_sampler, offseted, light, frag_depth);
+        shadow += textureSampleCompare(point_shadow_map, shadow_map_sampler, offseted, light, frag_depth - CONSTANT_BIAS);
     }
     return shadow / f32(config.samples);
 }
@@ -126,7 +128,7 @@ fn point_pcss_filtering(relative_pos: vec3f, frag_depth: f32, light: u32, radius
         let offseted = relative_pos + poisson_disk[config.samples + iteration].xyz * radius;
 
         let shadow_depth = textureSample(point_shadow_map, shadow_texture_sampler, offseted, light);
-        if (frag_depth > shadow_depth) {
+        if (frag_depth - CONSTANT_BIAS > shadow_depth) {
             avg_blocker_depth += shadow_depth;
             cnt += 1;
         }
@@ -139,7 +141,7 @@ fn point_pcss_filtering(relative_pos: vec3f, frag_depth: f32, light: u32, radius
 }
 
 fn point_no_filtering(relative_pos: vec3f, frag_depth: f32, light: u32) -> f32 {
-    return textureSampleCompare(point_shadow_map, shadow_map_sampler, relative_pos, light, frag_depth);
+    return textureSampleCompare(point_shadow_map, shadow_map_sampler, relative_pos, light, frag_depth - CONSTANT_BIAS);
 }
 
 fn sample_point_shadow_map(light: u32, relative_pos: vec3f, light_width: f32) -> f32 {
