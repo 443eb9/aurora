@@ -329,7 +329,7 @@ impl RenderNode for GeneralNode {
         assets.point_light_buffer.clear();
         assets.spot_light_buffer.clear();
 
-        for light in original.directional_lights.values() {
+        for light in original.dir_lights.values() {
             assets.directional_light_buffer.push(light);
         }
 
@@ -347,7 +347,7 @@ impl RenderNode for GeneralNode {
             .push(&<Camera as Into<GpuCamera>>::into(original.camera));
         assets.scene_desc_uniform.clear();
         assets.scene_desc_uniform.push(&GpuSceneDesc {
-            dir_lights: original.directional_lights.len() as u32,
+            dir_lights: original.dir_lights.len() as u32,
             point_lights: original.point_lights.len() as u32,
             spot_lights: original.spot_lights.len() as u32,
         });

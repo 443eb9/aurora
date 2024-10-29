@@ -18,6 +18,5 @@ fn main() {
     //     .filter_level(log::LevelFilter::Info)
     //     .init();
 
-    // aurora_core::import::gltf::load_gltf("gui/assets/gltf_test.glb").unwrap();
     pollster::block_on(real_time_app());
 }

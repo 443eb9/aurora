@@ -5,7 +5,10 @@ use std::{
     time::Instant,
 };
 
-use aurora_chest::shader_defs::{PbrDiffuse, PbrSpecular};
+use aurora_chest::{
+    import::load_gltf,
+    shader_defs::{PbrDiffuse, PbrSpecular},
+};
 use aurora_core::{
     render::{
         helper::{Camera, CameraProjection, Exposure, Transform},
@@ -77,31 +80,39 @@ impl<'a> Application<'a> {
                 | TextureUsages::COPY_SRC,
         );
 
-        let scene = crate::resource::load_primitives(&renderer);
+        let scene = load_gltf(
+            // "gui/assets/gltf_test.glb",
+            "gui/assets/cascade_test.glb",
+            // "gui/assets/classic_blender.glb",
+            &renderer.device,
+            &renderer.queue,
+        )
+        .unwrap();
 
         let main_camera = ControllableCamera::new(
-            Camera {
-                // transform: Transform {
-                //     translation: Vec3::new(-85., 69., -42.),
-                //     rotation: Quat::from_array([-0.183, -0.765, -0.247, 0.566]),
-                //     ..Default::default()
-                // },
-                projection: CameraProjection::Perspective(
-                    aurora_core::render::helper::PerspectiveProjection {
-                        aspect_ratio: dim.x as f32 / dim.y as f32,
-                        fov: std::f32::consts::FRAC_PI_4,
-                        near: 0.1,
-                        far: 500.,
-                    },
-                ),
-                // projection: CameraProjection::Orthographic(
-                //     aurora_core::render::helper::OrthographicProjection::symmetric(
-                //         160., 160., 1., 500.,
-                //     ),
-                // ),
-                exposure: Exposure { ev100: 9.7 },
-                ..Default::default()
-            },
+            // Camera {
+            //     // transform: Transform {
+            //     //     translation: Vec3::new(-85., 69., -42.),
+            //     //     rotation: Quat::from_array([-0.183, -0.765, -0.247, 0.566]),
+            //     //     ..Default::default()
+            //     // },
+            //     projection: CameraProjection::Perspective(
+            //         aurora_core::render::helper::PerspectiveProjection {
+            //             aspect_ratio: dim.x as f32 / dim.y as f32,
+            //             fov: std::f32::consts::FRAC_PI_4,
+            //             near: 0.1,
+            //             far: 500.,
+            //         },
+            //     ),
+            //     // projection: CameraProjection::Orthographic(
+            //     //     aurora_core::render::helper::OrthographicProjection::symmetric(
+            //     //         160., 160., 1., 500.,
+            //     //     ),
+            //     // ),
+            //     exposure: Exposure { ev100: 9.7 },
+            //     ..Default::default()
+            // },
+            scene.original.camera,
             CameraConfig::default(),
         );
 
@@ -215,9 +226,7 @@ impl<'a> Application<'a> {
             ),
         });
 
-        self.flow
-            .inner
-            .set_queue(self.scene.static_meshes.clone());
+        self.flow.inner.set_queue(self.scene.static_meshes.clone());
 
         if force_build {
             self.flow.inner.force_build(

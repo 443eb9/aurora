@@ -152,16 +152,16 @@ impl RenderNode for DepthViewNode {
                 BindGroupEntry {
                     binding: 0,
                     resource: BindingResource::TextureView(
-                        &scene.assets.textures[&SHADOW_MAPPING.directional_shadow_map].create_view(
-                            &TextureViewDescriptor {
-                                format: Some(TextureFormat::Depth32Float),
-                                dimension: Some(TextureViewDimension::D2),
-                                base_array_layer: 0,
-                                array_layer_count: Some(1),
-                                ..Default::default()
-                            },
-                        ),
-                        // target.depth.as_ref().unwrap(),
+                        // &scene.assets.textures[&SHADOW_MAPPING.directional_shadow_map].create_view(
+                        //     &TextureViewDescriptor {
+                        //         format: Some(TextureFormat::Depth32Float),
+                        //         dimension: Some(TextureViewDimension::D2),
+                        //         base_array_layer: 0,
+                        //         array_layer_count: Some(1),
+                        //         ..Default::default()
+                        //     },
+                        // ),
+                        targets.depth.as_ref().unwrap(),
                     ),
                 },
                 BindGroupEntry {

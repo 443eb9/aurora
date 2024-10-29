@@ -1,44 +1,160 @@
 use std::{any::TypeId, collections::BTreeMap, path::Path};
 
 use dyn_clone::DynClone;
-use glam::{IVec2, IVec3, IVec4, UVec2, UVec3, UVec4, Vec2, Vec3, Vec4};
-use image::ImageResult;
+use glam::{IVec2, IVec3, IVec4, Mat4, UVec2, UVec3, UVec4, Vec2, Vec3, Vec4};
+use image::{DynamicImage, ImageFormat, ImageResult};
 use log::warn;
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt, TextureDataOrder},
-    Buffer, BufferUsages, Device, Extent3d, Texture, TextureDescriptor, TextureDimension,
-    TextureFormat, TextureUsages, VertexAttribute, VertexFormat,
+    Buffer, BufferUsages, Device, Extent3d, IndexFormat, Queue, Texture, TextureDescriptor,
+    TextureDimension, TextureFormat, TextureUsages, VertexAttribute, VertexFormat,
 };
 
 use crate::{
     render::scene::{GpuAssets, MaterialInstanceId, MaterialTypeId, MeshInstanceId},
     util::ext::TypeIdAsUuid,
-    WgpuRenderer,
 };
 
 pub struct Image {
     width: u32,
     height: u32,
-    raw: Vec<u8>,
+    format: TextureFormat,
+    buffer: Vec<u8>,
 }
 
 impl Image {
-    pub fn from_path(path: impl AsRef<Path>) -> ImageResult<Self> {
-        let img = image::open(path)?.into_rgba8();
+    pub fn from_dynamic(dyn_image: DynamicImage, is_srgb: bool) -> Self {
+        let width;
+        let height;
+        let fmt;
+        let data;
 
-        Ok(Self {
-            width: img.width(),
-            height: img.height(),
-            raw: img.into_raw(),
-        })
-    }
+        match dyn_image {
+            DynamicImage::ImageLuma8(img) => {
+                let img = DynamicImage::ImageLuma8(img).into_rgba8();
+                width = img.width();
+                height = img.height();
+                fmt = if is_srgb {
+                    TextureFormat::Rgba8UnormSrgb
+                } else {
+                    TextureFormat::Rgba8Unorm
+                };
 
-    pub fn from_raw(data: Vec<u8>, width: u32, height: u32) -> Self {
+                data = img.into_raw();
+            }
+            DynamicImage::ImageLumaA8(img) => {
+                let img = DynamicImage::ImageLumaA8(img).into_rgba8();
+                width = img.width();
+                height = img.height();
+                fmt = if is_srgb {
+                    TextureFormat::Rgba8UnormSrgb
+                } else {
+                    TextureFormat::Rgba8Unorm
+                };
+
+                data = img.into_raw();
+            }
+            DynamicImage::ImageRgb8(img) => {
+                let img = DynamicImage::ImageRgb8(img).into_rgba8();
+                width = img.width();
+                height = img.height();
+                fmt = if is_srgb {
+                    TextureFormat::Rgba8UnormSrgb
+                } else {
+                    TextureFormat::Rgba8Unorm
+                };
+
+                data = img.into_raw();
+            }
+            DynamicImage::ImageRgba8(img) => {
+                let img = DynamicImage::ImageRgba8(img).into_rgba8();
+                width = img.width();
+                height = img.height();
+                fmt = if is_srgb {
+                    TextureFormat::Rgba8UnormSrgb
+                } else {
+                    TextureFormat::Rgba8Unorm
+                };
+
+                data = img.into_raw();
+            }
+            DynamicImage::ImageLuma16(img) => {
+                width = img.width();
+                height = img.height();
+                fmt = TextureFormat::R16Uint;
+                data = bytemuck::cast_slice(img.as_raw()).to_owned();
+            }
+            DynamicImage::ImageLumaA16(img) => {
+                width = img.width();
+                height = img.height();
+                fmt = TextureFormat::R16Uint;
+                data = bytemuck::cast_slice(img.as_raw()).to_owned();
+            }
+            DynamicImage::ImageRgb16(img) => {
+                width = img.width();
+                height = img.height();
+                fmt = TextureFormat::R16Unorm;
+                data = bytemuck::cast_slice(img.as_raw()).to_owned();
+            }
+            DynamicImage::ImageRgba16(img) => {
+                width = img.width();
+                height = img.height();
+                fmt = TextureFormat::R16Unorm;
+                let mut local_data = Vec::with_capacity(
+                    width as usize * height as usize * fmt.block_copy_size(None).unwrap() as usize,
+                );
+
+                for pixel in img.into_raw().chunks_exact(3) {
+                    local_data.extend_from_slice(&pixel[0].to_ne_bytes());
+                    local_data.extend_from_slice(&pixel[1].to_ne_bytes());
+                    local_data.extend_from_slice(&pixel[2].to_ne_bytes());
+                    local_data.extend_from_slice(&1f32.to_ne_bytes());
+                }
+                data = local_data;
+            }
+            DynamicImage::ImageRgb32F(img) => {
+                width = img.width();
+                height = img.height();
+                fmt = TextureFormat::Rgba32Float;
+                data = bytemuck::cast_slice(img.as_raw()).to_owned();
+            }
+            DynamicImage::ImageRgba32F(img) => {
+                width = img.width();
+                height = img.height();
+                fmt = TextureFormat::Rgba32Float;
+                data = bytemuck::cast_slice(img.as_raw()).to_owned();
+            }
+            _ => unreachable!(),
+        }
+
         Self {
             width,
             height,
-            raw: data,
+            format: fmt,
+            buffer: data,
         }
+    }
+
+    pub fn from_path(path: impl AsRef<Path>) -> ImageResult<Self> {
+        let img = image::open(path)?;
+        Ok(Self::from_dynamic(img, false))
+    }
+
+    pub fn from_raw_parts(buffer: Vec<u8>, format: TextureFormat, width: u32, height: u32) -> Self {
+        Self {
+            width,
+            height,
+            format,
+            buffer,
+        }
+    }
+
+    pub fn from_buffer(data: &[u8], format: ImageFormat, is_srgb: bool) -> Self {
+        let mut reader = image::ImageReader::new(std::io::Cursor::new(data));
+        reader.set_format(format);
+        reader.no_limits();
+        let dyn_image = reader.decode().unwrap();
+        Self::from_dynamic(dyn_image, is_srgb)
     }
 
     pub fn width(&self) -> u32 {
@@ -49,9 +165,9 @@ impl Image {
         self.height
     }
 
-    pub fn to_texture(&self, renderer: &WgpuRenderer) -> Texture {
-        renderer.device.create_texture_with_data(
-            &renderer.queue,
+    pub fn to_texture(&self, device: &Device, queue: &Queue) -> Texture {
+        device.create_texture_with_data(
+            queue,
             &TextureDescriptor {
                 label: None,
                 size: Extent3d {
@@ -62,12 +178,12 @@ impl Image {
                 mip_level_count: 1,
                 sample_count: 1,
                 dimension: TextureDimension::D2,
-                format: TextureFormat::Rgba8UnormSrgb,
+                format: self.format,
                 usage: TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING,
-                view_formats: &[TextureFormat::Rgba8UnormSrgb],
+                view_formats: &[],
             },
             TextureDataOrder::LayerMajor,
-            &self.raw,
+            &self.buffer,
         )
     }
 }
@@ -170,9 +286,22 @@ impl MeshVertexAttributeData {
     }
 }
 
+pub struct GpuIndexBuffer {
+    pub buffer: Buffer,
+    pub count: u32,
+    pub format: IndexFormat,
+}
+
+#[derive(Debug, Clone)]
+pub enum MeshIndices {
+    UInt16(Vec<u16>),
+    UInt32(Vec<u32>),
+}
+
 #[derive(Default, Clone)]
 pub struct Mesh {
     attributes: BTreeMap<MeshVertexAttributeId, MeshVertexAttributeData>,
+    indices: Option<MeshIndices>,
 }
 
 impl Mesh {
@@ -192,8 +321,13 @@ impl Mesh {
         Self::default()
     }
 
-    pub fn insert_attribute(&mut self, id: MeshVertexAttributeId, data: MeshVertexAttributeData) {
+    pub fn insert_attribute(
+        &mut self,
+        id: MeshVertexAttributeId,
+        data: MeshVertexAttributeData,
+    ) -> &mut Self {
         self.attributes.insert(id, data);
+        self
     }
 
     pub fn with_attribute(
@@ -205,54 +339,14 @@ impl Mesh {
         self
     }
 
-    pub fn from_obj(path: impl AsRef<Path>) -> Vec<Self> {
-        let mut source = Vec::new();
-        std::io::Read::read_to_end(&mut std::fs::File::open(path).unwrap(), &mut source).unwrap();
-        let obj = obj::ObjData::load_buf(&source[..]).unwrap();
+    pub fn insert_indices(&mut self, indices: MeshIndices) -> &mut Self {
+        self.indices = Some(indices);
+        self
+    }
 
-        let mut meshes = Vec::new();
-
-        for object in obj.objects {
-            let mut positions = Vec::new();
-            let mut normals = Vec::new();
-            let mut texcoords = Vec::new();
-
-            for group in object.groups {
-                for poly in group.polys {
-                    for end_index in 2..poly.0.len() {
-                        for &index in &[0, end_index - 1, end_index] {
-                            let obj::IndexTuple(position_id, Some(texture_id), Some(normal_id)) =
-                                poly.0[index]
-                            else {
-                                unreachable!()
-                            };
-
-                            positions.push(obj.position[position_id].into());
-                            normals.push(obj.normal[normal_id].into());
-                            texcoords.push(obj.texture[texture_id].into());
-                        }
-                    }
-                }
-            }
-
-            let mut mesh = Mesh::new()
-                .with_attribute(
-                    Mesh::POSITION_ATTR,
-                    MeshVertexAttributeData::Float32x3(positions),
-                )
-                .with_attribute(
-                    Mesh::NORMAL_ATTR,
-                    MeshVertexAttributeData::Float32x3(normals),
-                )
-                .with_attribute(
-                    Mesh::TEX_COORDS_ATTR,
-                    MeshVertexAttributeData::Float32x2(texcoords),
-                );
-            mesh.recalculate_tangent();
-            meshes.push(mesh);
-        }
-
-        meshes
+    pub fn with_indices(mut self, indices: MeshIndices) -> Self {
+        self.indices = Some(indices);
+        self
     }
 
     pub fn recalculate_tangent(&mut self) {
@@ -389,7 +483,7 @@ impl Mesh {
         buffer
     }
 
-    pub fn create_buffer(&self, device: &Device) -> Option<Buffer> {
+    pub fn create_vertex_buffer(&self, device: &Device) -> Option<Buffer> {
         let data = self.vertex_buffer_data();
         if data.is_empty() {
             None
@@ -400,6 +494,32 @@ impl Mesh {
                 usage: BufferUsages::VERTEX,
             }))
         }
+    }
+
+    pub fn create_index_buffer(&self, device: &Device) -> Option<GpuIndexBuffer> {
+        self.indices.as_ref().map(|indices| {
+            let (contents, format, count) = match indices {
+                MeshIndices::UInt16(vec) => (
+                    bytemuck::cast_slice(&vec),
+                    IndexFormat::Uint16,
+                    vec.len() as u32,
+                ),
+                MeshIndices::UInt32(vec) => (
+                    bytemuck::cast_slice(&vec),
+                    IndexFormat::Uint32,
+                    vec.len() as u32,
+                ),
+            };
+            GpuIndexBuffer {
+                buffer: device.create_buffer_init(&BufferInitDescriptor {
+                    label: Some("mesh_index_buffer"),
+                    contents,
+                    usage: BufferUsages::INDEX,
+                }),
+                count,
+                format,
+            }
+        })
     }
 
     pub fn vertex_attributes(&self) -> Vec<VertexAttribute> {
@@ -425,6 +545,19 @@ impl Mesh {
             .keys()
             .zip(attrs)
             .for_each(|(lhs, rhs)| assert_eq!(lhs.format, *rhs, "{} not matching.", lhs.name));
+    }
+
+    pub fn transform(&mut self, mat: Mat4) {
+        if let Some(positions) = self.attributes.get_mut(&Self::POSITION_ATTR) {
+            match positions {
+                MeshVertexAttributeData::Float32x3(vertices) => {
+                    for v in vertices {
+                        *v = mat.transform_point3(*v);
+                    }
+                }
+                _ => unreachable!(),
+            }
+        }
     }
 }
 

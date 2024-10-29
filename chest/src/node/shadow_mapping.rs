@@ -99,7 +99,7 @@ pub struct ShadowMappingNode {
 }
 
 impl ShadowMappingNode {
-    pub const CASCADE_COUNT: usize = 2;
+    pub const CASCADE_COUNT: usize = 3;
     pub const CONFIG: ShadowMappingConfig = ShadowMappingConfig {
         dir_map_resolution: 2048,
         point_map_resolution: 512,
@@ -316,9 +316,9 @@ impl RenderNode for ShadowMappingNode {
         RenderContext { device, queue, .. }: RenderContext,
     ) {
         let n_dirs = if Self::PARTITIONING == ShadowMapPartitioning::None {
-            original.directional_lights.len() as u32
+            original.dir_lights.len() as u32
         } else {
-            (original.directional_lights.len() * Self::CASCADE_COUNT) as u32
+            (original.dir_lights.len() * Self::CASCADE_COUNT) as u32
         };
         let directional_shadow_map = device.create_texture(&TextureDescriptor {
             label: Some("directional_shadow_map"),
@@ -573,7 +573,7 @@ impl RenderNode for ShadowMappingNode {
             frustum_slice(original.camera.projection, Self::CASCADE_COUNT as u32, 0.5)
         };
 
-        for (id, light) in &original.directional_lights {
+        for (id, light) in &original.dir_lights {
             let cascade_views = sliced_frustums.clone().into_iter().map(|proj| {
                 Self::calculate_cascade_view(original.camera.transform, proj, light.direction)
             });
@@ -785,14 +785,19 @@ impl RenderNode for ShadowMappingNode {
                 };
 
                 pass.set_pipeline(pipeline);
-                pass.set_vertex_buffer(0, instance.create_buffer(device).unwrap().slice(..));
-                pass.draw(0..instance.vertices_count() as u32, 0..1);
+                pass.set_vertex_buffer(0, instance.create_vertex_buffer(device).unwrap().slice(..));
+                if let Some(indices) = instance.create_index_buffer(device) {
+                    pass.set_index_buffer(indices.buffer.slice(..), indices.format);
+                    pass.draw_indexed(0..indices.count, 0, 0..1);
+                } else {
+                    pass.draw(0..instance.vertices_count() as u32, 0..1);
+                }
             }
 
             view_index += 1;
         };
 
-        for id in original.directional_lights.keys() {
+        for id in original.dir_lights.keys() {
             if Self::PARTITIONING == ShadowMapPartitioning::None {
                 _draw(&assets.texture_views[&self.directional_views[id].iter().next().unwrap()]);
             } else {

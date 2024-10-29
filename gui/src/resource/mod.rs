@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use aurora_chest::material::PbrMaterial;
+use aurora_chest::{import::mesh_from_obj, material::PbrMaterial};
 use aurora_core::{
     render::{
         helper::Transform,
@@ -22,21 +22,21 @@ pub fn load_primitives(renderer: &WgpuRenderer) -> GpuScene {
         uv_checker,
         Image::from_path("gui/assets/uv_checker.png")
             .unwrap()
-            .to_texture(renderer),
+            .to_texture(&renderer.device, &renderer.queue),
     );
     let normal_map = TextureId(Uuid::new_v4());
     scene.assets.textures.insert(
         normal_map,
         Image::from_path("gui/assets/sergun-kuyucu-medieval-blocks-normal.png")
             .unwrap()
-            .to_texture(renderer),
+            .to_texture(&renderer.device, &renderer.queue),
     );
 
     let meshes =
-    // Mesh::from_obj("gui/assets/large_primitives_offseted.obj")
-        // Mesh::from_obj("gui/assets/Room.obj")
-        // Mesh::from_obj("gui/assets/cube.obj")
-        Mesh::from_obj("gui/assets/large_scene_cascade_test.obj")
+    // mesh_from_obj("gui/assets/large_primitives_offseted.obj")
+        // mesh_from_obj("gui/assets/Room.obj")
+        // mesh_from_obj("gui/assets/cube.obj")
+        mesh_from_obj("gui/assets/large_scene_cascade_test.obj")
         .into_iter()
         .map(|m| {
             let instance_id = MeshInstanceId(Uuid::new_v4());
@@ -68,7 +68,7 @@ pub fn load_primitives(renderer: &WgpuRenderer) -> GpuScene {
     });
     scene.static_meshes.extend(static_meshes);
 
-    scene.original.directional_lights.insert(
+    scene.original.dir_lights.insert(
         Uuid::new_v4(),
         GpuDirectionalLight {
             // direction: Transform {

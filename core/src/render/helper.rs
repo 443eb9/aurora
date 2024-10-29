@@ -15,7 +15,7 @@ use crate::{
 #[derive(Default)]
 pub struct Scene {
     pub camera: Camera,
-    pub directional_lights: HashMap<Uuid, GpuDirectionalLight>,
+    pub dir_lights: HashMap<Uuid, GpuDirectionalLight>,
     pub point_lights: HashMap<Uuid, GpuPointLight>,
     pub spot_lights: HashMap<Uuid, GpuSpotLight>,
     pub materials: HashMap<MaterialInstanceId, Rc<dyn Material>>,
