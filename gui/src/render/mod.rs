@@ -1,4 +1,7 @@
-use aurora_chest::node::{BasicTriangleNode, PbrNode, PbrNodeConfig, ShadowMappingNode};
+use aurora_chest::node::{
+    BasicTriangleNode, EnvironmentMappingNode, PbrNode, PbrNodeConfig, ShadowMappingNode,
+    ENVIRONMENT_MAP_PATH_ATTR,
+};
 use aurora_core::render::flow::{
     GeneralNode, ImageFallbackNode, PostProcessGeneralNode, RenderFlow,
 };
@@ -14,10 +17,16 @@ impl Default for PbrRenderFlow {
         flow.add::<ImageFallbackNode>();
         flow.add::<PostProcessGeneralNode>();
         flow.add::<ShadowMappingNode>();
+        flow.add::<EnvironmentMappingNode>();
         flow.add::<PbrNode>();
         // flow.add::<DepthViewNode>();
 
         flow.config_node::<PbrNode>(PbrNodeConfig::SHADOW_MAPPING);
+        flow.config_node::<PbrNode>(PbrNodeConfig::ENVIRONMENT_MAPPING);
+        flow.add_extra_data::<EnvironmentMappingNode>(
+            ENVIRONMENT_MAP_PATH_ATTR,
+            "chest/assets/envmap/sunny_prairie_expanse_cube_map.hdr".into(),
+        );
 
         Self { inner: flow }
     }

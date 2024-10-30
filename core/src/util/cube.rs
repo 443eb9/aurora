@@ -1,4 +1,4 @@
-use glam::Vec3;
+use glam::{UVec2, Vec3};
 use uuid::Uuid;
 
 // From Bevy
@@ -46,4 +46,18 @@ pub const CUBE_MAP_FACES: [CubeMapFace; 6] = [
         up: Vec3::NEG_Y,
         id: Uuid::from_u128(1485120178465129865312),
     },
+];
+
+/// Offsets of cube map faces on a 2d texture.
+/// 
+/// ** +Y ** **
+/// -X+ Z +X -Z
+/// ** -Y ** **
+pub const CUBE_MAP_OFFSETS: [UVec2; 6] = [
+    UVec2 { x: 2, y: 1 },
+    UVec2 { x: 0, y: 1 },
+    UVec2 { x: 1, y: 0 },
+    UVec2 { x: 1, y: 2 },
+    UVec2 { x: 1, y: 1 },
+    UVec2 { x: 3, y: 1 },
 ];

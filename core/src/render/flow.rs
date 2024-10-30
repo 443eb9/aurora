@@ -1,4 +1,8 @@
-use std::{any::TypeId, borrow::Cow, collections::HashMap};
+use std::{
+    any::{type_name, TypeId},
+    borrow::Cow,
+    collections::HashMap,
+};
 
 use bitflags::Flags;
 use encase::ShaderType;
@@ -6,7 +10,6 @@ use indexmap::IndexMap;
 use naga_oil::compose::{
     ComposableModuleDescriptor, Composer, NagaModuleDescriptor, ShaderDefValue,
 };
-use uuid::Uuid;
 use wgpu::{
     util::{DeviceExt, TextureDataOrder},
     BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor, BindGroupLayoutEntry,
@@ -30,6 +33,43 @@ use crate::{
     WgpuRenderer,
 };
 
+pub enum NodeExtraData {
+    Int(i32),
+    UInt(u32),
+    Float(f32),
+    String(String),
+}
+
+impl From<i32> for NodeExtraData {
+    fn from(value: i32) -> Self {
+        Self::Int(value)
+    }
+}
+
+impl From<u32> for NodeExtraData {
+    fn from(value: u32) -> Self {
+        Self::UInt(value)
+    }
+}
+
+impl From<f32> for NodeExtraData {
+    fn from(value: f32) -> Self {
+        Self::Float(value)
+    }
+}
+
+impl From<String> for NodeExtraData {
+    fn from(value: String) -> Self {
+        Self::String(value)
+    }
+}
+
+impl From<&str> for NodeExtraData {
+    fn from(value: &str) -> Self {
+        Self::String(value.into())
+    }
+}
+
 struct PackedRenderNode {
     pub node: Box<dyn RenderNode>,
     pub context: NodeContext,
@@ -41,6 +81,7 @@ pub struct NodeContext {
     pub meshes: Vec<RenderMesh>,
     pub pipelines: HashMap<MeshInstanceId, RenderPipeline>,
     pub config: u32,
+    pub extra_data: HashMap<&'static str, NodeExtraData>,
 }
 
 pub struct RenderContext<'a> {
@@ -66,15 +107,18 @@ pub struct RenderFlow {
 }
 
 impl RenderFlow {
-    pub async fn request_renderer(&self) -> WgpuRenderer {
-        let (features, limits) = self.flow.values().fold(
-            (Default::default(), Default::default()),
-            |(mut feat, mut lim), node| {
-                node.node.require_renderer_features(&mut feat);
-                node.node.require_renderer_limits(&mut lim);
-                (feat, lim)
-            },
-        );
+    pub async fn request_renderer(
+        &self,
+        features: Option<Features>,
+        limits: Option<Limits>,
+    ) -> WgpuRenderer {
+        let mut features = features.unwrap_or_default();
+        let mut limits = limits.unwrap_or_default();
+
+        for node in self.flow.values() {
+            node.node.require_renderer_features(&mut features);
+            node.node.require_renderer_limits(&mut limits);
+        }
         WgpuRenderer::new(Some(features), Some(limits)).await
     }
 
@@ -112,6 +156,13 @@ impl RenderFlow {
     }
 
     #[inline]
+    pub fn add_extra_data<N: RenderNode>(&mut self, name: &'static str, value: NodeExtraData) {
+        if let Some(node) = self.flow.get_mut(&TypeId::of::<N>()) {
+            node.context.extra_data.insert(name, value);
+        }
+    }
+
+    #[inline]
     pub fn build(
         &mut self,
         renderer: &WgpuRenderer,
@@ -133,9 +184,11 @@ impl RenderFlow {
         shader_defs: Option<HashMap<String, ShaderDefValue>>,
         targets: &RenderTargets,
     ) {
-        for node in self.flow.values() {
-            if let Some(restriction) = node.node.restrict_mesh_format() {
-                for mesh in &node.context.meshes {
+        for PackedRenderNode { node, context } in self.flow.values_mut() {
+            node.self_configuration(context);
+
+            if let Some(restriction) = node.restrict_mesh_format() {
+                for mesh in &context.meshes {
                     scene.assets.meshes[&mesh.mesh.mesh].assert_vertex(restriction);
                 }
             }
@@ -157,7 +210,10 @@ impl RenderFlow {
                             shader_defs: shader_defs.clone(),
                             ..Default::default()
                         })
-                        .unwrap();
+                        .expect(&format!(
+                            "Error on building shader dependencies for node {}",
+                            node.label()
+                        ));
                 }
                 let module = composer
                     .make_naga_module(NagaModuleDescriptor {
@@ -165,7 +221,10 @@ impl RenderFlow {
                         shader_defs: shader_defs.clone(),
                         ..Default::default()
                     })
-                    .unwrap();
+                    .expect(&format!(
+                        "Error on building main shader for node {}",
+                        node.label()
+                    ));
 
                 context.shader = Some(renderer.device.create_shader_module(
                     ShaderModuleDescriptor {
@@ -230,6 +289,14 @@ impl RenderFlow {
 }
 
 pub trait RenderNode: 'static {
+    /// Get label of this node.
+    fn label(&self) -> &'static str {
+        type_name::<Self>()
+    }
+
+    /// Config self according to context.
+    fn self_configuration(&self, _context: &mut NodeContext) {}
+
     /// Restrict the format that this node accepts.
     fn restrict_mesh_format(&self) -> Option<&'static [VertexFormat]> {
         None

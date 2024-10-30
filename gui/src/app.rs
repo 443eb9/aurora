@@ -62,7 +62,7 @@ impl<'a> Application<'a> {
         );
 
         let flow: crate::render::PbrRenderFlow = Default::default();
-        let renderer = flow.inner.request_renderer().await;
+        let renderer = flow.inner.request_renderer(None, None).await;
         let surface = renderer.instance.create_surface(window.clone()).unwrap();
         surface.configure(
             &renderer.device,
@@ -112,7 +112,9 @@ impl<'a> Application<'a> {
             //     exposure: Exposure { ev100: 9.7 },
             //     ..Default::default()
             // },
-            scene.original.camera,
+            Camera {
+                ..scene.original.camera
+            },
             CameraConfig::default(),
         );
 

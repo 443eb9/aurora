@@ -2,6 +2,7 @@
 #import aurora::{
     common_binding::{camera, scene},
     common_type::VertexInput,
+    env_mapping::env_mapping,
     math::PI,
     pbr::{
         pbr_binding::{dir_lights, material, point_lights, spot_lights, tex_base_color, tex_sampler},
@@ -93,6 +94,7 @@ fn fragment(in: PbrVertexOutput) -> @location(0) vec4f {
         color += irradiated * shadow;
     }
 
+    color += env_mapping::sample_env_map(reflect(-unlit.view, unlit.normal)) * unlit.base_color;
     color = pbr_function::apply_exposure(color * unlit.base_color);
     return vec4f(tonemapping::tonemapping_tony_mc_mapface(color), 1.);
     // return vec4f(color, 1.);

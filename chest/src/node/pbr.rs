@@ -16,8 +16,8 @@ use naga_oil::compose::ShaderDefValue;
 use uuid::Uuid;
 use wgpu::{
     BufferUsages, Color, ColorTargetState, ColorWrites, CommandEncoderDescriptor, CompareFunction,
-    DepthBiasState, DepthStencilState, Face, FragmentState, LoadOp, MultisampleState, Operations,
-    PipelineCompilationOptions, PipelineLayoutDescriptor, PrimitiveState,
+    DepthBiasState, DepthStencilState, Face, FragmentState, Limits, LoadOp, MultisampleState,
+    Operations, PipelineCompilationOptions, PipelineLayoutDescriptor, PrimitiveState,
     RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor,
     RenderPipelineDescriptor, StencilState, StoreOp, VertexBufferLayout, VertexFormat, VertexState,
     VertexStepMode,
@@ -25,7 +25,7 @@ use wgpu::{
 
 use crate::{
     material::{PbrMaterial, PbrMaterialUniform},
-    node::shadow_mapping::SHADOW_MAPPING,
+    node::{shadow_mapping::SHADOW_MAPPING, ENV_MAPPING},
     texture,
 };
 
@@ -58,6 +58,10 @@ impl RenderNode for PbrNode {
         ])
     }
 
+    fn require_renderer_limits(&self, limits: &mut Limits) {
+        limits.max_bind_groups = limits.max_bind_groups.max(5);
+    }
+
     fn require_shader_defs(
         &self,
         shader_defs: &mut HashMap<String, ShaderDefValue>,
@@ -84,6 +88,9 @@ impl RenderNode for PbrNode {
                 include_str!("../shader/pbr/pbr_type.wgsl"),
                 include_str!("../shader/pbr/pbr_binding.wgsl"),
                 include_str!("../shader/pbr/pbr_function.wgsl"),
+                include_str!("../shader/env_mapping/env_mapping_type.wgsl"),
+                include_str!("../shader/env_mapping/env_mapping_binding.wgsl"),
+                include_str!("../shader/env_mapping/env_mapping.wgsl"),
                 include_str!("../shader/tonemapping.wgsl"),
                 include_str!("../shader/pbr/pbr.wgsl"),
             ],
@@ -114,11 +121,11 @@ impl RenderNode for PbrNode {
 
         let mut bind_group_layouts = vec![l_camera, l_lights, l_material];
         if config.contains(PbrNodeConfig::SHADOW_MAPPING) {
-            let Some(l_shadow_map) = assets.extra_layouts.get(&SHADOW_MAPPING.shadow_maps_layout)
-            else {
-                return;
-            };
-            bind_group_layouts.push(l_shadow_map);
+            bind_group_layouts.push(&assets.extra_layouts[&SHADOW_MAPPING.shadow_maps_layout]);
+        }
+
+        if config.contains(PbrNodeConfig::ENVIRONMENT_MAPPING) {
+            bind_group_layouts.push(&assets.extra_layouts[&ENV_MAPPING.env_mapping_layout]);
         }
 
         let layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
@@ -253,12 +260,17 @@ impl RenderNode for PbrNode {
             return;
         };
 
-        let b_shadow_maps = assets
-            .extra_bind_groups
-            .get(&SHADOW_MAPPING.shadow_maps_bind_group);
-        if config.contains(PbrNodeConfig::SHADOW_MAPPING) && b_shadow_maps.is_none() {
-            return;
-        }
+        let b_shadow_maps = if config.contains(PbrNodeConfig::SHADOW_MAPPING) {
+            Some(&assets.extra_bind_groups[&SHADOW_MAPPING.shadow_maps_bind_group])
+        } else {
+            None
+        };
+
+        let b_env_mapping = if config.contains(PbrNodeConfig::ENVIRONMENT_MAPPING) {
+            Some(&assets.extra_bind_groups[&ENV_MAPPING.env_mapping_bind_group])
+        } else {
+            None
+        };
 
         {
             let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {
@@ -286,6 +298,9 @@ impl RenderNode for PbrNode {
             pass.set_bind_group(1, b_lights, &[]);
             if config.contains(PbrNodeConfig::SHADOW_MAPPING) {
                 pass.set_bind_group(3, b_shadow_maps.unwrap(), &[]);
+            }
+            if config.contains(PbrNodeConfig::ENVIRONMENT_MAPPING) {
+                pass.set_bind_group(4, b_env_mapping.unwrap(), &[]);
             }
 
             for mesh in &node.meshes {

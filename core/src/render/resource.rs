@@ -1,16 +1,23 @@
+use std::path::Path;
+
 use bytemuck::NoUninit;
 use encase::{internal::WriteInto, DynamicStorageBuffer, ShaderType};
 use glam::{Mat4, Vec3};
+use image::{DynamicImage, ImageFormat, ImageResult};
 use uuid::Uuid;
 use wgpu::{
-    util::{BufferInitDescriptor, DeviceExt},
-    BindingResource, Buffer, BufferBinding, BufferDescriptor, BufferUsages, Device, Queue,
-    TextureFormat, TextureView,
+    util::{BufferInitDescriptor, DeviceExt, TextureDataOrder},
+    BindingResource, Buffer, BufferBinding, BufferDescriptor, BufferUsages, Device, Extent3d,
+    ImageCopyTexture, Origin3d, Queue, Texture, TextureAspect, TextureDescriptor, TextureDimension,
+    TextureFormat, TextureUsages, TextureView,
 };
 
-use crate::render::{
-    mesh::StaticMesh,
-    scene::{MaterialTypeId, TextureId},
+use crate::{
+    render::{
+        mesh::StaticMesh,
+        scene::{MaterialTypeId, TextureId},
+    },
+    util::cube::CUBE_MAP_OFFSETS,
 };
 
 pub const POST_PROCESS_COLOR_LAYOUT_UUID: MaterialTypeId =
@@ -119,6 +126,267 @@ impl DynamicGpuBuffer {
 
     pub fn len_bytes(&self) -> usize {
         self.raw.as_ref().len()
+    }
+}
+
+#[derive(Default)]
+pub struct ImageTextureDescriptor<'a> {
+    pub label: Option<&'a str>,
+    pub mip_level_count: Option<u32>,
+    pub sample_count: Option<u32>,
+    pub dimension: Option<TextureDimension>,
+    pub usage: Option<TextureUsages>,
+    pub view_formats: Option<&'a [TextureFormat]>,
+    pub data_order: Option<TextureDataOrder>,
+}
+
+pub struct Image {
+    width: u32,
+    height: u32,
+    format: TextureFormat,
+    buffer: Vec<u8>,
+}
+
+impl Image {
+    pub fn from_dynamic(dyn_image: DynamicImage, is_srgb: bool) -> Self {
+        let width;
+        let height;
+        let fmt;
+        let data;
+
+        match dyn_image {
+            DynamicImage::ImageLuma8(img) => {
+                let img = DynamicImage::ImageLuma8(img).into_rgba8();
+                width = img.width();
+                height = img.height();
+                fmt = if is_srgb {
+                    TextureFormat::Rgba8UnormSrgb
+                } else {
+                    TextureFormat::Rgba8Unorm
+                };
+
+                data = img.into_raw();
+            }
+            DynamicImage::ImageLumaA8(img) => {
+                let img = DynamicImage::ImageLumaA8(img).into_rgba8();
+                width = img.width();
+                height = img.height();
+                fmt = if is_srgb {
+                    TextureFormat::Rgba8UnormSrgb
+                } else {
+                    TextureFormat::Rgba8Unorm
+                };
+
+                data = img.into_raw();
+            }
+            DynamicImage::ImageRgb8(img) => {
+                let img = DynamicImage::ImageRgb8(img).into_rgba8();
+                width = img.width();
+                height = img.height();
+                fmt = if is_srgb {
+                    TextureFormat::Rgba8UnormSrgb
+                } else {
+                    TextureFormat::Rgba8Unorm
+                };
+
+                data = img.into_raw();
+            }
+            DynamicImage::ImageRgba8(img) => {
+                let img = DynamicImage::ImageRgba8(img).into_rgba8();
+                width = img.width();
+                height = img.height();
+                fmt = if is_srgb {
+                    TextureFormat::Rgba8UnormSrgb
+                } else {
+                    TextureFormat::Rgba8Unorm
+                };
+
+                data = img.into_raw();
+            }
+            DynamicImage::ImageLuma16(img) => {
+                width = img.width();
+                height = img.height();
+                fmt = TextureFormat::R16Uint;
+                data = bytemuck::cast_slice(img.as_raw()).to_owned();
+            }
+            DynamicImage::ImageLumaA16(img) => {
+                width = img.width();
+                height = img.height();
+                fmt = TextureFormat::R16Uint;
+                data = bytemuck::cast_slice(img.as_raw()).to_owned();
+            }
+            DynamicImage::ImageRgb16(img) => {
+                width = img.width();
+                height = img.height();
+                fmt = TextureFormat::R16Unorm;
+                data = bytemuck::cast_slice(img.as_raw()).to_owned();
+            }
+            DynamicImage::ImageRgba16(img) => {
+                width = img.width();
+                height = img.height();
+                fmt = TextureFormat::R16Unorm;
+                data = bytemuck::cast_slice(img.as_raw()).to_owned();
+            }
+            DynamicImage::ImageRgb32F(img) => {
+                width = img.width();
+                height = img.height();
+                fmt = TextureFormat::Rgba32Float;
+                let mut local_data = Vec::with_capacity(
+                    width as usize * height as usize * fmt.block_copy_size(None).unwrap() as usize,
+                );
+
+                for pixel in img.into_raw().chunks_exact(3) {
+                    local_data.extend_from_slice(&pixel[0].to_ne_bytes());
+                    local_data.extend_from_slice(&pixel[1].to_ne_bytes());
+                    local_data.extend_from_slice(&pixel[2].to_ne_bytes());
+                    local_data.extend_from_slice(&1f32.to_ne_bytes());
+                }
+                data = local_data;
+            }
+            DynamicImage::ImageRgba32F(img) => {
+                width = img.width();
+                height = img.height();
+                fmt = TextureFormat::Rgba32Float;
+                data = bytemuck::cast_slice(img.as_raw()).to_owned();
+            }
+            _ => unreachable!(),
+        }
+
+        Self {
+            width,
+            height,
+            format: fmt,
+            buffer: data,
+        }
+    }
+
+    pub fn from_path(path: impl AsRef<Path>) -> ImageResult<Self> {
+        let img = image::open(path)?;
+        Ok(Self::from_dynamic(img, false))
+    }
+
+    pub fn from_raw_parts(buffer: Vec<u8>, format: TextureFormat, width: u32, height: u32) -> Self {
+        Self {
+            width,
+            height,
+            format,
+            buffer,
+        }
+    }
+
+    pub fn from_buffer(data: &[u8], format: ImageFormat, is_srgb: bool) -> Self {
+        let mut reader = image::ImageReader::new(std::io::Cursor::new(data));
+        reader.set_format(format);
+        reader.no_limits();
+        let dyn_image = reader.decode().unwrap();
+        Self::from_dynamic(dyn_image, is_srgb)
+    }
+
+    pub fn width(&self) -> u32 {
+        self.width
+    }
+
+    pub fn height(&self) -> u32 {
+        self.height
+    }
+
+    pub fn to_texture(
+        &self,
+        device: &Device,
+        queue: &Queue,
+        desc: &ImageTextureDescriptor,
+    ) -> Texture {
+        device.create_texture_with_data(
+            queue,
+            &TextureDescriptor {
+                label: desc.label,
+                size: Extent3d {
+                    width: self.width,
+                    height: self.height,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: desc.mip_level_count.unwrap_or(1),
+                sample_count: desc.sample_count.unwrap_or(1),
+                dimension: desc.dimension.unwrap_or(TextureDimension::D2),
+                format: self.format,
+                usage: desc.usage.unwrap_or_else(TextureUsages::empty)
+                    | TextureUsages::TEXTURE_BINDING,
+                view_formats: desc.view_formats.unwrap_or_default(),
+            },
+            desc.data_order.unwrap_or_default(),
+            &self.buffer,
+        )
+    }
+
+    pub fn to_cube_map(
+        &self,
+        device: &Device,
+        queue: &Queue,
+        desc: &ImageTextureDescriptor,
+    ) -> Texture {
+        assert_eq!(self.width / 4, self.height / 3, "Invalid cubemap.");
+        let face_size = self.width / 4;
+        let mut cmd = device.create_command_encoder(&Default::default());
+        let cube_map = device.create_texture(&TextureDescriptor {
+            label: desc.label,
+            size: Extent3d {
+                width: face_size,
+                height: face_size,
+                depth_or_array_layers: 6,
+            },
+            mip_level_count: desc.mip_level_count.unwrap_or(1),
+            sample_count: desc.sample_count.unwrap_or(1),
+            dimension: desc.dimension.unwrap_or(TextureDimension::D2),
+            format: self.format,
+            usage: desc.usage.unwrap_or_else(TextureUsages::empty)
+                | TextureUsages::COPY_DST
+                | TextureUsages::TEXTURE_BINDING,
+            view_formats: desc.view_formats.unwrap_or_default(),
+        });
+
+        let flat = self.to_texture(
+            device,
+            queue,
+            &ImageTextureDescriptor {
+                dimension: None,
+                usage: Some(
+                    desc.usage.unwrap_or_else(TextureUsages::empty) | TextureUsages::COPY_SRC,
+                ),
+                ..*desc
+            },
+        );
+
+        for (index, offset) in CUBE_MAP_OFFSETS.into_iter().enumerate() {
+            cmd.copy_texture_to_texture(
+                ImageCopyTexture {
+                    texture: &flat,
+                    aspect: TextureAspect::All,
+                    mip_level: 0,
+                    origin: Origin3d {
+                        x: offset.x * face_size,
+                        y: offset.y * face_size,
+                        z: 0,
+                    },
+                },
+                ImageCopyTexture {
+                    texture: &cube_map,
+                    mip_level: 0,
+                    origin: Origin3d {
+                        x: 0,
+                        y: 0,
+                        z: index as u32,
+                    },
+                    aspect: TextureAspect::All,
+                },
+                Extent3d {
+                    width: face_size,
+                    height: face_size,
+                    depth_or_array_layers: 1,
+                },
+            );
+        }
+        queue.submit([cmd.finish()]);
+        cube_map
     }
 }
 

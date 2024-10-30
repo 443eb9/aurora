@@ -16,11 +16,11 @@ use aurora_core::render::{
         Camera, CameraProjection, Exposure, OrthographicProjection, PerspectiveProjection,
         Transform,
     },
-    mesh::{Image, Mesh, MeshIndices, MeshVertexAttributeData, StaticMesh},
-    resource::{GpuDirectionalLight, GpuPointLight, GpuSpotLight},
+    mesh::{Mesh, MeshIndices, MeshVertexAttributeData, StaticMesh},
+    resource::{GpuDirectionalLight, GpuPointLight, GpuSpotLight, Image},
     scene::{GpuScene, MaterialInstanceId, MeshInstanceId, TextureId},
 };
-use wgpu::{Device, Queue};
+use wgpu::{util::TextureDataOrder, Device, Queue};
 
 use crate::material::PbrMaterial;
 
@@ -122,7 +122,7 @@ pub fn load_gltf(
                 // Image::from_path("gui/assets/uv_checker.png")
                 //     .unwrap()
                 //     .to_texture(&device, &queue),
-                tex.to_texture(device, queue),
+                tex.to_texture(device, queue, &Default::default()),
             );
             id
         })
