@@ -40,7 +40,11 @@ fn fragment(in: PbrVertexOutput) -> @location(0) vec4f {
         let light = &dir_lights[i_light];
         
         let irradiated = pbr_function::apply_lighting((*light).direction, (*light).intensity, (*light).color, unlit);
+#ifdef SHADOW_MAPPING
         let shadow = shadow_mapping::sample_cascaded_shadow_map(i_light, in.position_ws, in.position_vs, (*light).radius * 2.);
+#else // SHADOW_MAPPING
+        let shadow = 1.;
+#endif // SHADOW_MAPPING
 
         color += irradiated * shadow;
 #ifdef SHOW_CASCADES
@@ -57,7 +61,11 @@ fn fragment(in: PbrVertexOutput) -> @location(0) vec4f {
         let intensity = (*light).intensity / (4. * PI * d2);
 
         let irradiated = pbr_function::apply_lighting(direction, intensity, (*light).color, unlit);
+#ifdef SHADOW_MAPPING
         let shadow = shadow_mapping::sample_point_shadow_map(i_light, position_rel, (*light).radius);
+#else // SHADOW_MAPPING
+        let shadow = 1.;
+#endif // SHADOW_MAPPING
 
         color += irradiated * shadow;
     }
@@ -76,7 +84,11 @@ fn fragment(in: PbrVertexOutput) -> @location(0) vec4f {
         // let intensity = (*light).intensity / (PI * dot(position_rel, position_rel)) * lambda;
 
         let irradiated = pbr_function::apply_lighting(direction, intensity, (*light).color, unlit);
+#ifdef SHADOW_MAPPING
         let shadow = shadow_mapping::sample_point_shadow_map(i_light, position_rel, (*light).radius);
+#else // SHADOW_MAPPING
+        let shadow = 1.;
+#endif // SHADOW_MAPPING
 
         color += irradiated * shadow;
     }

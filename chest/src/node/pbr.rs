@@ -5,7 +5,7 @@ use std::{
 
 use aurora_core::{
     render::{
-        flow::{PipelineCreationContext, RenderContext, RenderNode},
+        flow::{ConfigurableRenderNode, PipelineCreationContext, RenderContext, RenderNode},
         mesh::CreateBindGroupLayout,
         resource::DynamicGpuBuffer,
         scene::{GpuScene, MaterialTypeId, TextureId},
@@ -32,9 +32,20 @@ use crate::{
 pub const TONY_MC_MAPFACE_LUT: TextureId =
     TextureId(Uuid::from_u128(7949841653150346834163056985041356));
 
+bitflags::bitflags! {
+    pub struct PbrNodeConfig: u32 {
+        const SHADOW_MAPPING = 1 << 0;
+        const ENVIRONMENT_MAPPING = 1 << 1;
+    }
+}
+
 #[derive(Default)]
 pub struct PbrNode {
     mat_uuid: MaterialTypeId,
+}
+
+impl ConfigurableRenderNode for PbrNode {
+    type Config = PbrNodeConfig;
 }
 
 impl RenderNode for PbrNode {
@@ -47,11 +58,19 @@ impl RenderNode for PbrNode {
         ])
     }
 
-    fn require_shader_defs(&self, shader_defs: &mut HashMap<String, ShaderDefValue>) {
+    fn require_shader_defs(
+        &self,
+        shader_defs: &mut HashMap<String, ShaderDefValue>,
+        config_bits: u32,
+    ) {
+        let config = self.get_config(config_bits);
         shader_defs.extend([
             ("LUT_TEX_BINDING".to_string(), ShaderDefValue::UInt(4)),
             ("LUT_SAMPLER_BINDING".to_string(), ShaderDefValue::UInt(5)),
         ]);
+        if config.contains(PbrNodeConfig::SHADOW_MAPPING) {
+            shader_defs.insert("SHADOW_MAPPING".to_string(), ShaderDefValue::Bool(true));
+        }
     }
 
     fn require_shader(&self) -> Option<(&'static [&'static str], &'static str)> {
@@ -81,14 +100,11 @@ impl RenderNode for PbrNode {
             shader,
             meshes,
             pipelines,
+            config_bits,
         }: PipelineCreationContext,
     ) {
+        let config = self.get_config(config_bits);
         PbrMaterial::create_layout(device, assets);
-
-        let Some(l_shadow_map) = assets.extra_layouts.get(&SHADOW_MAPPING.shadow_maps_layout)
-        else {
-            return;
-        };
 
         let (l_camera, l_lights, l_material) = (
             assets.common_layout.as_ref().unwrap(),
@@ -96,9 +112,18 @@ impl RenderNode for PbrNode {
             &assets.material_layouts[&MaterialTypeId(TypeId::of::<PbrMaterial>().to_uuid())],
         );
 
+        let mut bind_group_layouts = vec![l_camera, l_lights, l_material];
+        if config.contains(PbrNodeConfig::SHADOW_MAPPING) {
+            let Some(l_shadow_map) = assets.extra_layouts.get(&SHADOW_MAPPING.shadow_maps_layout)
+            else {
+                return;
+            };
+            bind_group_layouts.push(l_shadow_map);
+        }
+
         let layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
             label: Some("pbr_pipeline_layout"),
-            bind_group_layouts: &[&l_camera, &l_lights, &l_material, &l_shadow_map],
+            bind_group_layouts: &bind_group_layouts,
             push_constant_ranges: &[],
         });
 
@@ -211,7 +236,7 @@ impl RenderNode for PbrNode {
 
     fn draw(
         &self,
-        scene: &mut GpuScene,
+        GpuScene { assets, .. }: &mut GpuScene,
         RenderContext {
             device,
             queue,
@@ -219,19 +244,21 @@ impl RenderNode for PbrNode {
             targets,
         }: RenderContext,
     ) {
-        let assets = &scene.assets;
-
+        let config = self.get_config(node.config);
         let mut encoder = device.create_command_encoder(&CommandEncoderDescriptor::default());
 
-        let (Some(b_camera), Some(b_lights), Some(b_shadow_maps)) = (
-            &assets.common_bind_group,
-            &assets.light_bind_group,
-            assets
-                .extra_bind_groups
-                .get(&SHADOW_MAPPING.shadow_maps_bind_group),
-        ) else {
+        let (Some(b_camera), Some(b_lights)) =
+            (&assets.common_bind_group, &assets.light_bind_group)
+        else {
             return;
         };
+
+        let b_shadow_maps = assets
+            .extra_bind_groups
+            .get(&SHADOW_MAPPING.shadow_maps_bind_group);
+        if config.contains(PbrNodeConfig::SHADOW_MAPPING) && b_shadow_maps.is_none() {
+            return;
+        }
 
         {
             let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {
@@ -257,7 +284,9 @@ impl RenderNode for PbrNode {
 
             pass.set_bind_group(0, b_camera, &[]);
             pass.set_bind_group(1, b_lights, &[]);
-            pass.set_bind_group(3, b_shadow_maps, &[]);
+            if config.contains(PbrNodeConfig::SHADOW_MAPPING) {
+                pass.set_bind_group(3, b_shadow_maps.unwrap(), &[]);
+            }
 
             for mesh in &node.meshes {
                 let (Some(b_material), Some(instance), Some(pipeline)) = (

@@ -188,7 +188,11 @@ impl RenderNode for ShadowMappingNode {
         *features |= Features::DEPTH_CLIP_CONTROL;
     }
 
-    fn require_shader_defs(&self, shader_defs: &mut HashMap<String, ShaderDefValue>) {
+    fn require_shader_defs(
+        &self,
+        shader_defs: &mut HashMap<String, ShaderDefValue>,
+        _config_bits: u32,
+    ) {
         shader_defs.extend([
             (
                 "SHADOW_CASCADES".to_owned(),
@@ -224,6 +228,7 @@ impl RenderNode for ShadowMappingNode {
             shader,
             meshes,
             pipelines,
+            ..
         }: PipelineCreationContext,
     ) {
         let light_view_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {

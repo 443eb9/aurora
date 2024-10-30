@@ -1,5 +1,6 @@
-use std::{borrow::Cow, collections::HashMap};
+use std::{any::TypeId, borrow::Cow, collections::HashMap};
 
+use bitflags::Flags;
 use encase::ShaderType;
 use indexmap::IndexMap;
 use naga_oil::compose::{
@@ -39,6 +40,7 @@ pub struct NodeContext {
     pub shader: Option<ShaderModule>,
     pub meshes: Vec<RenderMesh>,
     pub pipelines: HashMap<MeshInstanceId, RenderPipeline>,
+    pub config: u32,
 }
 
 pub struct RenderContext<'a> {
@@ -54,11 +56,12 @@ pub struct PipelineCreationContext<'a> {
     pub shader: &'a ShaderModule,
     pub meshes: &'a Vec<RenderMesh>,
     pub pipelines: &'a mut HashMap<MeshInstanceId, RenderPipeline>,
+    pub config_bits: u32,
 }
 
 #[derive(Default)]
 pub struct RenderFlow {
-    flow: IndexMap<Uuid, PackedRenderNode>,
+    flow: IndexMap<TypeId, PackedRenderNode>,
     is_built: bool,
 }
 
@@ -76,16 +79,14 @@ impl RenderFlow {
     }
 
     #[inline]
-    pub fn add<T: RenderNode + Default + 'static>(&mut self) -> Uuid {
-        let uuid = Uuid::new_v4();
+    pub fn add<T: RenderNode + Default + 'static>(&mut self) {
         self.flow.insert(
-            uuid,
+            TypeId::of::<T>(),
             PackedRenderNode {
                 node: Box::new(T::default()),
                 context: Default::default(),
             },
         );
-        uuid
     }
 
     #[inline]
@@ -101,6 +102,13 @@ impl RenderFlow {
         self.flow.values_mut().for_each(|node| {
             node.context.meshes = meshes.clone();
         });
+    }
+
+    #[inline]
+    pub fn config_node<N: RenderNode + ConfigurableRenderNode>(&mut self, config: N::Config) {
+        if let Some(node) = self.flow.get_mut(&TypeId::of::<N>()) {
+            node.context.config |= config.bits();
+        }
     }
 
     #[inline]
@@ -135,7 +143,8 @@ impl RenderFlow {
 
         let mut shader_defs = shader_defs.unwrap_or_default();
         for node in self.flow.values() {
-            node.node.require_shader_defs(&mut shader_defs);
+            node.node
+                .require_shader_defs(&mut shader_defs, node.context.config);
         }
 
         for PackedRenderNode { node, context } in self.flow.values_mut() {
@@ -175,6 +184,7 @@ impl RenderFlow {
                         shader,
                         meshes: &context.meshes,
                         pipelines: &mut context.pipelines,
+                        config_bits: context.config,
                     },
                 );
             }
@@ -219,27 +229,50 @@ impl RenderFlow {
     }
 }
 
-pub trait RenderNode {
+pub trait RenderNode: 'static {
+    /// Restrict the format that this node accepts.
     fn restrict_mesh_format(&self) -> Option<&'static [VertexFormat]> {
         None
     }
+
     /// Add required features
     fn require_renderer_features(&self, _features: &mut Features) {}
+
     /// Add required limits
     fn require_renderer_limits(&self, _limits: &mut Limits) {}
+
     /// Add required shader defs.
-    fn require_shader_defs(&self, _shader_defs: &mut HashMap<String, ShaderDefValue>) {}
+    fn require_shader_defs(
+        &self,
+        _shader_defs: &mut HashMap<String, ShaderDefValue>,
+        _config_bits: u32,
+    ) {
+    }
+
+    /// Construct required shader, returns (dependencies, main_shader)
     fn require_shader(&self) -> Option<(&'static [&'static str], &'static str)> {
         None
     }
+
     /// Create pipeline for meshes.
     fn create_pipelines(&self, _scene: &mut GpuScene, _context: PipelineCreationContext) {}
+
     /// Build the node.
     fn build(&mut self, scene: &mut GpuScene, context: RenderContext);
+
     /// Prepare bind groups and other assets for rendering.
     fn prepare(&mut self, _scene: &mut GpuScene, _context: RenderContext) {}
+
     /// Draw meshes.
     fn draw(&self, _scene: &mut GpuScene, _context: RenderContext) {}
+}
+
+pub trait ConfigurableRenderNode {
+    type Config: bitflags::Flags<Bits = u32>;
+
+    fn get_config(&self, bits: u32) -> Self::Config {
+        Self::Config::from_bits_truncate(bits)
+    }
 }
 
 /// Prepares camera, lights and post process bind groups.
