@@ -13,11 +13,8 @@ use wgpu::{
     CommandEncoderDescriptor, FilterMode, FragmentState, LoadOp, MultisampleState, Operations,
     PipelineCompilationOptions, PipelineLayoutDescriptor, PrimitiveState,
     RenderPassColorAttachment, RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor,
-    Sampler, SamplerDescriptor, ShaderModuleDescriptor, ShaderSource, StoreOp, TextureFormat,
-    TextureViewDescriptor, TextureViewDimension, VertexState,
+    Sampler, SamplerDescriptor, ShaderModuleDescriptor, ShaderSource, StoreOp, VertexState,
 };
-
-use crate::node::shadow_mapping::SHADOW_MAPPING;
 
 #[derive(Default)]
 pub struct DepthViewNode {

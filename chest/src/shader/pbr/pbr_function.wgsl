@@ -32,14 +32,14 @@ fn construct_surface_unlit(
 }
 
 // Construct a BrdfSurface WITH light related info.
-fn construct_surface_lit(light: vec3f, unlit: ptr<function, BrdfSurfaceUnlit>) -> BrdfSurfaceLit {
+fn construct_surface_lit(light: vec3f, unlit: BrdfSurfaceUnlit) -> BrdfSurfaceLit {
     var surface: BrdfSurfaceLit;
 
     surface.light = light;
-    surface.half = normalize(surface.light + (*unlit).view);
+    surface.half = normalize(surface.light + unlit.view);
     
-    surface.NdotL = saturate(dot((*unlit).normal, surface.light));
-    surface.NdotH = saturate(dot((*unlit).normal, surface.half));
+    surface.NdotL = saturate(dot(unlit.normal, surface.light));
+    surface.NdotH = saturate(dot(unlit.normal, surface.half));
     surface.HdotL = saturate(dot(surface.half, surface.light));
 
     return surface;
@@ -53,9 +53,9 @@ fn unpack_normal(normal_os: vec3f, tangent_os: vec4f, uv: vec2f) -> vec3f {
 }
 
 // GGX NDF
-fn D_GGX(unlit: ptr<function, BrdfSurfaceUnlit>, lit: ptr<function, BrdfSurfaceLit>) -> f32 {
-    let r2 = (*unlit).roughness * (*unlit).roughness;
-    let den = 1. + (*lit).NdotH * (*lit).NdotH * (r2 - 1.);
+fn D_GGX(roughness: f32, NdotH: f32) -> f32 {
+    let r2 = roughness * roughness;
+    let den = 1. + NdotH * NdotH * (r2 - 1.);
     return r2 / (PI * den * den);
 }
 
@@ -67,23 +67,21 @@ fn F_Schlick(HdotL: f32, f_normal: vec3f) -> vec3f {
 
 // Simplified by Lagarde
 // Notice this has already combined the denominator of specular BRDF.
-fn G2_HeightCorrelated(unlit: ptr<function, BrdfSurfaceUnlit>, lit: ptr<function, BrdfSurfaceLit>) -> f32 {
-    let r2 = (*unlit).roughness * (*unlit).roughness;
-    let NdotL = (*lit).NdotL;
-    let NdotV = (*unlit).NdotV;
+fn G2_HeightCorrelated(roughness: f32, NdotL: f32, NdotV: f32) -> f32 {
+    let r2 = roughness * roughness;
     let l = NdotV * sqrt(r2 + NdotL * (NdotL - r2 * NdotL));
     let v = NdotL * sqrt(r2 + NdotV * (NdotV - r2 * NdotV));
     return 0.5 / (l + v);
 }
 
-fn FD_Lambert(unlit: ptr<function, BrdfSurfaceUnlit>, lit: ptr<function, BrdfSurfaceLit>) -> vec3f {
-    return (1. - F_Schlick((*lit).HdotL, (*unlit).f_normal)) / PI;
+fn FD_Lambert(f_normal: vec3f, HdotL: f32) -> vec3f {
+    return (1. - F_Schlick(HdotL, f_normal)) / PI;
 }
 
-fn FD_Burley(unlit: ptr<function, BrdfSurfaceUnlit>, lit: ptr<function, BrdfSurfaceLit>) -> vec3f {
-    let f = 0.5 + 2. * (*unlit).roughness * (*lit).HdotL * (*lit).HdotL;
-    let l = F_Schlick((*lit).NdotL, f);
-    let v = F_Schlick((*unlit).NdotV, f);
+fn FD_Burley(roughness: f32, HdotL: f32, NdotV: f32, NdotL: f32) -> vec3f {
+    let f = 0.5 + 2. * roughness * HdotL * HdotL;
+    let l = F_Schlick(NdotL, f);
+    let v = F_Schlick(NdotV, f);
     return l * v / PI;
 }
 
@@ -95,27 +93,27 @@ fn apply_lighting(
     direction: vec3f,
     intensity: f32,
     color: vec3f,
-    unlit: ptr<function, BrdfSurfaceUnlit>
+    unlit: BrdfSurfaceUnlit
 ) -> vec3f {
     var lit = construct_surface_lit(direction, unlit);
 
 #ifdef GGX
-    let D = D_GGX(unlit, &lit);
-    let G = G2_HeightCorrelated(unlit, &lit);
+    let D = D_GGX(unlit.roughness, lit.NdotH);
+    let G = G2_HeightCorrelated(unlit.roughness, lit.NdotL, unlit.NdotV);
 #else
     let D = 0.;
     let G = 0.;
 #endif
 
 #ifdef LAMBERT
-    let FD = FD_Lambert(unlit, &lit);
+    let FD = FD_Lambert(unlit.f_normal, lit.HdotL);
 #else ifdef BURLEY
-    let FD = FD_Burley(unlit, &lit);
+    let FD = FD_Burley(unlit.roughness, lit.HdotL, unlit.NdotV, lit.NdotL);
 #else
     let FD = vec3f(0.);
 #endif
 
-    let F = F_Schlick(lit.HdotL, (*unlit).f_normal);
+    let F = F_Schlick(lit.HdotL, unlit.f_normal);
 
     let f_spec = D * G * F * PI;
     let f_diff = FD * PI;

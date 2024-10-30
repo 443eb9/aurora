@@ -81,8 +81,8 @@ impl<'a> Application<'a> {
         );
 
         let scene = load_gltf(
-            // "gui/assets/gltf_test.glb",
-            "gui/assets/cascade_test.glb",
+            "gui/assets/gltf_test.glb",
+            // "gui/assets/cascade_test.glb",
             // "gui/assets/classic_blender.glb",
             &renderer.device,
             &renderer.queue,
