@@ -36,6 +36,7 @@ pub struct RenderTargets {
 
 pub struct DynamicGpuBuffer {
     raw: DynamicStorageBuffer<Vec<u8>>,
+    label: Option<String>,
     buffer: Option<Buffer>,
     changed: bool,
     usage: BufferUsages,
@@ -45,6 +46,7 @@ impl DynamicGpuBuffer {
     pub fn new(usage: BufferUsages) -> Self {
         Self {
             raw: DynamicStorageBuffer::new(Vec::new()),
+            label: None,
             buffer: None,
             changed: true,
             usage: usage | BufferUsages::COPY_DST,
@@ -54,6 +56,7 @@ impl DynamicGpuBuffer {
     pub fn new_with_alignment(usage: BufferUsages, alignment: u64) -> Self {
         Self {
             raw: DynamicStorageBuffer::new_with_alignment(Vec::new(), alignment),
+            label: None,
             buffer: None,
             changed: true,
             usage: usage | BufferUsages::COPY_DST,
@@ -67,6 +70,11 @@ impl DynamicGpuBuffer {
 
     pub fn push<E: ShaderType + WriteInto>(&mut self, data: &E) -> u32 {
         self.raw.write(data).unwrap() as u32
+    }
+
+    pub fn set_label(&mut self, label: impl Into<String>) {
+        self.changed = true;
+        self.label = Some(label.into());
     }
 
     pub fn usage(&self) -> &BufferUsages {
@@ -85,14 +93,14 @@ impl DynamicGpuBuffer {
         if capacity < size || self.changed {
             if size == 0 {
                 self.buffer = Some(device.create_buffer(&BufferDescriptor {
-                    label: None,
+                    label: self.label.as_deref(),
                     size: E::min_size().get(),
                     usage: self.usage,
                     mapped_at_creation: false,
                 }));
             } else {
                 self.buffer = Some(device.create_buffer_init(&BufferInitDescriptor {
-                    label: None,
+                    label: self.label.as_deref(),
                     usage: self.usage,
                     contents: self.raw.as_ref(),
                 }));
@@ -290,7 +298,7 @@ impl Image {
         self.height
     }
 
-    pub fn to_texture(
+    pub fn as_texture(
         &self,
         device: &Device,
         queue: &Queue,
@@ -318,7 +326,7 @@ impl Image {
         )
     }
 
-    pub fn to_cube_map(
+    pub fn as_cube_map(
         &self,
         device: &Device,
         queue: &Queue,
@@ -344,7 +352,7 @@ impl Image {
             view_formats: desc.view_formats.unwrap_or_default(),
         });
 
-        let flat = self.to_texture(
+        let flat = self.as_texture(
             device,
             queue,
             &ImageTextureDescriptor {

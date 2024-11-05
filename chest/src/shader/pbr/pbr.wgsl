@@ -94,8 +94,12 @@ fn fragment(in: PbrVertexOutput) -> @location(0) vec4f {
         color += irradiated * shadow;
     }
 
-    color += env_mapping::sample_env_map(reflect(-unlit.view, unlit.normal)) * unlit.base_color;
+#ifdef ENVIRONMENT_MAPPING
+    // color += env_mapping::sample_refl_map(reflect(-unlit.view, unlit.normal)) * unlit.base_color;
+    let x = env_mapping::sample_refl_map(reflect(-unlit.view, unlit.normal)) * unlit.base_color;
+    color += env_mapping::sample_irradiance_map(unlit.normal) * unlit.base_color;
+#endif // ENVIRONMENT_MAPPING
     color = pbr_function::apply_exposure(color * unlit.base_color);
-    return vec4f(tonemapping::tonemapping_tony_mc_mapface(color), 1.);
-    // return vec4f(color, 1.);
+    // return vec4f(tonemapping::tonemapping_tony_mc_mapface(color), 1.);
+    return vec4f(color, 1.);
 }

@@ -51,7 +51,7 @@ pub const CUBE_MAP_FACES: [CubeMapFace; 6] = [
 /// Offsets of cube map faces on a 2d texture.
 /// 
 /// ** +Y ** **
-/// -X+ Z +X -Z
+/// -X +Z +X -Z
 /// ** -Y ** **
 pub const CUBE_MAP_OFFSETS: [UVec2; 6] = [
     UVec2 { x: 2, y: 1 },

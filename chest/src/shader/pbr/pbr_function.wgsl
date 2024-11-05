@@ -80,8 +80,8 @@ fn FD_Lambert(f_normal: vec3f, HdotL: f32) -> vec3f {
 
 fn FD_Burley(roughness: f32, HdotL: f32, NdotV: f32, NdotL: f32) -> vec3f {
     let f = 0.5 + 2. * roughness * HdotL * HdotL;
-    let l = F_Schlick(NdotL, f);
-    let v = F_Schlick(NdotV, f);
+    let l = F_Schlick(NdotL, vec3f(f));
+    let v = F_Schlick(NdotV, vec3f(f));
     return l * v / PI;
 }
 

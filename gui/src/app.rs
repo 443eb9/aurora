@@ -81,7 +81,10 @@ impl<'a> Application<'a> {
         );
 
         let scene = load_gltf(
-            "gui/assets/gltf_test.glb",
+            // "gui/assets/gltf_test.glb",
+            // "gui/assets/spheres_roughness.glb",
+            "gui/assets/spheres_roughness_no_tex.glb",
+            // "gui/assets/suzanne.glb",
             // "gui/assets/cascade_test.glb",
             // "gui/assets/classic_blender.glb",
             &renderer.device,
@@ -120,7 +123,7 @@ impl<'a> Application<'a> {
 
         let shader_defs = [
             PbrSpecular::GGX.to_def(),
-            PbrDiffuse::Lambert.to_def(),
+            PbrDiffuse::Burley.to_def(),
             // "TEX_NORMAL".to_def(),
         ]
         .into();

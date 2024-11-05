@@ -1,4 +1,4 @@
-use std::{f32::consts::FRAC_PI_4, path::Path, rc::Rc};
+use std::{collections::HashSet, f32::consts::FRAC_PI_4, path::Path, rc::Rc};
 
 use glam::{Mat4, Quat, Vec2, Vec3, Vec4};
 use gltf::{
@@ -20,7 +20,7 @@ use aurora_core::render::{
     resource::{GpuDirectionalLight, GpuPointLight, GpuSpotLight, Image},
     scene::{GpuScene, MaterialInstanceId, MeshInstanceId, TextureId},
 };
-use wgpu::{util::TextureDataOrder, Device, Queue};
+use wgpu::{Device, Queue};
 
 use crate::material::PbrMaterial;
 
@@ -112,8 +112,21 @@ pub fn load_gltf(
         };
     }
 
+    let mut linear_textures = HashSet::new();
+    for mat in model.materials() {
+        if let Some(tex) = mat.normal_texture() {
+            linear_textures.insert(tex.texture().index());
+        }
+        if let Some(tex) = mat.occlusion_texture() {
+            linear_textures.insert(tex.texture().index());
+        }
+        if let Some(tex) = mat.pbr_metallic_roughness().metallic_roughness_texture() {
+            linear_textures.insert(tex.texture().index());
+        }
+    }
+
     let buffers = load_buffers_data(&model)?;
-    let textures = load_textures(&model, &buffers)
+    let textures = load_textures(&model, &buffers, &linear_textures)
         .into_iter()
         .map(|tex| {
             let id = TextureId(Uuid::new_v4());
@@ -122,7 +135,7 @@ pub fn load_gltf(
                 // Image::from_path("gui/assets/uv_checker.png")
                 //     .unwrap()
                 //     .to_texture(&device, &queue),
-                tex.to_texture(device, queue, &Default::default()),
+                tex.as_texture(device, queue, &Default::default()),
             );
             id
         })
@@ -199,9 +212,13 @@ fn load_buffers_data(model: &Gltf) -> GltfLoadResult<Vec<Vec<u8>>> {
     Ok(data)
 }
 
-fn load_textures(model: &Gltf, buffers: &Vec<Vec<u8>>) -> Vec<Image> {
+fn load_textures(
+    model: &Gltf,
+    buffers: &Vec<Vec<u8>>,
+    linear_textures: &HashSet<usize>,
+) -> Vec<Image> {
     let mut textures = Vec::with_capacity(model.textures().len());
-    for texture in model.textures() {
+    for (index, texture) in model.textures().enumerate() {
         match texture.source().source() {
             gltf::image::Source::View { view, mime_type } => {
                 let format = match mime_type.to_ascii_lowercase().as_str() {
@@ -227,7 +244,7 @@ fn load_textures(model: &Gltf, buffers: &Vec<Vec<u8>>) -> Vec<Image> {
                 let image = Image::from_buffer(
                     &buffers[view.buffer().index()][view.offset()..view.offset() + view.length()],
                     format,
-                    false,
+                    !linear_textures.contains(&index),
                 );
 
                 textures.push(image);

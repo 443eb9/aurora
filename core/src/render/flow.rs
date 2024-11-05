@@ -321,8 +321,8 @@ pub trait RenderNode: 'static {
         None
     }
 
-    /// Create pipeline for meshes.
-    fn create_pipelines(&self, _scene: &mut GpuScene, _context: PipelineCreationContext) {}
+    /// Create pipeline for meshes respectively or one for commonly usage.
+    fn create_pipelines(&mut self, _scene: &mut GpuScene, _context: PipelineCreationContext) {}
 
     /// Build the node.
     fn build(&mut self, scene: &mut GpuScene, context: RenderContext);

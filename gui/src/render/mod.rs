@@ -25,7 +25,7 @@ impl Default for PbrRenderFlow {
         flow.config_node::<PbrNode>(PbrNodeConfig::ENVIRONMENT_MAPPING);
         flow.add_extra_data::<EnvironmentMappingNode>(
             ENVIRONMENT_MAP_PATH_ATTR,
-            "chest/assets/envmap/sunny_prairie_expanse_cube_map.hdr".into(),
+            "chest/assets/envmap/german_town_corner_at_night_cube_map.hdr".into(),
         );
 
         Self { inner: flow }

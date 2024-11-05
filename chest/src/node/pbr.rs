@@ -72,8 +72,16 @@ impl RenderNode for PbrNode {
             ("LUT_TEX_BINDING".to_string(), ShaderDefValue::UInt(4)),
             ("LUT_SAMPLER_BINDING".to_string(), ShaderDefValue::UInt(5)),
         ]);
+
         if config.contains(PbrNodeConfig::SHADOW_MAPPING) {
             shader_defs.insert("SHADOW_MAPPING".to_string(), ShaderDefValue::Bool(true));
+        }
+
+        if config.contains(PbrNodeConfig::ENVIRONMENT_MAPPING) {
+            shader_defs.insert(
+                "ENVIRONMENT_MAPPING".to_string(),
+                ShaderDefValue::Bool(true),
+            );
         }
     }
 
@@ -99,7 +107,7 @@ impl RenderNode for PbrNode {
     }
 
     fn create_pipelines(
-        &self,
+        &mut self,
         GpuScene { assets, .. }: &mut GpuScene,
         PipelineCreationContext {
             device,
