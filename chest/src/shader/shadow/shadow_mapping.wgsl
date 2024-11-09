@@ -23,7 +23,7 @@ fn dir_pcf_filtering(position_vs: vec4f, position_ws: vec3f, cascade: u32, radiu
     var shadow = 0.;
     for (var iteration = 0u; iteration < config.samples; iteration += 1u) {
         let sample = poisson_disk[iteration].xy;
-        let offset = math::rotate_vector(sample, hash::hash12(position_ws.xz * 1000.) * 2. * math::PI);
+        let offset = math::rotate01_vector(sample, hash::hash12(position_ws.xz * 1000.));
         let view = position_vs + vec4f(offset * radius, 0., 0.);
         var offseted = math::view_to_uv_and_depth(view, cascade_views[cascade].proj);
 
@@ -43,7 +43,7 @@ fn dir_pcss_filtering(position_vs: vec4f, position_ws: vec3f, cascade: u32, radi
     var cnt = 0;
     for (var iteration = 0u; iteration < config.samples; iteration += 1u) {
         let sample = poisson_disk[iteration].xy;
-        let offset = math::rotate_vector(sample, hash::hash12(position_ws.xz * 1000.) * 2. * math::PI);
+        let offset = math::rotate01_vector(sample, hash::hash12(position_ws.xz * 1000.));
         let view = position_vs + vec4f(offset * radius, 0., 0.);
         var offseted = math::view_to_uv_and_depth(view, cascade_views[cascade].proj);
 

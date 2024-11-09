@@ -220,7 +220,7 @@ impl RenderNode for ShadowMappingNode {
     }
 
     fn create_pipelines(
-        &self,
+        &mut self,
         GpuScene { assets, .. }: &mut GpuScene,
         PipelineCreationContext {
             device,

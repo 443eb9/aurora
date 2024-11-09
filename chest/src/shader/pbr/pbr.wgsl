@@ -3,8 +3,6 @@
     common_binding::{camera, scene},
     common_type::VertexInput,
     env_mapping::env_mapping,
-    math,
-    hash,
     math::PI,
     pbr::{
         pbr_binding::{dir_lights, material, point_lights, spot_lights, tex_base_color, tex_sampler},

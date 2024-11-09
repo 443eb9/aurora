@@ -1,6 +1,6 @@
 use aurora_chest::node::{
-    BasicTriangleNode, EnvironmentMappingNode, PbrNode, PbrNodeConfig, ShadowMappingNode,
-    ENVIRONMENT_MAP_PATH_ATTR,
+    BasicTriangleNode, EnvironmentMappingNode, NormalPrepassNode, PbrNode, PbrNodeConfig,
+    ShadowMappingNode, ENVIRONMENT_MAP_PATH_ATTR,
 };
 use aurora_core::render::flow::{
     GeneralNode, ImageFallbackNode, PostProcessGeneralNode, RenderFlow,
@@ -15,6 +15,7 @@ impl Default for PbrRenderFlow {
         let mut flow = RenderFlow::default();
         flow.add::<GeneralNode>();
         flow.add::<ImageFallbackNode>();
+        flow.add::<NormalPrepassNode>();
         flow.add::<PostProcessGeneralNode>();
         flow.add::<ShadowMappingNode>();
         // flow.add::<EnvironmentMappingNode>();

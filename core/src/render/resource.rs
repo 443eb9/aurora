@@ -2,7 +2,7 @@ use std::path::Path;
 
 use bytemuck::NoUninit;
 use encase::{internal::WriteInto, DynamicStorageBuffer, ShaderType};
-use glam::{Mat4, Vec3};
+use glam::{Mat4, UVec2, Vec3};
 use image::{DynamicImage, ImageFormat, ImageResult};
 use uuid::Uuid;
 use wgpu::{
@@ -32,6 +32,7 @@ pub struct RenderTargets {
     pub color: TextureView,
     pub depth_format: Option<TextureFormat>,
     pub depth: Option<TextureView>,
+    pub size: UVec2,
 }
 
 pub struct DynamicGpuBuffer {

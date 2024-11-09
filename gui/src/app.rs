@@ -197,6 +197,7 @@ impl<'a> Application<'a> {
                 color: screenshot.create_view(&TextureViewDescriptor::default()),
                 depth_format: Some(TextureFormat::Depth32Float),
                 depth: Some(depth.create_view(&TextureViewDescriptor::default())),
+                size: self.dim,
             }),
             true,
         );
@@ -228,6 +229,7 @@ impl<'a> Application<'a> {
                 self.depth_texture
                     .create_view(&TextureViewDescriptor::default()),
             ),
+            size: self.dim,
         });
 
         self.flow.inner.set_queue(self.scene.static_meshes.clone());

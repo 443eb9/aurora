@@ -322,10 +322,10 @@ pub trait RenderNode: 'static {
     }
 
     /// Create pipeline for meshes.
-    fn create_pipelines(&self, _scene: &mut GpuScene, _context: PipelineCreationContext) {}
+    fn create_pipelines(&mut self, _scene: &mut GpuScene, _context: PipelineCreationContext) {}
 
     /// Build the node.
-    fn build(&mut self, scene: &mut GpuScene, context: RenderContext);
+    fn build(&mut self, _scene: &mut GpuScene, _context: RenderContext) {}
 
     /// Prepare bind groups and other assets for rendering.
     fn prepare(&mut self, _scene: &mut GpuScene, _context: RenderContext) {}

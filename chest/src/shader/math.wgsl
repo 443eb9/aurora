@@ -23,3 +23,7 @@ fn rotation_mat(angle: f32) -> mat2x2f {
 fn rotate_vector(v: vec2f, angle: f32) -> vec2f {
     return rotation_mat(angle) * v;
 }
+
+fn rotate01_vector(v: vec2f, angle: f32) -> vec2f {
+    return rotation_mat(angle * 2. * PI) * v;
+}
