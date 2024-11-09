@@ -227,7 +227,7 @@ fn load_textures(model: &Gltf, buffers: &Vec<Vec<u8>>) -> Vec<Image> {
                 let image = Image::from_buffer(
                     &buffers[view.buffer().index()][view.offset()..view.offset() + view.length()],
                     format,
-                    false,
+                    true,
                 );
 
                 textures.push(image);

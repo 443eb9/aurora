@@ -75,6 +75,11 @@ impl RenderNode for PbrNode {
         if config.contains(PbrNodeConfig::SHADOW_MAPPING) {
             shader_defs.insert("SHADOW_MAPPING".to_string(), ShaderDefValue::Bool(true));
         }
+
+        // Avoid compilation error.
+        if !shader_defs.contains_key("SHADOW_CASCADES") {
+            shader_defs.insert("SHADOW_CASCADES".to_string(), ShaderDefValue::UInt(10));
+        }
     }
 
     fn require_shader(&self) -> Option<(&'static [&'static str], &'static str)> {

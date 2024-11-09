@@ -99,7 +99,7 @@ pub struct ShadowMappingNode {
 }
 
 impl ShadowMappingNode {
-    pub const CASCADE_COUNT: usize = 3;
+    pub const CASCADE_COUNT: usize = 1;
     pub const CONFIG: ShadowMappingConfig = ShadowMappingConfig {
         dir_map_resolution: 2048,
         point_map_resolution: 512,
@@ -107,7 +107,7 @@ impl ShadowMappingNode {
         dir_pcf_radius: 1.,
         dir_pcss_radius: 1.,
         point_pcf_radius: 0.2,
-        point_pcss_radius: 1.,
+        point_pcss_radius: 0.1,
     };
     pub const PARTITIONING: ShadowMapPartitioning = ShadowMapPartitioning::PSSM;
 
