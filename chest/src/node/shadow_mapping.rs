@@ -103,7 +103,7 @@ impl ShadowMappingNode {
     pub const CONFIG: ShadowMappingConfig = ShadowMappingConfig {
         dir_map_resolution: 2048,
         point_map_resolution: 512,
-        samples: 64,
+        samples: 16,
         dir_pcf_radius: 1.,
         dir_pcss_radius: 1.,
         point_pcf_radius: 0.2,

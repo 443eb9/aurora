@@ -86,6 +86,7 @@ impl RenderNode for PbrNode {
         Some((
             &[
                 include_str!("../shader/math.wgsl"),
+                include_str!("../shader/hash.wgsl"),
                 include_str!("../shader/common/common_type.wgsl"),
                 include_str!("../shader/common/common_binding.wgsl"),
                 include_str!("../shader/shadow/shadow_type.wgsl"),

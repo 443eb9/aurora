@@ -13,3 +13,13 @@ fn view_to_uv_and_depth(view: vec4f, proj_mat: mat4x4f) -> vec3f {
     uv.y = 1. - uv.y;
     return vec3f(uv, ndc.z);
 }
+
+fn rotation_mat(angle: f32) -> mat2x2f {
+    let s = sin(angle);
+    let c = cos(angle);
+    return mat2x2f(c, s, -s, c);
+}
+
+fn rotate_vector(v: vec2f, angle: f32) -> vec2f {
+    return rotation_mat(angle) * v;
+}

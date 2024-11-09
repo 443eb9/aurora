@@ -16,12 +16,12 @@ impl Default for PbrRenderFlow {
         flow.add::<GeneralNode>();
         flow.add::<ImageFallbackNode>();
         flow.add::<PostProcessGeneralNode>();
-        // flow.add::<ShadowMappingNode>();
+        flow.add::<ShadowMappingNode>();
         // flow.add::<EnvironmentMappingNode>();
         flow.add::<PbrNode>();
         // flow.add::<DepthViewNode>();
 
-        // flow.config_node::<PbrNode>(PbrNodeConfig::SHADOW_MAPPING);
+        flow.config_node::<PbrNode>(PbrNodeConfig::SHADOW_MAPPING);
         // flow.config_node::<PbrNode>(PbrNodeConfig::ENVIRONMENT_MAPPING);
         flow.add_extra_data::<EnvironmentMappingNode>(
             ENVIRONMENT_MAP_PATH_ATTR,
