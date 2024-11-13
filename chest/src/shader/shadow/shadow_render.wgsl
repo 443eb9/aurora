@@ -10,6 +10,7 @@
 
 @vertex
 fn vertex(in: VertexInput) -> @builtin(position) vec4f {
+#ifdef NORMAL_OFFSET
     var offset = 0.;
     if (camera.proj[3][3] == 1.) {
         offset = math::sin_between(camera.position, in.normal) * (204.8 / f32(config.dir_map_resolution));
@@ -17,6 +18,9 @@ fn vertex(in: VertexInput) -> @builtin(position) vec4f {
         offset = math::sin_between(camera.position - in.position, in.normal) * (12.8 / f32(config.point_map_resolution));
     }
     return camera.proj * camera.view * vec4f(in.position - offset * in.normal, 1.);
+#else // NORMAL_OFFSET
+    return camera.proj * camera.view * vec4f(in.position, 1.);
+#endif // NORMAL_OFFSET
 }
 
 @fragment

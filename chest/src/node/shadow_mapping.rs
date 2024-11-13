@@ -17,25 +17,30 @@ use uuid::Uuid;
 use wgpu::{
     BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor, BindGroupLayoutEntry,
     BindingResource, BindingType, BufferBindingType, BufferUsages, CompareFunction, DepthBiasState,
-    DepthStencilState, Extent3d, Features, FilterMode, FragmentState, LoadOp, MultisampleState,
-    Operations, PipelineCompilationOptions, PipelineLayoutDescriptor, PrimitiveState,
-    RenderPassDepthStencilAttachment, RenderPassDescriptor, RenderPipelineDescriptor,
-    SamplerBindingType, SamplerDescriptor, ShaderStages, StencilState, StoreOp, TextureAspect,
-    TextureDescriptor, TextureDimension, TextureFormat, TextureSampleType, TextureUsages,
-    TextureView, TextureViewDescriptor, TextureViewDimension, VertexBufferLayout, VertexFormat,
-    VertexState, VertexStepMode,
+    DepthStencilState, Extent3d, Face, Features, FilterMode, FragmentState, LoadOp,
+    MultisampleState, Operations, PipelineCompilationOptions, PipelineLayoutDescriptor,
+    PrimitiveState, RenderPassDepthStencilAttachment, RenderPassDescriptor,
+    RenderPipelineDescriptor, SamplerBindingType, SamplerDescriptor, ShaderStages, StencilState,
+    StoreOp, TextureAspect, TextureDescriptor, TextureDimension, TextureFormat, TextureSampleType,
+    TextureUsages, TextureView, TextureViewDescriptor, TextureViewDimension, VertexBufferLayout,
+    VertexFormat, VertexState, VertexStepMode,
 };
 
 use crate::{
-    shader_defs::ShadowFilter,
+    shader_defs::ShadowFiltering,
     util::{self, frustum_slice, Aabb},
 };
 
-#[derive(PartialEq, Eq)]
 pub enum ShadowMapPartitioning {
-    None,
-    PSSM,
-    SDSM,
+    PSSM(u32),
+    SDSM(u32),
+}
+
+#[derive(Default)]
+pub enum DepthBiasing {
+    NormalOffset,
+    #[default]
+    SingleSideRendering,
 }
 
 #[derive(ShaderType)]
@@ -47,6 +52,20 @@ pub struct ShadowMappingConfig {
     pub dir_pcss_radius: f32,
     pub point_pcf_radius: f32,
     pub point_pcss_radius: f32,
+}
+
+impl Default for ShadowMappingConfig {
+    fn default() -> Self {
+        Self {
+            dir_map_resolution: 2048,
+            point_map_resolution: 512,
+            samples: 16,
+            dir_pcf_radius: 1.,
+            dir_pcss_radius: 1.,
+            point_pcf_radius: 0.2,
+            point_pcss_radius: 0.1,
+        }
+    }
 }
 
 pub struct ShadowMapping {
@@ -91,25 +110,43 @@ pub const SHADOW_MAPPING: ShadowMapping = ShadowMapping {
     light_views_bind_group: ExtraBindGroupId(Uuid::from_u128(135648640640653130645120465123)),
 };
 
-#[derive(Default)]
 pub struct ShadowMappingNode {
-    directional_views: HashMap<Uuid, [TextureViewId; Self::CASCADE_COUNT]>,
-    point_views: HashMap<Uuid, [TextureViewId; 6]>,
-    offsets: Vec<u32>,
+    pub config: ShadowMappingConfig,
+    pub partitioning: Option<ShadowMapPartitioning>,
+    pub filtering: Option<ShadowFiltering>,
+    pub depth_biasing: DepthBiasing,
+    pub show_cascades: bool,
+
+    pub directional_views: HashMap<Uuid, Vec<TextureViewId>>,
+    pub point_views: HashMap<Uuid, [TextureViewId; 6]>,
+    pub offsets: Vec<u32>,
+}
+
+impl Default for ShadowMappingNode {
+    fn default() -> Self {
+        Self {
+            config: Default::default(),
+            partitioning: Some(ShadowMapPartitioning::PSSM(3)),
+            filtering: Some(ShadowFiltering::PCSS),
+            depth_biasing: Default::default(),
+            show_cascades: Default::default(),
+            directional_views: Default::default(),
+            point_views: Default::default(),
+            offsets: Default::default(),
+        }
+    }
 }
 
 impl ShadowMappingNode {
-    pub const CASCADE_COUNT: usize = 1;
-    pub const CONFIG: ShadowMappingConfig = ShadowMappingConfig {
-        dir_map_resolution: 2048,
-        point_map_resolution: 512,
-        samples: 16,
-        dir_pcf_radius: 1.,
-        dir_pcss_radius: 1.,
-        point_pcf_radius: 0.2,
-        point_pcss_radius: 0.1,
-    };
-    pub const PARTITIONING: ShadowMapPartitioning = ShadowMapPartitioning::PSSM;
+    pub fn cascade_count(&self) -> u32 {
+        match &self.partitioning {
+            Some(p) => match p {
+                ShadowMapPartitioning::PSSM(n) => *n,
+                ShadowMapPartitioning::SDSM(n) => *n,
+            },
+            None => 1,
+        }
+    }
 
     pub fn calculate_cascade_view(
         camera_transform: Transform,
@@ -190,23 +227,22 @@ impl RenderNode for ShadowMappingNode {
         *features |= Features::DEPTH_CLIP_CONTROL;
     }
 
-    fn require_shader_defs(
-        &self,
-        shader_defs: &mut HashMap<String, ShaderDefValue>,
-        _config_bits: u32,
-    ) {
-        shader_defs.extend([
-            (
-                "SHADOW_CASCADES".to_owned(),
-                ShaderDefValue::UInt(if Self::PARTITIONING == ShadowMapPartitioning::None {
-                    1
-                } else {
-                    Self::CASCADE_COUNT as u32
-                }),
-            ),
-            // ("SHOW_CASCADES".to_owned(), ShaderDefValue::Bool(true)),
-            ShadowFilter::PCSS.to_def(),
-        ]);
+    fn require_shader_defs(&self, shader_defs: &mut HashMap<String, ShaderDefValue>) {
+        shader_defs.extend([(
+            "SHADOW_CASCADES".to_owned(),
+            ShaderDefValue::UInt(self.cascade_count()),
+        )]);
+
+        if let Some(filtering) = &self.filtering {
+            shader_defs.extend([filtering.to_def()]);
+        }
+
+        match self.depth_biasing {
+            DepthBiasing::NormalOffset => {
+                shader_defs.insert("NORMAL_OFFSET".to_string(), ShaderDefValue::Bool(true));
+            }
+            _ => {}
+        }
     }
 
     fn require_shader(&self) -> Option<(&'static [&'static str], &'static str)> {
@@ -291,13 +327,13 @@ impl RenderNode for ShadowMappingNode {
                         attributes: &instance.vertex_attributes(),
                     }],
                 },
-                multisample: MultisampleState::default(),
                 fragment: Some(FragmentState {
                     module: shader,
                     entry_point: "fragment",
                     compilation_options: PipelineCompilationOptions::default(),
                     targets: &[None],
                 }),
+                multisample: MultisampleState::default(),
                 depth_stencil: Some(DepthStencilState {
                     format: targets.depth_format.unwrap(),
                     depth_write_enabled: true,
@@ -306,6 +342,10 @@ impl RenderNode for ShadowMappingNode {
                     bias: DepthBiasState::default(),
                 }),
                 primitive: PrimitiveState {
+                    cull_mode: match self.depth_biasing {
+                        DepthBiasing::NormalOffset => None,
+                        DepthBiasing::SingleSideRendering => Some(Face::Front),
+                    },
                     unclipped_depth: true,
                     ..Default::default()
                 },
@@ -322,17 +362,12 @@ impl RenderNode for ShadowMappingNode {
         }: &mut GpuScene,
         RenderContext { device, queue, .. }: RenderContext,
     ) {
-        let n_dirs = if Self::PARTITIONING == ShadowMapPartitioning::None {
-            original.dir_lights.len() as u32
-        } else {
-            (original.dir_lights.len() * Self::CASCADE_COUNT) as u32
-        };
         let directional_shadow_map = device.create_texture(&TextureDescriptor {
             label: Some("directional_shadow_map"),
             size: Extent3d {
-                width: Self::CONFIG.dir_map_resolution,
-                height: Self::CONFIG.dir_map_resolution,
-                depth_or_array_layers: n_dirs.max(1),
+                width: self.config.dir_map_resolution,
+                height: self.config.dir_map_resolution,
+                depth_or_array_layers: self.cascade_count().max(1),
             },
             mip_level_count: 1,
             sample_count: 1,
@@ -352,8 +387,8 @@ impl RenderNode for ShadowMappingNode {
         let point_shadow_map = device.create_texture(&TextureDescriptor {
             label: Some("point_shadow_map"),
             size: Extent3d {
-                width: Self::CONFIG.point_map_resolution,
-                height: Self::CONFIG.point_map_resolution,
+                width: self.config.point_map_resolution,
+                height: self.config.point_map_resolution,
                 depth_or_array_layers: ((original.point_lights.len() as u32
                     + original.spot_lights.len() as u32)
                     * 6)
@@ -508,7 +543,7 @@ impl RenderNode for ShadowMappingNode {
         let mut raw_poisson_disk = Vec::new();
         fast_poisson::Poisson2D::new()
             .into_iter()
-            .take(Self::CONFIG.samples as usize)
+            .take(self.config.samples as usize)
             .for_each(|x| {
                 raw_poisson_disk.extend_from_slice(bytemuck::bytes_of(
                     &(Vec2::from_array(x) * 2. - 1.).extend(0.).extend(0.),
@@ -517,7 +552,7 @@ impl RenderNode for ShadowMappingNode {
 
         fast_poisson::Poisson3D::new()
             .into_iter()
-            .take(Self::CONFIG.samples as usize)
+            .take(self.config.samples as usize)
             .for_each(|x| {
                 let p = Vec3::from_array(x) * 2. - 1.;
                 raw_poisson_disk.extend_from_slice(bytemuck::bytes_of(&p.extend(0.)));
@@ -530,7 +565,7 @@ impl RenderNode for ShadowMappingNode {
             .insert(SHADOW_MAPPING.poisson_disk, bf_poisson_disk);
 
         let mut bf_config = DynamicGpuBuffer::new(BufferUsages::UNIFORM);
-        bf_config.push(&Self::CONFIG);
+        bf_config.push(&self.config);
         bf_config.write::<ShadowMappingConfig>(&device, &queue);
         assets
             .extra_buffers
@@ -574,23 +609,19 @@ impl RenderNode for ShadowMappingNode {
         let directional_shadow_maps = &assets.textures[&SHADOW_MAPPING.directional_shadow_map];
         let point_shadow_maps = &assets.textures[&SHADOW_MAPPING.point_shadow_map];
 
-        let sliced_frustums = if Self::PARTITIONING == ShadowMapPartitioning::None {
-            vec![original.camera.projection]
-        } else {
-            frustum_slice(original.camera.projection, Self::CASCADE_COUNT as u32, 0.5)
-        };
+        let sliced_frustums = frustum_slice(original.camera.projection, self.cascade_count(), 0.5);
 
         for (id, light) in &original.dir_lights {
             let cascade_views = sliced_frustums.clone().into_iter().map(|proj| {
                 Self::calculate_cascade_view(original.camera.transform, proj, light.direction)
             });
 
-            let mut cascade_maps = [TextureViewId::default(); Self::CASCADE_COUNT];
+            let mut cascade_maps = Vec::new();
 
-            for (i_cascade, cascade_view) in cascade_views.enumerate() {
+            for cascade_view in cascade_views {
                 directional_desc.base_array_layer = directional_index;
                 let texture_view_id = TextureViewId(Uuid::new_v4());
-                cascade_maps[i_cascade] = texture_view_id;
+                cascade_maps.push(texture_view_id);
 
                 assets.texture_views.insert(
                     texture_view_id,
@@ -805,12 +836,8 @@ impl RenderNode for ShadowMappingNode {
         };
 
         for id in original.dir_lights.keys() {
-            if Self::PARTITIONING == ShadowMapPartitioning::None {
-                _draw(&assets.texture_views[&self.directional_views[id].iter().next().unwrap()]);
-            } else {
-                for texture_view_id in &self.directional_views[id] {
-                    _draw(&assets.texture_views[&texture_view_id]);
-                }
+            for texture_view_id in &self.directional_views[id] {
+                _draw(&assets.texture_views[&texture_view_id]);
             }
         }
 

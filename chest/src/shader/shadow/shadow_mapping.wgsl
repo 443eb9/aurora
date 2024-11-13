@@ -9,7 +9,11 @@
 
 #ifdef SHADOW_MAPPING
 
+#ifdef NORMAL_OFFSET
 const CONSTANT_BIAS: f32 = 0.001;
+#else // NORMAL_OFFSET
+const CONSTANT_BIAS: f32 = 0.0;
+#endif // NORMAL_OFFSET
 
 @group(#SHADOW_MAPPING) @binding(0) var<storage> cascade_views: array<Camera>;
 @group(#SHADOW_MAPPING) @binding(1) var<storage> point_light_views: array<Camera>;

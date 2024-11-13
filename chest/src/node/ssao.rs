@@ -47,6 +47,19 @@ pub struct Ssao {
     pub ssao_sampler: SamplerId,
 }
 
+impl Default for SsaoConfig {
+    fn default() -> Self {
+        Self {
+            texture_dim: UVec2::ZERO,
+            slices: 8,
+            samples: 8,
+            strength: 5.0,
+            angle_bias: std::f32::consts::FRAC_PI_6,
+            max_depth_diff: 1.2,
+        }
+    }
+}
+
 pub const SSAO: Ssao = Ssao {
     ssao_texture: TextureId(Uuid::from_u128(4365164098645125120)),
     ssao_texture_view: TextureViewId(Uuid::from_u128(15633484787465123021548)),
@@ -65,27 +78,17 @@ pub const SSAO_TEXTURE_FORMAT: TextureFormat = TextureFormat::R32Float;
 
 #[derive(Default)]
 pub struct SsaoNode {
-    pipeline: Option<ComputePipeline>,
+    pub config: SsaoConfig,
+
+    pub pipeline: Option<ComputePipeline>,
 }
 
 impl SsaoNode {
-    pub const CONFIG: SsaoConfig = SsaoConfig {
-        texture_dim: UVec2::ZERO,
-        slices: 8,
-        samples: 8,
-        strength: 5.0,
-        angle_bias: std::f32::consts::FRAC_PI_6,
-        max_depth_diff: 1.2,
-    };
     pub const WORKGROUP_SIZE: u32 = 16;
 }
 
 impl RenderNode for SsaoNode {
-    fn require_shader_defs(
-        &self,
-        shader_defs: &mut HashMap<String, ShaderDefValue>,
-        _config_bits: u32,
-    ) {
+    fn require_shader_defs(&self, shader_defs: &mut HashMap<String, ShaderDefValue>) {
         shader_defs.insert(
             "WORKGROUP_SIZE".to_string(),
             ShaderDefValue::UInt(Self::WORKGROUP_SIZE),
@@ -275,7 +278,7 @@ impl RenderNode for SsaoNode {
         let mut bf_config = DynamicGpuBuffer::new(BufferUsages::UNIFORM);
         bf_config.push(&SsaoConfig {
             texture_dim: targets.size,
-            ..Self::CONFIG
+            ..self.config
         });
         bf_config.write::<SsaoConfig>(device, queue);
 

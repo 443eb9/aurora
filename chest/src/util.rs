@@ -5,7 +5,8 @@ use aurora_core::render::helper::{
 };
 use glam::{Mat4, Vec3, Vec4Swizzles};
 use naga_oil::compose::{
-    ComposableModuleDescriptor, Composer, ComposerError, NagaModuleDescriptor, ShaderDefValue,
+    ComposableModuleDescriptor, Composer, ComposerError, ErrSource, NagaModuleDescriptor,
+    ShaderDefValue,
 };
 use wgpu::naga::Module;
 

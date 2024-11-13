@@ -35,9 +35,9 @@ pub fn expand_shader_def_enum(input: syn::DeriveInput) -> proc_macro::TokenStrea
 
     quote::quote! {
         impl aurora_core::render::ShaderDefEnum for #ty {
-            fn to_def(self) -> (String, naga_oil::compose::ShaderDefValue) {
+            fn to_def(&self) -> (String, naga_oil::compose::ShaderDefValue) {
                 (
-                    match self {
+                    match &self {
                         #(#arms)*
                     },
                     naga_oil::compose::ShaderDefValue::Bool(true),

@@ -42,7 +42,6 @@ pub struct Application<'a> {
 
     main_camera: Arc<Mutex<ControllableCamera>>,
     scene: GpuScene,
-    shader_defs: HashMap<String, ShaderDefValue>,
 
     flow: crate::render::PbrRenderFlow,
     last_draw: Instant,
@@ -124,13 +123,6 @@ impl<'a> Application<'a> {
             CameraConfig::default(),
         );
 
-        let shader_defs = [
-            PbrSpecular::GGX.to_def(),
-            PbrDiffuse::Lambert.to_def(),
-            // "TEX_NORMAL".to_def(),
-        ]
-        .into();
-
         Self {
             renderer,
             window,
@@ -140,7 +132,6 @@ impl<'a> Application<'a> {
 
             scene,
             flow,
-            shader_defs,
 
             main_camera: Arc::new(Mutex::new(main_camera)),
 
@@ -239,19 +230,13 @@ impl<'a> Application<'a> {
         self.flow.inner.set_queue(self.scene.static_meshes.clone());
 
         if force_build {
-            self.flow.inner.force_build(
-                &self.renderer,
-                &mut self.scene,
-                Some(self.shader_defs.clone()),
-                &targets,
-            );
+            self.flow
+                .inner
+                .force_build(&self.renderer, &mut self.scene, None, &targets);
         } else {
-            self.flow.inner.build(
-                &self.renderer,
-                &mut self.scene,
-                Some(self.shader_defs.clone()),
-                &targets,
-            );
+            self.flow
+                .inner
+                .build(&self.renderer, &mut self.scene, None, &targets);
         }
 
         self.flow

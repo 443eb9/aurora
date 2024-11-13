@@ -21,16 +21,17 @@ impl Default for PbrRenderFlow {
         flow.add::<ShadowMappingNode>();
         flow.add::<SsaoNode>();
         // flow.add::<EnvironmentMappingNode>();
-        flow.add::<PbrNode>();
+        flow.add_initialized(PbrNode {
+            node_cfg: PbrNodeConfig::SSAO | PbrNodeConfig::SHADOW_MAPPING,
+            ..Default::default()
+        });
         // flow.add::<DepthViewNode>();
 
-        flow.config_node::<PbrNode>(PbrNodeConfig::SSAO);
-        // flow.config_node::<PbrNode>(PbrNodeConfig::SHADOW_MAPPING);
         // flow.config_node::<PbrNode>(PbrNodeConfig::ENVIRONMENT_MAPPING);
-        flow.add_extra_data::<EnvironmentMappingNode>(
-            ENVIRONMENT_MAP_PATH_ATTR,
-            "chest/assets/envmap/sunny_prairie_expanse_cube_map.hdr".into(),
-        );
+        // flow.add_extra_data::<EnvironmentMappingNode>(
+        //     ENVIRONMENT_MAP_PATH_ATTR,
+        //     "chest/assets/envmap/sunny_prairie_expanse_cube_map.hdr".into(),
+        // );
 
         Self { inner: flow }
     }

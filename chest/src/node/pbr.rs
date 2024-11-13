@@ -5,10 +5,11 @@ use std::{
 
 use aurora_core::{
     render::{
-        flow::{ConfigurableRenderNode, PipelineCreationContext, RenderContext, RenderNode},
+        flow::{PipelineCreationContext, RenderContext, RenderNode},
         mesh::CreateBindGroupLayout,
         resource::DynamicGpuBuffer,
         scene::{GpuScene, MaterialTypeId, TextureId},
+        ShaderDefEnum,
     },
     util::ext::TypeIdAsUuid,
 };
@@ -26,6 +27,7 @@ use wgpu::{
 use crate::{
     material::{PbrMaterial, PbrMaterialUniform},
     node::{shadow_mapping::SHADOW_MAPPING, DEPTH_PREPASS_TEXTURE, ENV_MAPPING, SSAO},
+    shader_defs::{PbrDiffuse, PbrSpecular},
     texture,
 };
 
@@ -33,6 +35,7 @@ pub const TONY_MC_MAPFACE_LUT: TextureId =
     TextureId(Uuid::from_u128(7949841653150346834163056985041356));
 
 bitflags::bitflags! {
+    #[derive(Default)]
     pub struct PbrNodeConfig: u32 {
         const SHADOW_MAPPING = 1 << 0;
         const ENVIRONMENT_MAPPING = 1 << 1;
@@ -42,14 +45,14 @@ bitflags::bitflags! {
 
 #[derive(Default)]
 pub struct PbrNode {
-    mat_uuid: MaterialTypeId,
-    shadow_mapping_index: u32,
-    env_mapping_index: u32,
-    ssao_index: u32,
-}
+    pub diffuse: PbrDiffuse,
+    pub specular: PbrSpecular,
+    pub node_cfg: PbrNodeConfig,
 
-impl ConfigurableRenderNode for PbrNode {
-    type Config = PbrNodeConfig;
+    pub mat_uuid: MaterialTypeId,
+    pub shadow_mapping_index: u32,
+    pub env_mapping_index: u32,
+    pub ssao_index: u32,
 }
 
 impl RenderNode for PbrNode {
@@ -66,26 +69,23 @@ impl RenderNode for PbrNode {
         limits.max_bind_groups = limits.max_bind_groups.max(6);
     }
 
-    fn require_shader_defs(
-        &self,
-        shader_defs: &mut HashMap<String, ShaderDefValue>,
-        config_bits: u32,
-    ) {
-        let config = self.get_config(config_bits);
+    fn require_shader_defs(&self, shader_defs: &mut HashMap<String, ShaderDefValue>) {
         shader_defs.extend([
             ("LUT_TEX_BINDING".to_string(), ShaderDefValue::UInt(4)),
             ("LUT_SAMPLER_BINDING".to_string(), ShaderDefValue::UInt(5)),
+            self.diffuse.to_def(),
+            self.specular.to_def(),
         ]);
 
         let mut bind_groups = 3;
-        if config.contains(PbrNodeConfig::SHADOW_MAPPING) {
+        if self.node_cfg.contains(PbrNodeConfig::SHADOW_MAPPING) {
             shader_defs.insert(
                 "SHADOW_MAPPING".to_string(),
                 ShaderDefValue::UInt(bind_groups),
             );
             bind_groups += 1;
         }
-        if config.contains(PbrNodeConfig::SSAO) {
+        if self.node_cfg.contains(PbrNodeConfig::SSAO) {
             shader_defs.insert("SSAO".to_string(), ShaderDefValue::UInt(bind_groups));
             // bind_groups += 1;
         }
@@ -123,10 +123,8 @@ impl RenderNode for PbrNode {
             shader,
             meshes,
             pipelines,
-            config_bits,
         }: PipelineCreationContext,
     ) {
-        let config = self.get_config(config_bits);
         PbrMaterial::create_layout(device, assets);
 
         let (l_camera, l_lights, l_material) = (
@@ -136,11 +134,11 @@ impl RenderNode for PbrNode {
         );
 
         let mut bind_group_layouts = vec![l_camera, l_lights, l_material];
-        if config.contains(PbrNodeConfig::SHADOW_MAPPING) {
+        if self.node_cfg.contains(PbrNodeConfig::SHADOW_MAPPING) {
             self.shadow_mapping_index = bind_group_layouts.len() as u32;
             bind_group_layouts.push(&assets.extra_layouts[&SHADOW_MAPPING.shadow_maps_layout]);
         }
-        if config.contains(PbrNodeConfig::SSAO) {
+        if self.node_cfg.contains(PbrNodeConfig::SSAO) {
             self.ssao_index = bind_group_layouts.len() as u32;
             bind_group_layouts.push(&assets.extra_layouts[&SSAO.ssao_layout]);
         }
@@ -267,7 +265,6 @@ impl RenderNode for PbrNode {
             targets,
         }: RenderContext,
     ) {
-        let config = self.get_config(node.config);
         let mut encoder = device.create_command_encoder(&CommandEncoderDescriptor::default());
 
         let (Some(b_camera), Some(b_lights)) =
@@ -276,23 +273,20 @@ impl RenderNode for PbrNode {
             return;
         };
 
-        let b_shadow_maps = if config.contains(PbrNodeConfig::SHADOW_MAPPING) {
-            Some(&assets.extra_bind_groups[&SHADOW_MAPPING.shadow_maps_bind_group])
-        } else {
-            None
-        };
+        let b_shadow_maps = self
+            .node_cfg
+            .contains(PbrNodeConfig::SHADOW_MAPPING)
+            .then(|| &assets.extra_bind_groups[&SHADOW_MAPPING.shadow_maps_bind_group]);
 
-        let b_env_mapping = if config.contains(PbrNodeConfig::ENVIRONMENT_MAPPING) {
-            Some(&assets.extra_bind_groups[&ENV_MAPPING.env_mapping_bind_group])
-        } else {
-            None
-        };
+        let b_env_mapping = self
+            .node_cfg
+            .contains(PbrNodeConfig::ENVIRONMENT_MAPPING)
+            .then(|| &assets.extra_bind_groups[&ENV_MAPPING.env_mapping_bind_group]);
 
-        let b_ssao = if config.contains(PbrNodeConfig::SSAO) {
-            Some(&assets.extra_bind_groups[&SSAO.ssao_bind_group])
-        } else {
-            None
-        };
+        let b_ssao = self
+            .node_cfg
+            .contains(PbrNodeConfig::SSAO)
+            .then(|| &assets.extra_bind_groups[&SSAO.ssao_bind_group]);
 
         {
             let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {
@@ -318,13 +312,13 @@ impl RenderNode for PbrNode {
 
             pass.set_bind_group(0, b_camera, &[]);
             pass.set_bind_group(1, b_lights, &[]);
-            if config.contains(PbrNodeConfig::SHADOW_MAPPING) {
+            if self.node_cfg.contains(PbrNodeConfig::SHADOW_MAPPING) {
                 pass.set_bind_group(self.shadow_mapping_index, b_shadow_maps.unwrap(), &[]);
             }
-            if config.contains(PbrNodeConfig::ENVIRONMENT_MAPPING) {
+            if self.node_cfg.contains(PbrNodeConfig::ENVIRONMENT_MAPPING) {
                 pass.set_bind_group(self.env_mapping_index, b_env_mapping.unwrap(), &[]);
             }
-            if config.contains(PbrNodeConfig::SSAO) {
+            if self.node_cfg.contains(PbrNodeConfig::SSAO) {
                 pass.set_bind_group(self.ssao_index, b_ssao.unwrap(), &[]);
             }
 

@@ -4,7 +4,6 @@ use std::{
     collections::HashMap,
 };
 
-use bitflags::Flags;
 use encase::ShaderType;
 use indexmap::IndexMap;
 use naga_oil::compose::{
@@ -80,7 +79,6 @@ pub struct NodeContext {
     pub shader: Option<ShaderModule>,
     pub meshes: Vec<RenderMesh>,
     pub pipelines: HashMap<MeshInstanceId, RenderPipeline>,
-    pub config: u32,
     pub extra_data: HashMap<&'static str, NodeExtraData>,
 }
 
@@ -97,7 +95,6 @@ pub struct PipelineCreationContext<'a> {
     pub shader: &'a ShaderModule,
     pub meshes: &'a Vec<RenderMesh>,
     pub pipelines: &'a mut HashMap<MeshInstanceId, RenderPipeline>,
-    pub config_bits: u32,
 }
 
 #[derive(Default)]
@@ -134,6 +131,17 @@ impl RenderFlow {
     }
 
     #[inline]
+    pub fn add_initialized<T: RenderNode>(&mut self, node: T) {
+        self.flow.insert(
+            TypeId::of::<T>(),
+            PackedRenderNode {
+                node: Box::new(node),
+                context: Default::default(),
+            },
+        );
+    }
+
+    #[inline]
     pub fn set_queue(&mut self, meshes: Vec<StaticMesh>) {
         let meshes = meshes
             .iter()
@@ -146,13 +154,6 @@ impl RenderFlow {
         self.flow.values_mut().for_each(|node| {
             node.context.meshes = meshes.clone();
         });
-    }
-
-    #[inline]
-    pub fn config_node<N: RenderNode + ConfigurableRenderNode>(&mut self, config: N::Config) {
-        if let Some(node) = self.flow.get_mut(&TypeId::of::<N>()) {
-            node.context.config |= config.bits();
-        }
     }
 
     #[inline]
@@ -185,8 +186,6 @@ impl RenderFlow {
         targets: &RenderTargets,
     ) {
         for PackedRenderNode { node, context } in self.flow.values_mut() {
-            node.self_configuration(context);
-
             if let Some(restriction) = node.restrict_mesh_format() {
                 for mesh in &context.meshes {
                     scene.assets.meshes[&mesh.mesh.mesh].assert_vertex(restriction);
@@ -196,8 +195,7 @@ impl RenderFlow {
 
         let mut shader_defs = shader_defs.unwrap_or_default();
         for node in self.flow.values() {
-            node.node
-                .require_shader_defs(&mut shader_defs, node.context.config);
+            node.node.require_shader_defs(&mut shader_defs);
         }
 
         for PackedRenderNode { node, context } in self.flow.values_mut() {
@@ -243,7 +241,6 @@ impl RenderFlow {
                         shader,
                         meshes: &context.meshes,
                         pipelines: &mut context.pipelines,
-                        config_bits: context.config,
                     },
                 );
             }
@@ -309,12 +306,7 @@ pub trait RenderNode: 'static {
     fn require_renderer_limits(&self, _limits: &mut Limits) {}
 
     /// Add required shader defs.
-    fn require_shader_defs(
-        &self,
-        _shader_defs: &mut HashMap<String, ShaderDefValue>,
-        _config_bits: u32,
-    ) {
-    }
+    fn require_shader_defs(&self, _shader_defs: &mut HashMap<String, ShaderDefValue>) {}
 
     /// Construct required shader, returns (dependencies, main_shader)
     fn require_shader(&self) -> Option<(&'static [&'static str], &'static str)> {
@@ -332,14 +324,6 @@ pub trait RenderNode: 'static {
 
     /// Draw meshes.
     fn draw(&self, _scene: &mut GpuScene, _context: RenderContext) {}
-}
-
-pub trait ConfigurableRenderNode {
-    type Config: bitflags::Flags<Bits = u32>;
-
-    fn get_config(&self, bits: u32) -> Self::Config {
-        Self::Config::from_bits_truncate(bits)
-    }
 }
 
 /// Prepares camera, lights and post process bind groups.

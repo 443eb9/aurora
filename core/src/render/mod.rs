@@ -7,5 +7,5 @@ pub mod resource;
 pub mod scene;
 
 pub trait ShaderDefEnum {
-    fn to_def(self) -> (String, ShaderDefValue);
+    fn to_def(&self) -> (String, ShaderDefValue);
 }
