@@ -101,12 +101,10 @@ fn fragment(in: PbrVertexOutput) -> @location(0) vec4f {
 #endif // ENVIRONMENT_MAPPING
 
 #ifdef SSAO
-    let uv = math::view_to_uv_and_depth(in.position_vs.xyz, camera.proj).xy;
-    color *= 1.0 - vec3f(min(1.0, ssao::get_ao(uv) * 10.0));
-    // color *= textureSample(ssao::ssao_texture, ssao::ssao_sampler, uv).rgb;
+    // TODO use position_cs directly from input.
+    color *= vec3f(ssao::get_ao(camera.proj * in.position_vs));
 #endif // SSAO
 
     color = pbr_function::apply_exposure(color * unlit.base_color);
     return vec4f(tonemapping::tonemapping_tony_mc_mapface(color), 1.);
-    // return vec4f(color, 1.);
 }

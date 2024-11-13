@@ -24,7 +24,7 @@ impl Default for PbrRenderFlow {
         flow.add::<PbrNode>();
         // flow.add::<DepthViewNode>();
 
-        // flow.config_node::<PbrNode>(PbrNodeConfig::SSAO);
+        flow.config_node::<PbrNode>(PbrNodeConfig::SSAO);
         // flow.config_node::<PbrNode>(PbrNodeConfig::SHADOW_MAPPING);
         // flow.config_node::<PbrNode>(PbrNodeConfig::ENVIRONMENT_MAPPING);
         flow.add_extra_data::<EnvironmentMappingNode>(

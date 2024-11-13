@@ -1,7 +1,7 @@
 use std::{any::TypeId, collections::BTreeMap};
 
 use dyn_clone::DynClone;
-use glam::{IVec2, IVec3, IVec4, Mat4, UVec2, UVec3, UVec4, Vec2, Vec3, Vec4};
+use glam::{IVec2, IVec3, IVec4, Mat3, Mat4, UVec2, UVec3, UVec4, Vec2, Vec3, Vec4};
 use log::warn;
 use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
@@ -373,14 +373,25 @@ impl Mesh {
     }
 
     pub fn transform(&mut self, mat: Mat4) {
-        if let Some(positions) = self.attributes.get_mut(&Self::POSITION_ATTR) {
-            match positions {
-                MeshVertexAttributeData::Float32x3(vertices) => {
-                    for v in vertices {
-                        *v = mat.transform_point3(*v);
-                    }
-                }
-                _ => unreachable!(),
+        if let Some(MeshVertexAttributeData::Float32x3(vertices)) =
+            self.attributes.get_mut(&Self::POSITION_ATTR)
+        {
+            for v in vertices {
+                *v = mat.transform_point3(*v);
+            }
+        }
+
+        if let Some(MeshVertexAttributeData::Float32x3(normals)) =
+            self.attributes.get_mut(&Self::NORMAL_ATTR)
+        {
+            let normal_mat = Mat3::from_cols(
+                mat.x_axis.truncate().normalize(),
+                mat.y_axis.truncate().normalize(),
+                mat.z_axis.truncate().normalize(),
+            );
+
+            for n in normals {
+                *n = normal_mat * *n;
             }
         }
     }

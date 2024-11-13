@@ -11,10 +11,13 @@ fn cos_between(x: vec3f, y: vec3f) -> f32 {
 }
 
 fn clip_to_uv(clip: vec4f) -> vec2f {
-    let ndc = clip.xyz / clip.w;
-    var uv = (ndc.xy + 1.) * 0.5;
+    var uv = (clip.xy / clip.w + 1.0) * 0.5;
     uv.y = 1.0 - uv.y;
     return uv;
+}
+
+fn square_length(x: vec3f) -> f32 {
+    return dot(x, x);
 }
 
 fn view_to_uv_and_depth(view: vec3f, proj_mat: mat4x4f) -> vec3f {

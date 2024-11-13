@@ -155,10 +155,6 @@ impl RenderNode for PbrNode {
         });
 
         for mesh in meshes {
-            if pipelines.contains_key(&mesh.mesh.mesh) {
-                continue;
-            }
-
             let instance = &assets.meshes[&mesh.mesh.mesh];
             let pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
                 label: Some("pbr_pipeline"),

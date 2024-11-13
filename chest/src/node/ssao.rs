@@ -15,7 +15,7 @@ use uuid::Uuid;
 use wgpu::{
     BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor, BindGroupLayoutEntry,
     BindingResource, BindingType, BufferBindingType, BufferUsages, ComputePassDescriptor,
-    ComputePipeline, ComputePipelineDescriptor, Extent3d, FilterMode, PipelineLayoutDescriptor,
+    ComputePipeline, ComputePipelineDescriptor, Extent3d, PipelineLayoutDescriptor,
     SamplerBindingType, SamplerDescriptor, ShaderStages, StorageTextureAccess, TextureDescriptor,
     TextureDimension, TextureFormat, TextureSampleType, TextureUsages, TextureViewDescriptor,
     TextureViewDimension,
@@ -28,6 +28,9 @@ pub struct SsaoConfig {
     pub texture_dim: UVec2,
     pub slices: u32,
     pub samples: u32,
+    pub strength: f32,
+    pub angle_bias: f32,
+    pub max_depth_diff: f32,
 }
 
 pub struct Ssao {
@@ -58,7 +61,7 @@ pub const SSAO: Ssao = Ssao {
     ssao_sampler: SamplerId(Uuid::from_u128(1464060146365201068451)),
 };
 
-pub const SSAO_TEXTURE_FORMAT: TextureFormat = TextureFormat::Rgba32Float;
+pub const SSAO_TEXTURE_FORMAT: TextureFormat = TextureFormat::R32Float;
 
 #[derive(Default)]
 pub struct SsaoNode {
@@ -68,8 +71,11 @@ pub struct SsaoNode {
 impl SsaoNode {
     pub const CONFIG: SsaoConfig = SsaoConfig {
         texture_dim: UVec2::ZERO,
-        slices: 16,
-        samples: 4,
+        slices: 8,
+        samples: 8,
+        strength: 5.0,
+        angle_bias: std::f32::consts::FRAC_PI_6,
+        max_depth_diff: 1.2,
     };
     pub const WORKGROUP_SIZE: u32 = 16;
 }
