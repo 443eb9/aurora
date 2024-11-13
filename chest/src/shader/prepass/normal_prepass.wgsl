@@ -12,11 +12,11 @@ struct VertexOutput {
 fn vertex(in: VertexInput) -> VertexOutput {
     var out: VertexOutput;
     out.position_cs = camera.proj * camera.view * vec4f(in.position, 1.);
-    out.normal_ws = in.normal;
+    out.normal_ws = normalize(in.normal);
     return out;
 }
 
 @fragment
 fn fragment(in: VertexOutput) -> @location(0) vec4f {
-    return vec4f(in.normal_ws * 0.5 + 1., 1.);
+    return vec4f(in.normal_ws * 0.5 + 0.5, 1.);
 }

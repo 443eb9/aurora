@@ -2,7 +2,9 @@
 
 struct Camera {
     view: mat4x4f,
+    inv_view: mat4x4f,
     proj: mat4x4f,
+    inv_proj: mat4x4f,
     position: vec3f,
     exposure: f32,
 }

@@ -6,11 +6,22 @@ fn sin_between(x: vec3f, y: vec3f) -> f32 {
     return length(cross(x, y)) / (length(x) * length(y));
 }
 
-fn view_to_uv_and_depth(view: vec4f, proj_mat: mat4x4f) -> vec3f {
-    let clip = proj_mat * view;
+fn cos_between(x: vec3f, y: vec3f) -> f32 {
+    return dot(x, y) / (length(x) * length(y));
+}
+
+fn clip_to_uv(clip: vec4f) -> vec2f {
     let ndc = clip.xyz / clip.w;
     var uv = (ndc.xy + 1.) * 0.5;
-    uv.y = 1. - uv.y;
+    uv.y = 1.0 - uv.y;
+    return uv;
+}
+
+fn view_to_uv_and_depth(view: vec3f, proj_mat: mat4x4f) -> vec3f {
+    let clip = proj_mat * vec4f(view, 1.0);
+    let ndc = clip.xyz / clip.w;
+    var uv = (ndc.xy + 1.0) * 0.5;
+    uv.y = 1.0 - uv.y;
     return vec3f(uv, ndc.z);
 }
 
@@ -25,5 +36,9 @@ fn rotate_vector(v: vec2f, angle: f32) -> vec2f {
 }
 
 fn rotate01_vector(v: vec2f, angle: f32) -> vec2f {
-    return rotation_mat(angle * 2. * PI) * v;
+    return rotation_mat(angle * 2.0 * PI) * v;
+}
+
+fn project_vector_to_plane(v: vec3f, plane_normal: vec3f) -> vec3f {
+    return v - dot(v, plane_normal) * plane_normal;
 }

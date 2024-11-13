@@ -401,7 +401,9 @@ pub struct RenderMesh {
 #[repr(C)]
 pub struct GpuCamera {
     pub view: Mat4,
+    pub inv_view: Mat4,
     pub proj: Mat4,
+    pub inv_proj: Mat4,
     pub position_ws: Vec3,
     pub exposure: f32,
 }

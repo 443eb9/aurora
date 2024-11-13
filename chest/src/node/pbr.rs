@@ -25,7 +25,7 @@ use wgpu::{
 
 use crate::{
     material::{PbrMaterial, PbrMaterialUniform},
-    node::{shadow_mapping::SHADOW_MAPPING, ENV_MAPPING},
+    node::{shadow_mapping::SHADOW_MAPPING, DEPTH_PREPASS_TEXTURE, ENV_MAPPING, SSAO},
     texture,
 };
 
@@ -36,12 +36,16 @@ bitflags::bitflags! {
     pub struct PbrNodeConfig: u32 {
         const SHADOW_MAPPING = 1 << 0;
         const ENVIRONMENT_MAPPING = 1 << 1;
+        const SSAO = 1 << 2;
     }
 }
 
 #[derive(Default)]
 pub struct PbrNode {
     mat_uuid: MaterialTypeId,
+    shadow_mapping_index: u32,
+    env_mapping_index: u32,
+    ssao_index: u32,
 }
 
 impl ConfigurableRenderNode for PbrNode {
@@ -59,7 +63,7 @@ impl RenderNode for PbrNode {
     }
 
     fn require_renderer_limits(&self, limits: &mut Limits) {
-        limits.max_bind_groups = limits.max_bind_groups.max(5);
+        limits.max_bind_groups = limits.max_bind_groups.max(6);
     }
 
     fn require_shader_defs(
@@ -72,13 +76,18 @@ impl RenderNode for PbrNode {
             ("LUT_TEX_BINDING".to_string(), ShaderDefValue::UInt(4)),
             ("LUT_SAMPLER_BINDING".to_string(), ShaderDefValue::UInt(5)),
         ]);
-        if config.contains(PbrNodeConfig::SHADOW_MAPPING) {
-            shader_defs.insert("SHADOW_MAPPING".to_string(), ShaderDefValue::Bool(true));
-        }
 
-        // Avoid compilation error.
-        if !shader_defs.contains_key("SHADOW_CASCADES") {
-            shader_defs.insert("SHADOW_CASCADES".to_string(), ShaderDefValue::UInt(10));
+        let mut bind_groups = 3;
+        if config.contains(PbrNodeConfig::SHADOW_MAPPING) {
+            shader_defs.insert(
+                "SHADOW_MAPPING".to_string(),
+                ShaderDefValue::UInt(bind_groups),
+            );
+            bind_groups += 1;
+        }
+        if config.contains(PbrNodeConfig::SSAO) {
+            shader_defs.insert("SSAO".to_string(), ShaderDefValue::UInt(bind_groups));
+            // bind_groups += 1;
         }
     }
 
@@ -91,6 +100,7 @@ impl RenderNode for PbrNode {
                 include_str!("../shader/common/common_binding.wgsl"),
                 include_str!("../shader/shadow/shadow_type.wgsl"),
                 include_str!("../shader/shadow/shadow_mapping.wgsl"),
+                include_str!("../shader/post_processing/ssao.wgsl"),
                 include_str!("../shader/pbr/pbr_type.wgsl"),
                 include_str!("../shader/pbr/pbr_binding.wgsl"),
                 include_str!("../shader/pbr/pbr_function.wgsl"),
@@ -127,12 +137,16 @@ impl RenderNode for PbrNode {
 
         let mut bind_group_layouts = vec![l_camera, l_lights, l_material];
         if config.contains(PbrNodeConfig::SHADOW_MAPPING) {
+            self.shadow_mapping_index = bind_group_layouts.len() as u32;
             bind_group_layouts.push(&assets.extra_layouts[&SHADOW_MAPPING.shadow_maps_layout]);
         }
-
-        if config.contains(PbrNodeConfig::ENVIRONMENT_MAPPING) {
-            bind_group_layouts.push(&assets.extra_layouts[&ENV_MAPPING.env_mapping_layout]);
+        if config.contains(PbrNodeConfig::SSAO) {
+            self.ssao_index = bind_group_layouts.len() as u32;
+            bind_group_layouts.push(&assets.extra_layouts[&SSAO.ssao_layout]);
         }
+        // if config.contains(PbrNodeConfig::ENVIRONMENT_MAPPING) {
+        //     bind_group_layouts.push(&assets.extra_layouts[&ENV_MAPPING.env_mapping_layout]);
+        // }
 
         let layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
             label: Some("pbr_pipeline_layout"),
@@ -278,6 +292,12 @@ impl RenderNode for PbrNode {
             None
         };
 
+        let b_ssao = if config.contains(PbrNodeConfig::SSAO) {
+            Some(&assets.extra_bind_groups[&SSAO.ssao_bind_group])
+        } else {
+            None
+        };
+
         {
             let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {
                 label: Some("pbr_pass"),
@@ -290,9 +310,9 @@ impl RenderNode for PbrNode {
                     },
                 })],
                 depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
-                    view: targets.depth.as_ref().unwrap(),
+                    view: &assets.texture_views[&DEPTH_PREPASS_TEXTURE.view],
                     depth_ops: Some(Operations {
-                        load: LoadOp::Clear(1.),
+                        load: LoadOp::Load,
                         store: StoreOp::Store,
                     }),
                     stencil_ops: None,
@@ -303,10 +323,13 @@ impl RenderNode for PbrNode {
             pass.set_bind_group(0, b_camera, &[]);
             pass.set_bind_group(1, b_lights, &[]);
             if config.contains(PbrNodeConfig::SHADOW_MAPPING) {
-                pass.set_bind_group(3, b_shadow_maps.unwrap(), &[]);
+                pass.set_bind_group(self.shadow_mapping_index, b_shadow_maps.unwrap(), &[]);
             }
             if config.contains(PbrNodeConfig::ENVIRONMENT_MAPPING) {
-                pass.set_bind_group(4, b_env_mapping.unwrap(), &[]);
+                pass.set_bind_group(self.env_mapping_index, b_env_mapping.unwrap(), &[]);
+            }
+            if config.contains(PbrNodeConfig::SSAO) {
+                pass.set_bind_group(self.ssao_index, b_ssao.unwrap(), &[]);
             }
 
             for mesh in &node.meshes {

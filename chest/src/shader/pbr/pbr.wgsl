@@ -3,12 +3,14 @@
     common_binding::{camera, scene},
     common_type::VertexInput,
     env_mapping::env_mapping,
+    math,
     math::PI,
     pbr::{
         pbr_binding::{dir_lights, material, point_lights, spot_lights, tex_base_color, tex_sampler},
         pbr_function,
         pbr_type::PbrVertexOutput,
     }
+    post_processing::ssao,
     shadow_mapping,
     tonemapping,
 }
@@ -97,6 +99,13 @@ fn fragment(in: PbrVertexOutput) -> @location(0) vec4f {
 #ifdef ENVIRONMENT_MAPPING
     color += env_mapping::sample_env_map(reflect(-unlit.view, unlit.normal)) * unlit.base_color;
 #endif // ENVIRONMENT_MAPPING
+
+#ifdef SSAO
+    let uv = math::view_to_uv_and_depth(in.position_vs.xyz, camera.proj).xy;
+    color *= 1.0 - vec3f(min(1.0, ssao::get_ao(uv) * 10.0));
+    // color *= textureSample(ssao::ssao_texture, ssao::ssao_sampler, uv).rgb;
+#endif // SSAO
+
     color = pbr_function::apply_exposure(color * unlit.base_color);
     return vec4f(tonemapping::tonemapping_tony_mc_mapface(color), 1.);
     // return vec4f(color, 1.);

@@ -10,11 +10,12 @@ use wgpu::{
     BindGroupLayoutEntry, BindingType, BufferBindingType, Color, ColorTargetState, ColorWrites,
     CompareFunction, DepthBiasState, DepthStencilState, Extent3d, FragmentState, LoadOp,
     Operations, PipelineLayoutDescriptor, RenderPassColorAttachment,
-    RenderPassDepthStencilAttachment, RenderPassDescriptor, RenderPipeline,
-    RenderPipelineDescriptor, ShaderStages, StoreOp, TextureDescriptor, TextureDimension,
-    TextureFormat, TextureUsages, TextureViewDescriptor, VertexBufferLayout, VertexFormat,
-    VertexState, VertexStepMode,
+    RenderPassDepthStencilAttachment, RenderPassDescriptor, RenderPipelineDescriptor, ShaderStages,
+    StoreOp, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
+    TextureViewDescriptor, VertexBufferLayout, VertexFormat, VertexState, VertexStepMode,
 };
+
+use crate::node::DEPTH_PREPASS_TEXTURE;
 
 pub struct NormalPrepassTexture {
     pub texture: TextureId,
@@ -25,6 +26,8 @@ pub const NORMAL_PREPASS_TEXTURE: NormalPrepassTexture = NormalPrepassTexture {
     texture: TextureId(Uuid::from_u128(87456135453120100496854)),
     view: TextureViewId(Uuid::from_u128(3540690463413654698451)),
 };
+
+pub const NORMAL_PREPASS_FORMAT: TextureFormat = TextureFormat::Rgb10a2Unorm;
 
 #[derive(Default)]
 pub struct NormalPrepassNode {
@@ -107,7 +110,7 @@ impl RenderNode for NormalPrepassNode {
                         entry_point: "fragment",
                         compilation_options: Default::default(),
                         targets: &[Some(ColorTargetState {
-                            format: TextureFormat::Rgba8UnormSrgb,
+                            format: NORMAL_PREPASS_FORMAT,
                             blend: None,
                             write_mask: ColorWrites::all(),
                         })],
@@ -145,7 +148,7 @@ impl RenderNode for NormalPrepassNode {
                 depth_or_array_layers: 1,
             },
             dimension: TextureDimension::D2,
-            format: TextureFormat::Rgba8UnormSrgb,
+            format: NORMAL_PREPASS_FORMAT,
             mip_level_count: 1,
             sample_count: 1,
             usage: TextureUsages::TEXTURE_BINDING | TextureUsages::RENDER_ATTACHMENT,
@@ -188,7 +191,6 @@ impl RenderNode for NormalPrepassNode {
         RenderContext {
             device,
             queue,
-            targets,
             node,
             ..
         }: RenderContext,
@@ -207,9 +209,9 @@ impl RenderNode for NormalPrepassNode {
                     },
                 })],
                 depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
-                    view: targets.depth.as_ref().unwrap(),
+                    view: &assets.texture_views[&DEPTH_PREPASS_TEXTURE.view],
                     depth_ops: Some(Operations {
-                        load: LoadOp::Clear(1.),
+                        load: LoadOp::Load,
                         store: StoreOp::Store,
                     }),
                     stencil_ops: None,

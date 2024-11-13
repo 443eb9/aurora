@@ -7,17 +7,19 @@
     shadow_type::ShadowMappingConfig,
 }
 
+#ifdef SHADOW_MAPPING
+
 const CONSTANT_BIAS: f32 = 0.001;
 
-@group(3) @binding(0) var<storage> cascade_views: array<Camera>;
-@group(3) @binding(1) var<storage> point_light_views: array<Camera>;
-@group(3) @binding(2) var shadow_map_sampler: sampler_comparison;
-@group(3) @binding(3) var shadow_texture_sampler: sampler;
-@group(3) @binding(4) var directional_shadow_map: texture_depth_2d_array;
-@group(3) @binding(5) var point_shadow_map: texture_depth_cube_array;
+@group(#SHADOW_MAPPING) @binding(0) var<storage> cascade_views: array<Camera>;
+@group(#SHADOW_MAPPING) @binding(1) var<storage> point_light_views: array<Camera>;
+@group(#SHADOW_MAPPING) @binding(2) var shadow_map_sampler: sampler_comparison;
+@group(#SHADOW_MAPPING) @binding(3) var shadow_texture_sampler: sampler;
+@group(#SHADOW_MAPPING) @binding(4) var directional_shadow_map: texture_depth_2d_array;
+@group(#SHADOW_MAPPING) @binding(5) var point_shadow_map: texture_depth_cube_array;
 // First `samples` are 2d, then `samples` are 3d.
-@group(3) @binding(6) var<storage> poisson_disk: array<vec4f>;
-@group(3) @binding(7) var<uniform> config: ShadowMappingConfig;
+@group(#SHADOW_MAPPING) @binding(6) var<storage> poisson_disk: array<vec4f>;
+@group(#SHADOW_MAPPING) @binding(7) var<uniform> config: ShadowMappingConfig;
 
 fn dir_pcf_filtering(position_vs: vec4f, position_ws: vec3f, cascade: u32, radius: f32) -> f32 {
     var shadow = 0.;
@@ -25,7 +27,7 @@ fn dir_pcf_filtering(position_vs: vec4f, position_ws: vec3f, cascade: u32, radiu
         let sample = poisson_disk[iteration].xy;
         let offset = math::rotate01_vector(sample, hash::hash12(position_ws.xz * 1000.));
         let view = position_vs + vec4f(offset * radius, 0., 0.);
-        var offseted = math::view_to_uv_and_depth(view, cascade_views[cascade].proj);
+        var offseted = math::view_to_uv_and_depth(view.xyz, cascade_views[cascade].proj);
 
         if (offseted.x > 0. && offseted.x < 1. && offseted.y > 0. && offseted.y < 1.) {
             let frag_depth = saturate(offseted.z) - CONSTANT_BIAS;
@@ -38,14 +40,14 @@ fn dir_pcf_filtering(position_vs: vec4f, position_ws: vec3f, cascade: u32, radiu
 }
 
 fn dir_pcss_filtering(position_vs: vec4f, position_ws: vec3f, cascade: u32, radius: f32, light_width: f32) -> f32 {
-    let frag_depth = math::view_to_uv_and_depth(position_vs, cascade_views[cascade].proj).z;
+    let frag_depth = math::view_to_uv_and_depth(position_vs.xyz, cascade_views[cascade].proj).z;
     var avg_blocker_depth = 0.;
     var cnt = 0;
     for (var iteration = 0u; iteration < config.samples; iteration += 1u) {
         let sample = poisson_disk[iteration].xy;
         let offset = math::rotate01_vector(sample, hash::hash12(position_ws.xz * 1000.));
         let view = position_vs + vec4f(offset * radius, 0., 0.);
-        var offseted = math::view_to_uv_and_depth(view, cascade_views[cascade].proj);
+        var offseted = math::view_to_uv_and_depth(view.xyz, cascade_views[cascade].proj);
 
         if (offseted.x > 0. && offseted.x < 1. && offseted.y > 0. && offseted.y < 1.) {
             let shadow_depth = textureSample(directional_shadow_map, shadow_texture_sampler, offseted.xy, cascade);
@@ -75,7 +77,7 @@ fn sample_cascaded_shadow_map(light: u32, position_ws: vec3f, position_vs: vec4f
         // If this point is inside this frustum slice.
         if abs(position_vs.z) > abs(cascade_views[index].exposure) {
             let position_vs = cascade_views[index].view * vec4f(position_ws, 1.);
-            let uv_and_depth = math::view_to_uv_and_depth(position_vs, cascade_views[index].proj);
+            let uv_and_depth = math::view_to_uv_and_depth(position_vs.xyz, cascade_views[index].proj);
 
             if (uv_and_depth.x > 0. && uv_and_depth.x < 1. && uv_and_depth.y > 0. && uv_and_depth.y < 1.) {
                 #ifdef PCF
@@ -167,3 +169,5 @@ fn sample_point_shadow_map(light: u32, relative_pos: vec3f, light_width: f32) ->
     return point_no_filtering(relative_pos, projected_depth, light);
 #endif // PCF
 }
+
+#endif // SHADOW_MAPPING

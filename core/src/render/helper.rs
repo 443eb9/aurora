@@ -31,9 +31,14 @@ pub struct Camera {
 
 impl Into<GpuCamera> for Camera {
     fn into(self) -> GpuCamera {
+        let inv_view = self.transform.compute_matrix();
+        let proj = self.projection.compute_matrix();
+
         GpuCamera {
-            view: self.transform.compute_matrix().inverse(),
-            proj: self.projection.compute_matrix(),
+            view: inv_view.inverse(),
+            inv_view,
+            proj,
+            inv_proj: proj.inverse(),
             position_ws: self.transform.translation,
             exposure: self.exposure.ev100,
         }
@@ -125,9 +130,14 @@ impl OrthographicProjection {
 
 impl GpuDirectionalLight {
     pub fn light_view(&self) -> GpuCamera {
+        let view = Mat4::look_to_rh(Vec3::ZERO, self.direction, Vec3::Y);
+        let proj = Mat4::orthographic_rh(-16., 16., -16., 16., 20., -20.);
+
         GpuCamera {
-            view: Mat4::look_to_rh(Vec3::ZERO, self.direction, Vec3::Y).inverse(),
-            proj: Mat4::orthographic_rh(-16., 16., -16., 16., 20., -20.),
+            view,
+            inv_view: view.inverse(),
+            proj,
+            inv_proj: proj.inverse(),
             position_ws: Vec3::ZERO,
             exposure: 0.,
         }
@@ -144,9 +154,14 @@ impl GpuPointLight {
                 let trans = Transform::default()
                     .looking_at(face.target, face.up)
                     .with_translation(self.position);
+                let inv_view = trans.compute_matrix();
+                let proj = Mat4::perspective_rh(std::f32::consts::FRAC_PI_2, 1., 0.1, 20.);
+
                 views[face_index] = GpuCamera {
-                    view: trans.compute_matrix().inverse(),
-                    proj: Mat4::perspective_rh(std::f32::consts::FRAC_PI_2, 1., 0.1, 20.),
+                    view: inv_view.inverse(),
+                    inv_view,
+                    proj,
+                    inv_proj: proj.inverse(),
                     position_ws: trans.translation,
                     exposure: 0.,
                 };

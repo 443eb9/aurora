@@ -160,7 +160,9 @@ impl ShadowMappingNode {
 
         GpuCamera {
             view: cascade_view,
+            inv_view: cascade_view.inverse(),
             proj: cascade_proj,
+            inv_proj: cascade_proj.inverse(),
             position_ws: match camera_proj_slice {
                 CameraProjection::Perspective(_) => center,
                 CameraProjection::Orthographic(_) => light_dir,

@@ -83,9 +83,12 @@ impl<'a> Application<'a> {
         let scene = load_gltf(
             // "gui/assets/gltf_test.glb",
             "gui/assets/suzanne.glb",
+            // "gui/assets/sponza.glb",
+            // "gui/assets/spheres_roughness_no_tex.glb",
             // "gui/assets/stanford_bunny.glb",
             // "gui/assets/cascade_test.glb",
             // "gui/assets/classic_blender.glb",
+            // "gui/assets/randomized_plane.glb",
             &renderer.device,
             &renderer.queue,
         )
