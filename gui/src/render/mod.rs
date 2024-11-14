@@ -24,6 +24,7 @@ impl Default for PbrRenderFlow {
         });
         flow.add_initialized(SsaoNode {
             denoise: true,
+            debug_ssao_only: false,
             ..Default::default()
         });
         // flow.add::<EnvironmentMappingNode>();

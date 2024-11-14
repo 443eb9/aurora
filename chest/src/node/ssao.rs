@@ -58,7 +58,7 @@ impl Default for SsaoConfig {
             texture_dim: UVec2::ZERO,
             slices: 4,
             samples: 4,
-            strength: 16.0,
+            strength: 20.0,
             angle_bias: std::f32::consts::FRAC_PI_3,
             // angle_bias: 0.0,
             max_depth_diff: 2.0,
@@ -91,6 +91,7 @@ pub const SSAO_TEXTURE_FORMAT: TextureFormat = TextureFormat::R32Float;
 pub struct SsaoNode {
     pub config: SsaoConfig,
     pub denoise: bool,
+    pub debug_ssao_only: bool,
 
     pub compute_pipeline: Option<ComputePipeline>,
     pub denoise_pipeline: Option<ComputePipeline>,
@@ -163,6 +164,14 @@ impl RenderNode for SsaoNode {
             "SSAO_WORKGROUP_SIZE".to_string(),
             ShaderDefValue::UInt(Self::SSAO_WORKGROUP_SIZE),
         );
+
+        if self.denoise {
+            shader_defs.insert("SSAO_DENOISE".to_string(), Default::default());
+        }
+
+        if self.debug_ssao_only {
+            shader_defs.insert("SSAO_ONLY".to_string(), Default::default());
+        }
     }
 
     fn require_shaders(&self) -> Option<&'static [(&'static [&'static str], &'static str)]> {

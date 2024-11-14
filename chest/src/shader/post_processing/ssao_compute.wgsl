@@ -54,13 +54,9 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
     let uv = vec2f(texel) / tex_sizef;
 
     // Convert all data into view space.
-    let texel_depth = view_space_depth(uv);
     let texel_vs = view_space_position(uv);
     let normal_vs = view_space_normal(uv);
-    // Direction from point to camera.
-    let view_dir = normalize(-texel_vs);
     // Random rotation to avoid artifact.
-    // let randomness = hash::hash12u(texel) * 2.0 * PI;
     let randomness = math::hilbert_curve_noise(textureLoad(hilbert_lut, texel % 64, 0).r);
 
     var ao = 0.0;
@@ -92,7 +88,7 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
 
             // Height difference. We only cares about those points that are higher than the original
             // point, and they are closer to the camera, having lower value of depth.
-            let diff = texel_depth - sample_depth;
+            let diff = -texel_vs.z - sample_depth;
             let sin_angle = diff / sqrt(diff * diff + planar_dist * planar_dist);
             let horizon_angle = asin(sin_angle);
             
@@ -111,8 +107,11 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
     }
 
     ao /= f32(config.slices * config.samples);
-    // ao = pow(1.0 - saturate(ao * config.strength), config.strength);
+#ifdef SSAO_DENOISE
     ao = 1.0 - saturate(ao);
+#else // SSAO_DENOISE
+    ao = pow(1.0 - saturate(ao * config.strength), config.strength);
+#endif // SSAO_DENOISE
 
     textureStore(output, id.xy, vec4f(ao, 0.0, 0.0, 0.0));
 }

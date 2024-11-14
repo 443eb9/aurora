@@ -27,8 +27,8 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
     var sum = 0.0;
     var weight = 0.0;
 
-    for (var dx = -2; dx <= 2; dx += 1) {
-        for (var dy = -2; dy <= 2; dy += 1) {
+    for (var dx = -5; dx <= 5; dx += 1) {
+        for (var dy = -5; dy <= 5; dy += 1) {
             let v = vec2i(dx, dy);
             let x = textureLoad(noisy_ao, vec2i(texel) + v, 0).r;
             let dist = length(vec2f(v));

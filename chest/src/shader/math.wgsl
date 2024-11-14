@@ -51,6 +51,7 @@ fn normal_distribution(x: f32, mean: f32, variance: f32) -> f32 {
     return 1.0 / sqrt(2.0 * PI * variance * variance) * exp(-(t * t) / (2.0 * variance * variance));
 }
 
+// https://extremelearning.com.au/unreasonable-effectiveness-of-quasirandom-sequences/
 fn hilbert_curve_noise(index: u32) -> vec2f {
     return fract(0.5 + f32(index) * vec2<f32>(0.75487766624669276005, 0.5698402909980532659114));
 }
