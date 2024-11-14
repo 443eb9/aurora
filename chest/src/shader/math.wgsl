@@ -48,5 +48,9 @@ fn project_vector_to_plane(v: vec3f, plane_normal: vec3f) -> vec3f {
 
 fn normal_distribution(x: f32, mean: f32, variance: f32) -> f32 {
     let t = x - mean;
-    return 1.0 / sqrt(2.0 * PI * variance & variance) * exp(-(t * t) / (2.0 * variance * variance));
+    return 1.0 / sqrt(2.0 * PI * variance * variance) * exp(-(t * t) / (2.0 * variance * variance));
+}
+
+fn hilbert_curve_noise(index: u32) -> vec2f {
+    return fract(0.5 + f32(index) * vec2<f32>(0.75487766624669276005, 0.5698402909980532659114));
 }

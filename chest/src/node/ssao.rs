@@ -58,9 +58,10 @@ impl Default for SsaoConfig {
             texture_dim: UVec2::ZERO,
             slices: 4,
             samples: 4,
-            strength: 8.0,
-            angle_bias: std::f32::consts::FRAC_PI_6,
-            max_depth_diff: 0.5,
+            strength: 16.0,
+            angle_bias: std::f32::consts::FRAC_PI_3,
+            // angle_bias: 0.0,
+            max_depth_diff: 2.0,
         }
     }
 }
@@ -175,7 +176,7 @@ impl RenderNode for SsaoNode {
                 include_str!("../shader/post_processing/ssao_compute.wgsl"),
             ),
             (
-                &[],
+                &[include_str!("../shader/math.wgsl")],
                 include_str!("../shader/post_processing/ssao_denoise.wgsl"),
             ),
         ])

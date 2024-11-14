@@ -1,6 +1,6 @@
 use aurora_chest::node::{
     BasicTriangleNode, DepthPrepassNode, EnvironmentMappingNode, NormalPrepassNode, PbrNode,
-    PbrNodeConfig, ShadowMappingNode, SsaoNode, ENVIRONMENT_MAP_PATH_ATTR,
+    PbrNodeConfig, ShadowMappingNode, ShadowMappingNodeConfig, SsaoNode, ENVIRONMENT_MAP_PATH_ATTR,
 };
 use aurora_core::render::flow::{
     GeneralNode, ImageFallbackNode, PostProcessGeneralNode, RenderFlow,
@@ -18,7 +18,10 @@ impl Default for PbrRenderFlow {
         flow.add::<DepthPrepassNode>();
         flow.add::<NormalPrepassNode>();
         // flow.add::<PostProcessGeneralNode>();
-        flow.add::<ShadowMappingNode>();
+        flow.add_initialized(ShadowMappingNode {
+            node_cfg: ShadowMappingNodeConfig::RANDOMIZE,
+            ..Default::default()
+        });
         flow.add_initialized(SsaoNode {
             denoise: true,
             ..Default::default()

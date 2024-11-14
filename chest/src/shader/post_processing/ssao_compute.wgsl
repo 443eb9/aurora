@@ -19,11 +19,6 @@ struct SsaoConfig {
 
 const STEP_LENGTH: f32 = 0.02;
 
-fn load_noise(texel: vec2u) -> vec2f {
-    let index = textureLoad(hilbert_lut, texel % 64, 0).r;
-    return fract(0.5 + f32(index) * vec2<f32>(0.75487766624669276005, 0.5698402909980532659114));
-}
-
 fn view_space_normal(uv: vec2f) -> vec3f {
     let normal_ws = textureSampleLevel(normal, tex_sampler, uv, 0.0).xyz;
     let view_mat = mat3x3f(
@@ -66,7 +61,7 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
     let view_dir = normalize(-texel_vs);
     // Random rotation to avoid artifact.
     // let randomness = hash::hash12u(texel) * 2.0 * PI;
-    let randomness = load_noise(texel);
+    let randomness = math::hilbert_curve_noise(textureLoad(hilbert_lut, texel % 64, 0).r);
 
     var ao = 0.0;
 
@@ -89,7 +84,7 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
 
         for (var sample_index = 1u; sample_index <= config.samples; sample_index += 1u) {
             // March in the sample direction, in view space.
-            let planar_dist = (f32(sample_index) + randomness.y) * STEP_LENGTH;
+            var planar_dist = (f32(sample_index) + randomness.y) * STEP_LENGTH;
             let sample_vs = texel_vs + dir3 * planar_dist;
 
             // Get the depth at this sample position.
@@ -102,7 +97,7 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
             let horizon_angle = asin(sin_angle);
             
             // Find the highest point.
-            if sin_angle > sin_horizon_angle && horizon_angle > tangent_angle + config.angle_bias && diff < config.max_depth_diff {
+            if sin_angle > sin_horizon_angle && horizon_angle > config.angle_bias && diff < config.max_depth_diff {
                 let t = f32(sample_index - 1u) / f32(config.samples);
                 let sample_weight = 1.0 - t * t;
 
@@ -116,7 +111,8 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
     }
 
     ao /= f32(config.slices * config.samples);
-    ao = pow(1.0 - saturate(ao * config.strength), config.strength);
+    // ao = pow(1.0 - saturate(ao * config.strength), config.strength);
+    ao = 1.0 - saturate(ao);
 
     textureStore(output, id.xy, vec4f(ao, 0.0, 0.0, 0.0));
 }

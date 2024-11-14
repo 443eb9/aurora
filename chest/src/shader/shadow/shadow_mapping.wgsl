@@ -12,7 +12,7 @@
 #ifdef NORMAL_OFFSET
 const CONSTANT_BIAS: f32 = 0.001;
 #else // NORMAL_OFFSET
-const CONSTANT_BIAS: f32 = 0.0;
+const CONSTANT_BIAS: f32 = 0.0001;
 #endif // NORMAL_OFFSET
 
 @group(#SHADOW_MAPPING) @binding(0) var<storage> cascade_views: array<Camera>;
@@ -29,8 +29,12 @@ fn dir_pcf_filtering(position_vs: vec4f, position_ws: vec3f, cascade: u32, radiu
     var shadow = 0.;
     for (var iteration = 0u; iteration < config.samples; iteration += 1u) {
         let sample = poisson_disk[iteration].xy;
+#ifdef SHADOW_MAP_SAMPLE_RANDOMIZE
         let offset = math::rotate01_vector(sample, hash::hash12(position_ws.xz * 1000.));
         let view = position_vs + vec4f(offset * radius, 0., 0.);
+#else // SHADOW_MAP_SAMPLE_RANDOMIZE
+        let view = position_vs + vec4f(sample * radius, 0., 0.);
+#endif // SHADOW_MAP_SAMPLE_RANDOMIZE
         var offseted = math::view_to_uv_and_depth(view.xyz, cascade_views[cascade].proj);
 
         if (offseted.x > 0. && offseted.x < 1. && offseted.y > 0. && offseted.y < 1.) {
@@ -49,8 +53,12 @@ fn dir_pcss_filtering(position_vs: vec4f, position_ws: vec3f, cascade: u32, radi
     var cnt = 0;
     for (var iteration = 0u; iteration < config.samples; iteration += 1u) {
         let sample = poisson_disk[iteration].xy;
+#ifdef SHADOW_MAP_SAMPLE_RANDOMIZE
         let offset = math::rotate01_vector(sample, hash::hash12(position_ws.xz * 1000.));
         let view = position_vs + vec4f(offset * radius, 0., 0.);
+#else // SHADOW_MAP_SAMPLE_RANDOMIZE
+        let view = position_vs + vec4f(sample * radius, 0., 0.);
+#endif // SHADOW_MAP_SAMPLE_RANDOMIZE
         var offseted = math::view_to_uv_and_depth(view.xyz, cascade_views[cascade].proj);
 
         if (offseted.x > 0. && offseted.x < 1. && offseted.y > 0. && offseted.y < 1.) {

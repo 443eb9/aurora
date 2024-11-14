@@ -31,6 +31,13 @@ use crate::{
     util::{self, frustum_slice, Aabb},
 };
 
+bitflags::bitflags! {
+    #[derive(Default)]
+    pub struct ShadowMappingNodeConfig : u32 {
+        const RANDOMIZE = 1 << 0;
+    }
+}
+
 pub enum ShadowMapPartitioning {
     PSSM(u32),
     SDSM(u32),
@@ -116,6 +123,7 @@ pub struct ShadowMappingNode {
     pub filtering: Option<ShadowFiltering>,
     pub depth_biasing: DepthBiasing,
     pub show_cascades: bool,
+    pub node_cfg: ShadowMappingNodeConfig,
 
     pub directional_views: HashMap<Uuid, Vec<TextureViewId>>,
     pub point_views: HashMap<Uuid, [TextureViewId; 6]>,
@@ -129,6 +137,7 @@ impl Default for ShadowMappingNode {
             partitioning: Some(ShadowMapPartitioning::PSSM(3)),
             filtering: Some(ShadowFiltering::PCSS),
             depth_biasing: Default::default(),
+            node_cfg: Default::default(),
             show_cascades: Default::default(),
             directional_views: Default::default(),
             point_views: Default::default(),
@@ -232,6 +241,13 @@ impl RenderNode for ShadowMappingNode {
             "SHADOW_CASCADES".to_owned(),
             ShaderDefValue::UInt(self.cascade_count()),
         )]);
+
+        if self.node_cfg.contains(ShadowMappingNodeConfig::RANDOMIZE) {
+            shader_defs.insert(
+                "SHADOW_MAP_SAMPLE_RANDOMIZE".to_string(),
+                ShaderDefValue::Bool(true),
+            );
+        }
 
         if let Some(filtering) = &self.filtering {
             shader_defs.extend([filtering.to_def()]);
