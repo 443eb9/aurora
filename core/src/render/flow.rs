@@ -76,7 +76,7 @@ struct PackedRenderNode {
 
 #[derive(Default)]
 pub struct NodeContext {
-    pub shader: Option<ShaderModule>,
+    pub shaders: Vec<ShaderModule>,
     pub meshes: Vec<RenderMesh>,
     pub pipelines: HashMap<MeshInstanceId, RenderPipeline>,
     pub extra_data: HashMap<&'static str, NodeExtraData>,
@@ -92,7 +92,7 @@ pub struct RenderContext<'a> {
 pub struct PipelineCreationContext<'a> {
     pub device: &'a Device,
     pub targets: &'a RenderTargets,
-    pub shader: &'a ShaderModule,
+    pub shaders: &'a Vec<ShaderModule>,
     pub meshes: &'a Vec<RenderMesh>,
     pub pipelines: &'a mut HashMap<MeshInstanceId, RenderPipeline>,
 }
@@ -132,6 +132,25 @@ impl RenderFlow {
 
     #[inline]
     pub fn add_initialized<T: RenderNode>(&mut self, node: T) {
+        let mut before = Vec::new();
+        let mut after = Vec::new();
+
+        for (index, dep) in node.add_node_dependencies() {
+            let elem = (
+                dep.identifier(),
+                PackedRenderNode {
+                    node: dep,
+                    context: Default::default(),
+                },
+            );
+
+            match index {
+                DependencyNodeIndex::Before => before.push(elem),
+                DependencyNodeIndex::After => after.push(elem),
+            }
+        }
+
+        self.flow.extend(before);
         self.flow.insert(
             TypeId::of::<T>(),
             PackedRenderNode {
@@ -139,6 +158,7 @@ impl RenderFlow {
                 context: Default::default(),
             },
         );
+        self.flow.extend(after);
     }
 
     #[inline]
@@ -199,51 +219,55 @@ impl RenderFlow {
         }
 
         for PackedRenderNode { node, context } in self.flow.values_mut() {
-            if let Some((deps, main)) = node.require_shader() {
-                let mut composer = Composer::default();
-                for dep in deps {
-                    composer
-                        .add_composable_module(ComposableModuleDescriptor {
-                            source: dep,
+            if let Some(shaders) = node.require_shaders() {
+                let mut compiled = Vec::with_capacity(shaders.len());
+                for (deps, main) in shaders {
+                    let mut composer = Composer::default();
+                    for dep in deps.into_iter() {
+                        composer
+                            .add_composable_module(ComposableModuleDescriptor {
+                                source: dep,
+                                shader_defs: shader_defs.clone(),
+                                ..Default::default()
+                            })
+                            .expect(&format!(
+                                "Error on building shader dependencies for node {}",
+                                node.label()
+                            ));
+                    }
+                    let module = composer
+                        .make_naga_module(NagaModuleDescriptor {
+                            source: &main,
                             shader_defs: shader_defs.clone(),
                             ..Default::default()
                         })
                         .expect(&format!(
-                            "Error on building shader dependencies for node {}",
+                            "Error on building main shader for node {}",
                             node.label()
                         ));
+
+                    compiled.push(
+                        renderer
+                            .device
+                            .create_shader_module(ShaderModuleDescriptor {
+                                label: None,
+                                source: ShaderSource::Naga(Cow::Owned(module)),
+                            }),
+                    );
                 }
-                let module = composer
-                    .make_naga_module(NagaModuleDescriptor {
-                        source: &main,
-                        shader_defs: shader_defs.clone(),
-                        ..Default::default()
-                    })
-                    .expect(&format!(
-                        "Error on building main shader for node {}",
-                        node.label()
-                    ));
-
-                context.shader = Some(renderer.device.create_shader_module(
-                    ShaderModuleDescriptor {
-                        label: None,
-                        source: ShaderSource::Naga(Cow::Owned(module)),
-                    },
-                ));
+                context.shaders = compiled;
             }
 
-            if let Some(shader) = &context.shader {
-                node.create_pipelines(
-                    scene,
-                    PipelineCreationContext {
-                        device: &renderer.device,
-                        targets,
-                        shader,
-                        meshes: &context.meshes,
-                        pipelines: &mut context.pipelines,
-                    },
-                );
-            }
+            node.create_pipelines(
+                scene,
+                PipelineCreationContext {
+                    device: &renderer.device,
+                    targets,
+                    shaders: &context.shaders,
+                    meshes: &context.meshes,
+                    pipelines: &mut context.pipelines,
+                },
+            );
 
             node.build(
                 scene,
@@ -285,18 +309,29 @@ impl RenderFlow {
     }
 }
 
+pub enum DependencyNodeIndex {
+    Before,
+    After,
+}
+
 pub trait RenderNode: 'static {
+    fn identifier(&self) -> TypeId {
+        TypeId::of::<Self>()
+    }
+
     /// Get label of this node.
     fn label(&self) -> &'static str {
         type_name::<Self>()
     }
 
-    /// Config self according to context.
-    fn self_configuration(&self, _context: &mut NodeContext) {}
-
     /// Restrict the format that this node accepts.
     fn restrict_mesh_format(&self) -> Option<&'static [VertexFormat]> {
         None
+    }
+
+    /// Add nodes as dependencies.
+    fn add_node_dependencies(&self) -> Vec<(DependencyNodeIndex, Box<dyn RenderNode>)> {
+        Vec::new()
     }
 
     /// Add required features
@@ -309,7 +344,7 @@ pub trait RenderNode: 'static {
     fn require_shader_defs(&self, _shader_defs: &mut HashMap<String, ShaderDefValue>) {}
 
     /// Construct required shader, returns (dependencies, main_shader)
-    fn require_shader(&self) -> Option<(&'static [&'static str], &'static str)> {
+    fn require_shaders(&self) -> Option<&'static [(&'static [&'static str], &'static str)]> {
         None
     }
 

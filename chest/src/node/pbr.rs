@@ -91,8 +91,8 @@ impl RenderNode for PbrNode {
         }
     }
 
-    fn require_shader(&self) -> Option<(&'static [&'static str], &'static str)> {
-        Some((
+    fn require_shaders(&self) -> Option<&'static [(&'static [&'static str], &'static str)]> {
+        Some(&[(
             &[
                 include_str!("../shader/math.wgsl"),
                 include_str!("../shader/hash.wgsl"),
@@ -111,7 +111,7 @@ impl RenderNode for PbrNode {
                 include_str!("../shader/pbr/pbr.wgsl"),
             ],
             include_str!("../shader/pbr/pbr.wgsl"),
-        ))
+        )])
     }
 
     fn create_pipelines(
@@ -120,7 +120,7 @@ impl RenderNode for PbrNode {
         PipelineCreationContext {
             device,
             targets,
-            shader,
+            shaders: shader,
             meshes,
             pipelines,
         }: PipelineCreationContext,
@@ -159,7 +159,7 @@ impl RenderNode for PbrNode {
                 layout: Some(&layout),
                 cache: None,
                 vertex: VertexState {
-                    module: shader,
+                    module: &shader[0],
                     entry_point: "vertex",
                     compilation_options: PipelineCompilationOptions::default(),
                     buffers: &[VertexBufferLayout {
@@ -170,7 +170,7 @@ impl RenderNode for PbrNode {
                 },
                 multisample: MultisampleState::default(),
                 fragment: Some(FragmentState {
-                    module: shader,
+                    module: &shader[0],
                     entry_point: "fragment",
                     compilation_options: PipelineCompilationOptions::default(),
                     targets: &[Some(ColorTargetState {

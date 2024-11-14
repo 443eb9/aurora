@@ -45,3 +45,8 @@ fn rotate01_vector(v: vec2f, angle: f32) -> vec2f {
 fn project_vector_to_plane(v: vec3f, plane_normal: vec3f) -> vec3f {
     return v - dot(v, plane_normal) * plane_normal;
 }
+
+fn normal_distribution(x: f32, mean: f32, variance: f32) -> f32 {
+    let t = x - mean;
+    return 1.0 / sqrt(2.0 * PI * variance & variance) * exp(-(t * t) / (2.0 * variance * variance));
+}

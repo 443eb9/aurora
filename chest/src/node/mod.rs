@@ -1,5 +1,4 @@
 mod basic_triangle;
-mod bilateral_filtering;
 mod depth_prepass;
 mod depth_view;
 mod env_mapping;
@@ -9,7 +8,6 @@ mod shadow_mapping;
 mod ssao;
 
 pub use basic_triangle::*;
-pub use bilateral_filtering::*;
 pub use depth_prepass::*;
 pub use depth_view::*;
 pub use env_mapping::*;

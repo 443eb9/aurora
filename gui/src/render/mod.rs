@@ -19,10 +19,13 @@ impl Default for PbrRenderFlow {
         flow.add::<NormalPrepassNode>();
         // flow.add::<PostProcessGeneralNode>();
         flow.add::<ShadowMappingNode>();
-        flow.add::<SsaoNode>();
+        flow.add_initialized(SsaoNode {
+            denoise: true,
+            ..Default::default()
+        });
         // flow.add::<EnvironmentMappingNode>();
         flow.add_initialized(PbrNode {
-            node_cfg: PbrNodeConfig::SSAO | PbrNodeConfig::SHADOW_MAPPING,
+            node_cfg: PbrNodeConfig::SSAO,
             ..Default::default()
         });
         // flow.add::<DepthViewNode>();

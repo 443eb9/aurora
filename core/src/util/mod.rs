@@ -3,9 +3,9 @@ use std::path::Path;
 use glam::UVec3;
 use image::RgbaImage;
 use wgpu::{
-    BufferDescriptor, BufferUsages, CommandEncoderDescriptor, Device, Extent3d, ImageCopyBuffer,
-    ImageDataLayout, Maintain, MapMode, Queue, Texture, TextureDescriptor, TextureDimension,
-    TextureFormat, TextureUsages,
+    BufferDescriptor, BufferUsages, CommandEncoderDescriptor, Device, Extent3d, Features,
+    ImageCopyBuffer, ImageDataLayout, Maintain, MapMode, Queue, Texture, TextureAspect,
+    TextureDescriptor, TextureDimension, TextureFormat, TextureSampleType, TextureUsages,
 };
 
 pub mod cube;
@@ -94,4 +94,40 @@ pub async fn save_color_texture_as_image(
 
 pub fn struct_to_bytes<T>(s: &T) -> &[u8] {
     unsafe { core::slice::from_raw_parts(s as *const T as *const u8, core::mem::size_of::<T>()) }
+}
+
+pub fn texel_format_to_storage(format: TextureFormat) -> &'static str {
+    match format {
+        TextureFormat::R32Uint => "r32uint",
+        TextureFormat::R32Sint => "r32sint",
+        TextureFormat::R32Float => "r32float",
+        TextureFormat::Rgba8Unorm => "rgba8unorm",
+        TextureFormat::Rgba8Snorm => "rgba8snorm",
+        TextureFormat::Rgba8Uint => "rgba8uint",
+        TextureFormat::Rgba8Sint => "rgba8sint",
+        TextureFormat::Bgra8Unorm => "bgra8unorm",
+        TextureFormat::Rg32Uint => "rg32uint",
+        TextureFormat::Rg32Sint => "rg32sint",
+        TextureFormat::Rg32Float => "rg32float",
+        TextureFormat::Rgba16Uint => "rgba16uint",
+        TextureFormat::Rgba16Sint => "rgba16sint",
+        TextureFormat::Rgba16Float => "rgba16float",
+        TextureFormat::Rgba32Uint => "rgba32uint",
+        TextureFormat::Rgba32Sint => "rgba32sint",
+        TextureFormat::Rgba32Float => "rgba32float",
+        _ => panic!("Format not supported."),
+    }
+}
+
+pub fn texel_format_to_sampled(
+    format: TextureFormat,
+    aspect: Option<TextureAspect>,
+    device_features: Option<Features>,
+) -> &'static str {
+    match format.sample_type(aspect, device_features).unwrap() {
+        TextureSampleType::Float { .. } => "f32",
+        TextureSampleType::Depth => "depth",
+        TextureSampleType::Sint => "i32",
+        TextureSampleType::Uint => "u32",
+    }
 }

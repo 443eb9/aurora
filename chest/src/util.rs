@@ -5,16 +5,16 @@ use aurora_core::render::helper::{
 };
 use glam::{Mat4, Vec3, Vec4Swizzles};
 use naga_oil::compose::{
-    ComposableModuleDescriptor, Composer, ComposerError, ErrSource, NagaModuleDescriptor,
-    ShaderDefValue,
+    ComposableModuleDescriptor, Composer, ComposerError, NagaModuleDescriptor, ShaderDefValue,
 };
 use wgpu::naga::Module;
 
 pub fn build_shader<const N: usize>(
-    deps: [&'static str; N],
-    main: &'static str,
-    defs: HashMap<String, ShaderDefValue>,
+    deps: [&str; N],
+    main: &str,
+    defs: impl Into<HashMap<String, ShaderDefValue>>,
 ) -> Result<Module, ComposerError> {
+    let defs = defs.into();
     let mut composer = Composer::default();
     for dep in deps {
         composer.add_composable_module(ComposableModuleDescriptor {

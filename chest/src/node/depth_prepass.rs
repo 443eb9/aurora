@@ -26,14 +26,14 @@ pub const DEPTH_PREPASS_FORMAT: TextureFormat = TextureFormat::Depth32Float;
 pub struct DepthPrepassNode;
 
 impl RenderNode for DepthPrepassNode {
-    fn require_shader(&self) -> Option<(&'static [&'static str], &'static str)> {
-        Some((
+    fn require_shaders(&self) -> Option<&'static [(&'static [&'static str], &'static str)]> {
+        Some(&[(
             &[
                 include_str!("../shader/common/common_type.wgsl"),
                 include_str!("../shader/common/common_binding.wgsl"),
             ],
             include_str!("../shader/prepass/depth_prepass.wgsl"),
-        ))
+        )])
     }
 
     fn create_pipelines(
@@ -41,7 +41,7 @@ impl RenderNode for DepthPrepassNode {
         GpuScene { assets, .. }: &mut GpuScene,
         PipelineCreationContext {
             device,
-            shader,
+            shaders: shader,
             meshes,
             pipelines,
             ..
@@ -63,7 +63,7 @@ impl RenderNode for DepthPrepassNode {
                 label: Some("depth_prepass_pipeline"),
                 layout: Some(&pipeline_layout),
                 vertex: VertexState {
-                    module: shader,
+                    module: &shader[0],
                     entry_point: "vertex",
                     compilation_options: Default::default(),
                     buffers: &[VertexBufferLayout {
@@ -73,7 +73,7 @@ impl RenderNode for DepthPrepassNode {
                     }],
                 },
                 fragment: Some(FragmentState {
-                    module: shader,
+                    module: &shader[0],
                     entry_point: "fragment",
                     compilation_options: Default::default(),
                     targets: &[None],

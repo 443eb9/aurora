@@ -15,8 +15,14 @@ struct SsaoConfig {
 @group(0) @binding(3) var<uniform> config: SsaoConfig;
 @group(0) @binding(4) var tex_sampler: sampler;
 @group(0) @binding(5) var<uniform> camera: Camera;
+@group(0) @binding(6) var hilbert_lut: texture_2d<u32>;
 
 const STEP_LENGTH: f32 = 0.02;
+
+fn load_noise(texel: vec2u) -> vec2f {
+    let index = textureLoad(hilbert_lut, texel % 64, 0).r;
+    return fract(0.5 + f32(index) * vec2<f32>(0.75487766624669276005, 0.5698402909980532659114));
+}
 
 fn view_space_normal(uv: vec2f) -> vec3f {
     let normal_ws = textureSampleLevel(normal, tex_sampler, uv, 0.0).xyz;
@@ -42,11 +48,11 @@ fn view_space_depth(uv: vec2f) -> f32 {
     return -view_space_position(uv).z;
 }
 
-@workgroup_size(#WORKGROUP_SIZE, #WORKGROUP_SIZE, 1)
+@workgroup_size(#SSAO_WORKGROUP_SIZE, #SSAO_WORKGROUP_SIZE, 1)
 @compute
 fn main(@builtin(global_invocation_id) id: vec3u) {
     let texel = id.xy;
-    if id.x >= config.texture_dim.x || id.y > config.texture_dim.y {
+    if any(id.xy >= config.texture_dim) {
         return;
     }
     let tex_sizef = vec2f(config.texture_dim);
@@ -59,13 +65,14 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
     // Direction from point to camera.
     let view_dir = normalize(-texel_vs);
     // Random rotation to avoid artifact.
-    let randomness = hash::hash12u(texel) * 2.0 * PI;
+    // let randomness = hash::hash12u(texel) * 2.0 * PI;
+    let randomness = load_noise(texel);
 
     var ao = 0.0;
 
     for (var slice_index = 0u; slice_index < config.slices; slice_index += 1u) {
         // Get the direction of current slice, in view space.
-        let angle = (f32(slice_index) / f32(config.slices) + randomness) * 2.0 * PI;
+        let angle = ((f32(slice_index) + randomness.x) / f32(config.slices)) * 2.0 * PI;
         let dir = vec2f(cos(angle), sin(angle));
         let dir3 = vec3f(dir, 0.0);
 
@@ -82,7 +89,7 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
 
         for (var sample_index = 1u; sample_index <= config.samples; sample_index += 1u) {
             // March in the sample direction, in view space.
-            let planar_dist = f32(sample_index) * STEP_LENGTH;
+            let planar_dist = (f32(sample_index) + randomness.y) * STEP_LENGTH;
             let sample_vs = texel_vs + dir3 * planar_dist;
 
             // Get the depth at this sample position.
@@ -111,5 +118,5 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
     ao /= f32(config.slices * config.samples);
     ao = pow(1.0 - saturate(ao * config.strength), config.strength);
 
-    textureStore(output, id.xy, vec4f(ao));
+    textureStore(output, id.xy, vec4f(ao, 0.0, 0.0, 0.0));
 }

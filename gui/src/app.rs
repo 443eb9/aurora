@@ -250,6 +250,10 @@ impl<'a> Application<'a> {
     }
 
     pub fn resize(&mut self, dim: UVec2) {
+        if dim == UVec2::ZERO {
+            return;
+        }
+
         self.dim = dim;
         self.surface.configure(
             &self.renderer.device,
