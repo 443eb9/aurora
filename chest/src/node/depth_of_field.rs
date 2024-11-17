@@ -27,19 +27,21 @@ pub struct GaussianDof {
 
 #[derive(ShaderType)]
 pub struct DepthOfField {
-    pub aperture_diameter: f32,
     pub focal_length: f32,
+    pub focal_distance: f32,
     pub coc_factor: f32,
     pub max_coc_radius: f32,
+    pub max_depth: f32,
 }
 
 impl Default for DepthOfField {
     fn default() -> Self {
         Self {
-            aperture_diameter: 10.0,
-            focal_length: 10.0,
-            coc_factor: 10.0,
-            max_coc_radius: 30.0,
+            focal_length: 2.0,
+            focal_distance: 20.0,
+            coc_factor: 1.0,
+            max_coc_radius: 50.0,
+            max_depth: 30.0,
         }
     }
 }
