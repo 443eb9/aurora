@@ -17,11 +17,14 @@ use aurora_core::{
         ShaderDefEnum,
     },
     util::{self, ext::StrAsShaderDef},
-    WgpuRenderer,
+    PostProcessChain, WgpuRenderer,
 };
 use glam::{EulerRot, Quat, UVec2, Vec2, Vec3};
 use naga_oil::compose::ShaderDefValue;
-use wgpu::{Surface, Texture, TextureFormat, TextureUsages, TextureViewDescriptor};
+use wgpu::{
+    Surface, Texture, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
+    TextureViewDescriptor,
+};
 use winit::{
     application::ApplicationHandler,
     dpi::{PhysicalSize, Size},
@@ -36,6 +39,7 @@ use crate::scene::{CameraConfig, ControllableCamera};
 pub struct Application<'a> {
     renderer: WgpuRenderer,
     surface: Surface<'a>,
+    post_process_chain: Option<PostProcessChain>,
     window: Arc<Window>,
     depth_texture: Texture,
     dim: UVec2,
@@ -82,7 +86,8 @@ impl<'a> Application<'a> {
         let scene = load_gltf(
             // "gui/assets/gltf_test.glb",
             // "gui/assets/suzanne.glb",
-            "gui/assets/ao_test.glb",
+            // "gui/assets/ao_test.glb",
+            "gui/assets/depth_of_field_test.glb",
             // "gui/assets/sponza.glb",
             // "gui/assets/spheres_roughness_no_tex.glb",
             // "gui/assets/stanford_bunny.glb",
@@ -127,6 +132,7 @@ impl<'a> Application<'a> {
             renderer,
             window,
             surface,
+            post_process_chain: None,
             depth_texture,
             dim,
 
@@ -186,12 +192,15 @@ impl<'a> Application<'a> {
             TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
         );
 
+        let swap_chain = self.post_process_chain.take().unwrap();
         self.redraw(
             Some(RenderTargets {
                 color_format: TextureFormat::Rgba8UnormSrgb,
                 color: screenshot.create_view(&TextureViewDescriptor::default()),
+                surface: screenshot.create_view(&TextureViewDescriptor::default()),
                 depth_format: Some(TextureFormat::Depth32Float),
                 depth: Some(depth.create_view(&TextureViewDescriptor::default())),
+                post_process_chain: &swap_chain,
                 size: self.dim,
             }),
             true,
@@ -214,16 +223,40 @@ impl<'a> Application<'a> {
             return;
         };
 
+        let swap_chain = match &self.post_process_chain {
+            Some(sc) => sc,
+            None => {
+                self.post_process_chain.replace(PostProcessChain::new(
+                    &self.renderer.device,
+                    &TextureDescriptor {
+                        label: Some("post_process_chain"),
+                        size: frame.texture.size(),
+                        mip_level_count: 1,
+                        sample_count: 1,
+                        dimension: TextureDimension::D2,
+                        format: frame.texture.format(),
+                        usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
+                        view_formats: &[],
+                    },
+                ));
+                self.post_process_chain.as_ref().unwrap()
+            }
+        };
+
         self.scene.original.camera = camera.camera;
 
         let targets = target_override.unwrap_or_else(|| RenderTargets {
-            color_format: TextureFormat::Bgra8UnormSrgb,
-            color: frame.texture.create_view(&TextureViewDescriptor::default()),
+            color_format: frame.texture.format(),
+            color: swap_chain
+                .current_texture()
+                .create_view(&Default::default()),
+            surface: frame.texture.create_view(&Default::default()),
             depth_format: Some(TextureFormat::Depth32Float),
             depth: Some(
                 self.depth_texture
                     .create_view(&TextureViewDescriptor::default()),
             ),
+            post_process_chain: swap_chain,
             size: self.dim,
         });
 

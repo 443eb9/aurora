@@ -325,7 +325,7 @@ impl RenderNode for PbrNode {
             for mesh in &node.meshes {
                 let (Some(b_material), Some(instance), Some(pipeline)) = (
                     assets.material_bind_groups.get(&mesh.mesh.material),
-                    assets.meshes.get(&mesh.mesh.mesh),
+                    assets.gpu_meshes.get(&mesh.mesh.mesh),
                     node.pipelines.get(&mesh.mesh.mesh),
                 ) else {
                     continue;
@@ -333,12 +333,12 @@ impl RenderNode for PbrNode {
 
                 pass.set_pipeline(pipeline);
                 pass.set_bind_group(2, b_material, &[mesh.offset.unwrap()]);
-                pass.set_vertex_buffer(0, instance.create_vertex_buffer(device).unwrap().slice(..));
-                if let Some(indices) = instance.create_index_buffer(device) {
+                pass.set_vertex_buffer(0, instance.vertex_buffer.slice(..));
+                if let Some(indices) = &instance.index_buffer {
                     pass.set_index_buffer(indices.buffer.slice(..), indices.format);
                     pass.draw_indexed(0..indices.count, 0, 0..1);
                 } else {
-                    pass.draw(0..instance.vertices_count() as u32, 0..1);
+                    pass.draw(0..instance.vertices_count, 0..1);
                 }
             }
         }

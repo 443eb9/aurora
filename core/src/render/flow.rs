@@ -11,17 +11,20 @@ use naga_oil::compose::{
 };
 use wgpu::{
     util::{DeviceExt, TextureDataOrder},
-    BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor, BindGroupLayoutEntry,
-    BindingType, BufferBindingType, Device, Extent3d, Features, Limits, Queue, RenderPipeline,
-    SamplerBindingType, ShaderModule, ShaderModuleDescriptor, ShaderSource, ShaderStages,
-    TextureDescriptor, TextureDimension, TextureFormat, TextureSampleType, TextureUsages,
-    TextureViewDimension, VertexFormat,
+    BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor,
+    BindGroupLayoutEntry, BindingResource, BindingType, BufferBindingType, Color, ColorTargetState,
+    ColorWrites, Device, Extent3d, Features, FilterMode, FragmentState, Limits, LoadOp, Operations,
+    PipelineLayoutDescriptor, Queue, RenderPassColorAttachment, RenderPassDescriptor,
+    RenderPipeline, RenderPipelineDescriptor, SamplerBindingType, SamplerDescriptor, ShaderModule,
+    ShaderModuleDescriptor, ShaderSource, ShaderStages, StoreOp, TextureDescriptor,
+    TextureDimension, TextureFormat, TextureSampleType, TextureUsages, TextureViewDimension,
+    VertexFormat, VertexState,
 };
 
 use crate::{
     render::{
         helper::Camera,
-        mesh::StaticMesh,
+        mesh::{GpuMesh, StaticMesh},
         resource::{
             GpuCamera, GpuDirectionalLight, GpuPointLight, GpuSceneDesc, GpuSpotLight, RenderMesh,
             RenderTargets, DUMMY_2D_TEX, POST_PROCESS_COLOR_LAYOUT_UUID,
@@ -86,12 +89,12 @@ pub struct RenderContext<'a> {
     pub device: &'a Device,
     pub queue: &'a Queue,
     pub node: &'a mut NodeContext,
-    pub targets: &'a RenderTargets,
+    pub targets: &'a RenderTargets<'a>,
 }
 
 pub struct PipelineCreationContext<'a> {
     pub device: &'a Device,
-    pub targets: &'a RenderTargets,
+    pub targets: &'a RenderTargets<'a>,
     pub shaders: &'a Vec<ShaderModule>,
     pub meshes: &'a Vec<RenderMesh>,
     pub pipelines: &'a mut HashMap<MeshInstanceId, RenderPipeline>,
@@ -366,73 +369,90 @@ pub trait RenderNode: 'static {
 pub struct GeneralNode;
 
 impl RenderNode for GeneralNode {
-    fn build(&mut self, scene: &mut GpuScene, RenderContext { device, .. }: RenderContext) {
-        scene.assets.common_layout =
-            Some(device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-                label: Some("common_layout"),
-                entries: &[
-                    BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: ShaderStages::VERTEX_FRAGMENT,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: Some(GpuCamera::min_size()),
+    fn build(
+        &mut self,
+        GpuScene { assets, .. }: &mut GpuScene,
+        RenderContext { device, .. }: RenderContext,
+    ) {
+        for (id, mesh) in &assets.meshes {
+            if !assets.gpu_meshes.contains_key(id) {
+                if let Some(vertex_buffer) = mesh.create_vertex_buffer(device) {
+                    assets.gpu_meshes.insert(
+                        *id,
+                        GpuMesh {
+                            vertex_buffer,
+                            index_buffer: mesh.create_index_buffer(device),
+                            vertices_count: mesh.vertices_count() as u32,
                         },
-                        count: None,
-                    },
-                    BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: ShaderStages::VERTEX_FRAGMENT,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: Some(GpuSceneDesc::min_size()),
-                        },
-                        count: None,
-                    },
-                ],
-            }));
+                    );
+                }
+            }
+        }
 
-        scene.assets.lights_layout =
-            Some(device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-                label: Some("lights_layout"),
-                entries: &[
-                    // Directional
-                    BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: ShaderStages::FRAGMENT,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Storage { read_only: true },
-                            has_dynamic_offset: false,
-                            min_binding_size: Some(GpuDirectionalLight::min_size()),
-                        },
-                        count: None,
+        assets.common_layout = Some(device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+            label: Some("common_layout"),
+            entries: &[
+                BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: ShaderStages::VERTEX_FRAGMENT,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: Some(GpuCamera::min_size()),
                     },
-                    // Point
-                    BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: ShaderStages::FRAGMENT,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Storage { read_only: true },
-                            has_dynamic_offset: false,
-                            min_binding_size: Some(GpuPointLight::min_size()),
-                        },
-                        count: None,
+                    count: None,
+                },
+                BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: ShaderStages::VERTEX_FRAGMENT,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: Some(GpuSceneDesc::min_size()),
                     },
-                    // Spot
-                    BindGroupLayoutEntry {
-                        binding: 2,
-                        visibility: ShaderStages::FRAGMENT,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Storage { read_only: true },
-                            has_dynamic_offset: false,
-                            min_binding_size: Some(GpuSpotLight::min_size()),
-                        },
-                        count: None,
+                    count: None,
+                },
+            ],
+        }));
+
+        assets.lights_layout = Some(device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+            label: Some("lights_layout"),
+            entries: &[
+                // Directional
+                BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: ShaderStages::FRAGMENT,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: Some(GpuDirectionalLight::min_size()),
                     },
-                ],
-            }));
+                    count: None,
+                },
+                // Point
+                BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: ShaderStages::FRAGMENT,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: Some(GpuPointLight::min_size()),
+                    },
+                    count: None,
+                },
+                // Spot
+                BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: ShaderStages::FRAGMENT,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: Some(GpuSpotLight::min_size()),
+                    },
+                    count: None,
+                },
+            ],
+        }));
     }
 
     fn prepare(
@@ -641,5 +661,138 @@ impl RenderNode for ImageFallbackNode {
                 &[255; 4],
             ),
         );
+    }
+}
+
+#[derive(Default)]
+pub struct PresentNode {
+    pipeline: Option<RenderPipeline>,
+    bind_group: Option<BindGroup>,
+}
+
+impl RenderNode for PresentNode {
+    fn require_shaders(&self) -> Option<&'static [(&'static [&'static str], &'static str)]> {
+        Some(&[(&[], include_str!("present.wgsl"))])
+    }
+
+    fn build(
+        &mut self,
+        _scene: &mut GpuScene,
+        RenderContext {
+            device,
+            node,
+            targets,
+            ..
+        }: RenderContext,
+    ) {
+        let sampler = device.create_sampler(&SamplerDescriptor {
+            label: Some("present_sampler"),
+            ..Default::default()
+        });
+        let layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+            label: Some("present_layout"),
+            entries: &[
+                BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: ShaderStages::FRAGMENT,
+                    ty: BindingType::Texture {
+                        sample_type: TextureSampleType::Float { filterable: false },
+                        view_dimension: TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: ShaderStages::FRAGMENT,
+                    ty: BindingType::Sampler(SamplerBindingType::NonFiltering),
+                    count: None,
+                },
+            ],
+        });
+
+        let bind_group = device.create_bind_group(&BindGroupDescriptor {
+            label: Some("present_bind_group"),
+            layout: &layout,
+            entries: &[
+                BindGroupEntry {
+                    binding: 0,
+                    resource: BindingResource::TextureView(&targets.color),
+                },
+                BindGroupEntry {
+                    binding: 1,
+                    resource: BindingResource::Sampler(&sampler),
+                },
+            ],
+        });
+
+        let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
+            label: Some("present_pipeline_layout"),
+            bind_group_layouts: &[&layout],
+            ..Default::default()
+        });
+
+        let pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
+            label: Some("present_pipeline"),
+            layout: Some(&pipeline_layout),
+            vertex: VertexState {
+                module: &node.shaders[0],
+                entry_point: "vertex",
+                compilation_options: Default::default(),
+                buffers: &[],
+            },
+            fragment: Some(FragmentState {
+                module: &node.shaders[0],
+                entry_point: "fragment",
+                compilation_options: Default::default(),
+                targets: &[Some(ColorTargetState {
+                    format: targets.color_format,
+                    blend: None,
+                    write_mask: ColorWrites::ALL,
+                })],
+            }),
+            primitive: Default::default(),
+            depth_stencil: Default::default(),
+            multisample: Default::default(),
+            multiview: Default::default(),
+            cache: Default::default(),
+        });
+
+        self.pipeline = Some(pipeline);
+        self.bind_group = Some(bind_group);
+    }
+
+    fn draw(
+        &self,
+        _scene: &mut GpuScene,
+        RenderContext {
+            device,
+            queue,
+            targets,
+            ..
+        }: RenderContext,
+    ) {
+        let mut command_encoder = device.create_command_encoder(&Default::default());
+
+        {
+            let mut pass = command_encoder.begin_render_pass(&RenderPassDescriptor {
+                label: Some("present_pass"),
+                color_attachments: &[Some(RenderPassColorAttachment {
+                    view: &targets.surface,
+                    resolve_target: None,
+                    ops: Operations {
+                        load: LoadOp::Clear(Color::TRANSPARENT),
+                        store: StoreOp::Store,
+                    },
+                })],
+                ..Default::default()
+            });
+
+            pass.set_pipeline(self.pipeline.as_ref().unwrap());
+            pass.set_bind_group(0, self.bind_group.as_ref().unwrap(), &[]);
+            pass.draw(0..3, 0..1);
+        }
+
+        queue.submit([command_encoder.finish()]);
     }
 }

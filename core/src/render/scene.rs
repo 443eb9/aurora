@@ -3,7 +3,11 @@ use std::collections::HashMap;
 use uuid::Uuid;
 use wgpu::{BindGroup, BindGroupLayout, BufferUsages, Sampler, Texture, TextureView};
 
-use crate::render::{helper::Scene, mesh::{Mesh, StaticMesh}, resource::DynamicGpuBuffer};
+use crate::render::{
+    helper::Scene,
+    mesh::{GpuMesh, Mesh, StaticMesh},
+    resource::DynamicGpuBuffer,
+};
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct MaterialInstanceId(pub Uuid);
@@ -34,6 +38,7 @@ pub struct ExtraBufferId(pub Uuid);
 
 pub struct GpuAssets {
     pub meshes: HashMap<MeshInstanceId, Mesh>,
+    pub gpu_meshes: HashMap<MeshInstanceId, GpuMesh>,
 
     pub camera_uniform: DynamicGpuBuffer,
     pub scene_desc_uniform: DynamicGpuBuffer,
@@ -62,6 +67,7 @@ impl Default for GpuAssets {
     fn default() -> Self {
         Self {
             meshes: Default::default(),
+            gpu_meshes: Default::default(),
             camera_uniform: DynamicGpuBuffer::new(BufferUsages::UNIFORM),
             scene_desc_uniform: DynamicGpuBuffer::new(BufferUsages::UNIFORM),
             directional_light_buffer: DynamicGpuBuffer::new(BufferUsages::STORAGE),

@@ -123,6 +123,12 @@ pub enum MeshIndices {
     UInt32(Vec<u32>),
 }
 
+pub struct GpuMesh {
+    pub vertex_buffer: Buffer,
+    pub index_buffer: Option<GpuIndexBuffer>,
+    pub vertices_count: u32,
+}
+
 #[derive(Default, Clone)]
 pub struct Mesh {
     attributes: BTreeMap<MeshVertexAttributeId, MeshVertexAttributeData>,
