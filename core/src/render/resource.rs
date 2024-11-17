@@ -18,7 +18,7 @@ use crate::{
         scene::{MaterialTypeId, TextureId},
     },
     util::cube::CUBE_MAP_OFFSETS,
-    PostProcessChain,
+    SwapChain,
 };
 
 pub const POST_PROCESS_COLOR_LAYOUT_UUID: MaterialTypeId =
@@ -30,11 +30,10 @@ pub const DUMMY_2D_TEX: TextureId = TextureId(Uuid::from_u128(867416749864064916
 
 pub struct RenderTargets<'a> {
     pub color_format: TextureFormat,
-    pub color: TextureView,
+    pub swap_chain: &'a SwapChain,
     pub surface: TextureView,
     pub depth_format: Option<TextureFormat>,
     pub depth: Option<TextureView>,
-    pub post_process_chain: &'a PostProcessChain,
     pub size: UVec2,
 }
 

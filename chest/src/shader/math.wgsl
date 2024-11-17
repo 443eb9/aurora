@@ -55,3 +55,8 @@ fn normal_distribution(x: f32, mean: f32, variance: f32) -> f32 {
 fn hilbert_curve_noise(index: u32) -> vec2f {
     return fract(0.5 + f32(index) * vec2<f32>(0.75487766624669276005, 0.5698402909980532659114));
 }
+
+fn clip_depth_to_view(depth: f32, inv_proj: mat4x4f) -> f32 {
+    let t = inv_proj * vec4f(0.0, 0.0, depth, 1.0);
+    return -t.z / t.w;
+}

@@ -45,11 +45,11 @@ impl WgpuRenderer {
 }
 
 pub struct PostProcess<'a> {
-    src: &'a TextureView,
-    dst: &'a TextureView,
+    pub src: &'a TextureView,
+    pub dst: &'a TextureView,
 }
 
-pub struct PostProcessChain {
+pub struct SwapChain {
     main_texture: RefCell<bool>,
     main_texture_a: Texture,
     main_view_a: TextureView,
@@ -57,7 +57,7 @@ pub struct PostProcessChain {
     main_view_b: TextureView,
 }
 
-impl PostProcessChain {
+impl SwapChain {
     pub fn new(device: &Device, desc: &TextureDescriptor) -> Self {
         let a = device.create_texture(desc);
         let b = device.create_texture(desc);
@@ -72,7 +72,7 @@ impl PostProcessChain {
     }
 
     pub fn swap(&self) {
-        self.main_texture.replace(self.main_texture());
+        self.main_texture.replace(!self.main_texture());
     }
 
     pub fn main_texture(&self) -> bool {
@@ -108,6 +108,14 @@ impl PostProcessChain {
             &self.main_view_a
         } else {
             &self.main_view_b
+        }
+    }
+
+    pub fn start_post_process(&self) -> PostProcess {
+        self.swap();
+        PostProcess {
+            src: self.another_view(),
+            dst: self.current_view(),
         }
     }
 }

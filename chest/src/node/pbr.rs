@@ -292,7 +292,7 @@ impl RenderNode for PbrNode {
             let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {
                 label: Some("pbr_pass"),
                 color_attachments: &[Some(RenderPassColorAttachment {
-                    view: &targets.color,
+                    view: &targets.swap_chain.current_view(),
                     resolve_target: None,
                     ops: Operations {
                         load: LoadOp::Clear(Color::TRANSPARENT),

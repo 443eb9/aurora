@@ -17,7 +17,7 @@ use aurora_core::{
         ShaderDefEnum,
     },
     util::{self, ext::StrAsShaderDef},
-    PostProcessChain, WgpuRenderer,
+    SwapChain, WgpuRenderer,
 };
 use glam::{EulerRot, Quat, UVec2, Vec2, Vec3};
 use naga_oil::compose::ShaderDefValue;
@@ -39,7 +39,7 @@ use crate::scene::{CameraConfig, ControllableCamera};
 pub struct Application<'a> {
     renderer: WgpuRenderer,
     surface: Surface<'a>,
-    post_process_chain: Option<PostProcessChain>,
+    post_process_chain: Option<SwapChain>,
     window: Arc<Window>,
     depth_texture: Texture,
     dim: UVec2,
@@ -196,11 +196,10 @@ impl<'a> Application<'a> {
         self.redraw(
             Some(RenderTargets {
                 color_format: TextureFormat::Rgba8UnormSrgb,
-                color: screenshot.create_view(&TextureViewDescriptor::default()),
                 surface: screenshot.create_view(&TextureViewDescriptor::default()),
                 depth_format: Some(TextureFormat::Depth32Float),
                 depth: Some(depth.create_view(&TextureViewDescriptor::default())),
-                post_process_chain: &swap_chain,
+                swap_chain: &swap_chain,
                 size: self.dim,
             }),
             true,
@@ -226,7 +225,7 @@ impl<'a> Application<'a> {
         let swap_chain = match &self.post_process_chain {
             Some(sc) => sc,
             None => {
-                self.post_process_chain.replace(PostProcessChain::new(
+                self.post_process_chain.replace(SwapChain::new(
                     &self.renderer.device,
                     &TextureDescriptor {
                         label: Some("post_process_chain"),
@@ -247,16 +246,13 @@ impl<'a> Application<'a> {
 
         let targets = target_override.unwrap_or_else(|| RenderTargets {
             color_format: frame.texture.format(),
-            color: swap_chain
-                .current_texture()
-                .create_view(&Default::default()),
             surface: frame.texture.create_view(&Default::default()),
             depth_format: Some(TextureFormat::Depth32Float),
             depth: Some(
                 self.depth_texture
                     .create_view(&TextureViewDescriptor::default()),
             ),
-            post_process_chain: swap_chain,
+            swap_chain,
             size: self.dim,
         });
 

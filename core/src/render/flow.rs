@@ -13,7 +13,7 @@ use wgpu::{
     util::{DeviceExt, TextureDataOrder},
     BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor,
     BindGroupLayoutEntry, BindingResource, BindingType, BufferBindingType, Color, ColorTargetState,
-    ColorWrites, Device, Extent3d, Features, FilterMode, FragmentState, Limits, LoadOp, Operations,
+    ColorWrites, Device, Extent3d, Features, FragmentState, Limits, LoadOp, Operations,
     PipelineLayoutDescriptor, Queue, RenderPassColorAttachment, RenderPassDescriptor,
     RenderPipeline, RenderPipelineDescriptor, SamplerBindingType, SamplerDescriptor, ShaderModule,
     ShaderModuleDescriptor, ShaderSource, ShaderStages, StoreOp, TextureDescriptor,
@@ -717,7 +717,7 @@ impl RenderNode for PresentNode {
             entries: &[
                 BindGroupEntry {
                     binding: 0,
-                    resource: BindingResource::TextureView(&targets.color),
+                    resource: BindingResource::TextureView(&targets.swap_chain.current_view()),
                 },
                 BindGroupEntry {
                     binding: 1,

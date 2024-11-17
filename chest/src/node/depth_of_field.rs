@@ -14,6 +14,8 @@ use wgpu::{
     TextureUsages, TextureViewDimension, VertexState,
 };
 
+use crate::node::DEPTH_PREPASS_TEXTURE;
+
 pub struct GaussianDof {
     pub horizontal: RenderPipeline,
     pub vertical: RenderPipeline,
@@ -28,14 +30,16 @@ pub struct DepthOfField {
     pub aperture_diameter: f32,
     pub focal_length: f32,
     pub coc_factor: f32,
+    pub max_coc_radius: f32,
 }
 
 impl Default for DepthOfField {
     fn default() -> Self {
         Self {
-            aperture_diameter: Default::default(),
-            focal_length: Default::default(),
-            coc_factor: Default::default(),
+            aperture_diameter: 10.0,
+            focal_length: 10.0,
+            coc_factor: 10.0,
+            max_coc_radius: 30.0,
         }
     }
 }
@@ -63,7 +67,12 @@ impl RenderNode for DepthOfFieldNode {
         Some(&[
             (&[], include_str!("../shader/fullscreen.wgsl")),
             (
-                &[include_str!("../shader/fullscreen.wgsl")],
+                &[
+                    include_str!("../shader/common/common_type.wgsl"),
+                    include_str!("../shader/common/common_binding.wgsl"),
+                    include_str!("../shader/fullscreen.wgsl"),
+                    include_str!("../shader/math.wgsl"),
+                ],
                 include_str!("../shader/post_processing/depth_of_field.wgsl"),
             ),
         ])
@@ -112,7 +121,7 @@ impl RenderNode for DepthOfFieldNode {
                 BindGroupLayoutEntry {
                     binding: 2,
                     visibility: ShaderStages::FRAGMENT,
-                    ty: BindingType::Sampler(SamplerBindingType::Filtering),
+                    ty: BindingType::Sampler(SamplerBindingType::NonFiltering),
                     count: None,
                 },
                 // Config
@@ -131,7 +140,7 @@ impl RenderNode for DepthOfFieldNode {
 
         let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
             label: Some("deo_pipeline_layout"),
-            bind_group_layouts: &[&layout],
+            bind_group_layouts: &[assets.common_layout.as_ref().unwrap(), &layout],
             ..Default::default()
         });
 
@@ -164,9 +173,9 @@ impl RenderNode for DepthOfFieldNode {
 
         let sampler = device.create_sampler(&SamplerDescriptor {
             label: Some("dof_sampler"),
-            mag_filter: FilterMode::Linear,
-            min_filter: FilterMode::Linear,
-            mipmap_filter: FilterMode::Linear,
+            // mag_filter: FilterMode::Linear,
+            // min_filter: FilterMode::Linear,
+            // mipmap_filter: FilterMode::Linear,
             ..Default::default()
         });
 
@@ -199,7 +208,7 @@ impl RenderNode for DepthOfFieldNode {
 
     fn draw(
         &self,
-        _scene: &mut GpuScene,
+        GpuScene { assets, .. }: &mut GpuScene,
         RenderContext {
             device,
             queue,
@@ -209,82 +218,61 @@ impl RenderNode for DepthOfFieldNode {
     ) {
         match self.data.as_ref().unwrap() {
             DepthOfFieldData::Gaussian(data) => {
-                targets.post_process_chain.swap();
-                let mut command_encoder = device.create_command_encoder(&Default::default());
-                let mut bind_group_entries = [
-                    BindGroupEntry {
-                        binding: 0,
-                        resource: BindingResource::TextureView(targets.depth.as_ref().unwrap()),
-                    },
-                    BindGroupEntry {
-                        binding: 1,
-                        resource: BindingResource::TextureView(targets.post_process_chain.another_view()),
-                    },
-                    BindGroupEntry {
-                        binding: 2,
-                        resource: BindingResource::Sampler(&data.sampler),
-                    },
-                    BindGroupEntry {
-                        binding: 3,
-                        resource: data.config.binding::<DepthOfField>().unwrap(),
-                    },
-                ];
+                for (label, pipeline) in [
+                    ("dof_gaussian_horizontal", &data.horizontal),
+                    ("dof_gaussian_vertical", &data.vertical),
+                ] {
+                    let mut command_encoder = device.create_command_encoder(&Default::default());
+                    let post_process = targets.swap_chain.start_post_process();
+                    let bind_group_entries = [
+                        BindGroupEntry {
+                            binding: 0,
+                            resource: BindingResource::TextureView(
+                                &assets.texture_views[&DEPTH_PREPASS_TEXTURE.view],
+                            ),
+                        },
+                        BindGroupEntry {
+                            binding: 1,
+                            resource: BindingResource::TextureView(post_process.src),
+                        },
+                        BindGroupEntry {
+                            binding: 2,
+                            resource: BindingResource::Sampler(&data.sampler),
+                        },
+                        BindGroupEntry {
+                            binding: 3,
+                            resource: data.config.binding::<DepthOfField>().unwrap(),
+                        },
+                    ];
 
-                {
-                    let bind_group_horizontal = device.create_bind_group(&BindGroupDescriptor {
-                        label: Some("dof_bind_group_horizontal"),
+                    let bind_group = device.create_bind_group(&BindGroupDescriptor {
+                        label: Some(&label),
                         layout: &data.layout,
                         entries: &bind_group_entries,
                     });
 
-                    let mut pass = command_encoder.begin_render_pass(&RenderPassDescriptor {
-                        label: Some("dof_gaussian_horizontal"),
-                        color_attachments: &[Some(RenderPassColorAttachment {
-                            view: &targets.post_process_chain.current_view(),
-                            resolve_target: None,
-                            ops: Operations {
-                                load: LoadOp::Clear(Color::TRANSPARENT),
-                                store: StoreOp::Store,
-                            },
-                        })],
-                        ..Default::default()
-                    });
-                    pass.set_pipeline(&data.horizontal);
-                    pass.set_bind_group(0, &bind_group_horizontal, &[]);
-                    pass.draw(0..3, 0..1);
+                    {
+                        let mut pass = command_encoder.begin_render_pass(&RenderPassDescriptor {
+                            label: Some(label),
+                            color_attachments: &[Some(RenderPassColorAttachment {
+                                view: post_process.dst,
+                                resolve_target: None,
+                                ops: Operations {
+                                    load: LoadOp::Clear(Color::TRANSPARENT),
+                                    store: StoreOp::Store,
+                                },
+                            })],
+                            ..Default::default()
+                        });
+
+                        pass.set_pipeline(pipeline);
+                        pass.set_bind_group(0, assets.common_bind_group.as_ref().unwrap(), &[]);
+                        pass.set_bind_group(1, &bind_group, &[]);
+                        pass.draw(0..3, 0..1);
+                    }
+
+                    queue.submit([command_encoder.finish()]);
                 }
-                queue.submit([command_encoder.finish()]);
-
-                targets.post_process_chain.swap();
-                let mut command_encoder = device.create_command_encoder(&Default::default());
-
-                {
-                    bind_group_entries[1].resource =
-                        BindingResource::TextureView(&targets.post_process_chain.another_view());
-                    let bind_group_vertical = device.create_bind_group(&BindGroupDescriptor {
-                        label: Some("dof_bind_group_vertical"),
-                        layout: &data.layout,
-                        entries: &bind_group_entries,
-                    });
-
-                    let mut pass = command_encoder.begin_render_pass(&RenderPassDescriptor {
-                        label: Some("dof_gaussian_vertical"),
-                        color_attachments: &[Some(RenderPassColorAttachment {
-                            view: &targets.post_process_chain.current_view(),
-                            resolve_target: None,
-                            ops: Operations {
-                                load: LoadOp::Clear(Color::TRANSPARENT),
-                                store: StoreOp::Store,
-                            },
-                        })],
-                        ..Default::default()
-                    });
-
-                    pass.set_pipeline(&data.vertical);
-                    pass.set_bind_group(0, &bind_group_vertical, &[]);
-                    pass.draw(0..3, 0..1);
-                }
-                queue.submit([command_encoder.finish()]);
             }
         }
     }
