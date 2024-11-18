@@ -71,8 +71,6 @@ impl RenderNode for PbrNode {
 
     fn require_shader_defs(&self, shader_defs: &mut HashMap<String, ShaderDefValue>) {
         shader_defs.extend([
-            ("LUT_TEX_BINDING".to_string(), ShaderDefValue::UInt(4)),
-            ("LUT_SAMPLER_BINDING".to_string(), ShaderDefValue::UInt(5)),
             self.diffuse.to_def(),
             self.specular.to_def(),
         ]);
@@ -107,7 +105,6 @@ impl RenderNode for PbrNode {
                 include_str!("../shader/env_mapping/env_mapping_type.wgsl"),
                 include_str!("../shader/env_mapping/env_mapping_binding.wgsl"),
                 include_str!("../shader/env_mapping/env_mapping.wgsl"),
-                include_str!("../shader/tonemapping.wgsl"),
                 include_str!("../shader/pbr/pbr.wgsl"),
             ],
             include_str!("../shader/pbr/pbr.wgsl"),

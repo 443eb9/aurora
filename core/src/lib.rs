@@ -55,12 +55,19 @@ pub struct SwapChain {
     main_view_a: TextureView,
     main_texture_b: Texture,
     main_view_b: TextureView,
+    desc: TextureDescriptor<'static>,
 }
 
 impl SwapChain {
-    pub fn new(device: &Device, desc: &TextureDescriptor) -> Self {
-        let a = device.create_texture(desc);
-        let b = device.create_texture(desc);
+    pub fn new(device: &Device, desc: &TextureDescriptor<'static>) -> Self {
+        let a = device.create_texture(&TextureDescriptor {
+            label: Some("swap_chain_texture_a"),
+            ..desc.clone()
+        });
+        let b = device.create_texture(&TextureDescriptor {
+            label: Some("swap_chain_texture_b"),
+            ..desc.clone()
+        });
 
         Self {
             main_texture: RefCell::new(false),
@@ -68,7 +75,12 @@ impl SwapChain {
             main_texture_a: a,
             main_view_b: b.create_view(&Default::default()),
             main_texture_b: b,
+            desc: desc.clone(),
         }
+    }
+
+    pub fn desc(&self) -> &TextureDescriptor {
+        &self.desc
     }
 
     pub fn swap(&self) {

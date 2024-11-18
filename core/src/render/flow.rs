@@ -746,7 +746,7 @@ impl RenderNode for PresentNode {
                 entry_point: "fragment",
                 compilation_options: Default::default(),
                 targets: &[Some(ColorTargetState {
-                    format: targets.color_format,
+                    format: targets.surface_format,
                     blend: None,
                     write_mask: ColorWrites::ALL,
                 })],

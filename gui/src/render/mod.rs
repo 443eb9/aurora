@@ -1,7 +1,7 @@
 use aurora_chest::node::{
     BasicTriangleNode, DepthOfFieldNode, DepthPrepassNode, EnvironmentMappingNode,
     NormalPrepassNode, PbrNode, PbrNodeConfig, ShadowMappingNode, ShadowMappingNodeConfig,
-    SsaoNode, ENVIRONMENT_MAP_PATH_ATTR,
+    SsaoNode, TonemappingNode, ENVIRONMENT_MAP_PATH_ATTR,
 };
 use aurora_core::render::flow::{
     GeneralNode, ImageFallbackNode, PostProcessGeneralNode, PresentNode, RenderFlow,
@@ -17,8 +17,7 @@ impl Default for PbrRenderFlow {
         flow.add::<GeneralNode>();
         flow.add::<ImageFallbackNode>();
         flow.add::<DepthPrepassNode>();
-        // flow.add::<NormalPrepassNode>();
-        // // flow.add::<PostProcessGeneralNode>();
+        flow.add::<NormalPrepassNode>();
         // flow.add_initialized(ShadowMappingNode {
         //     node_cfg: ShadowMappingNodeConfig::RANDOMIZE,
         //     ..Default::default()
@@ -28,15 +27,14 @@ impl Default for PbrRenderFlow {
         //     debug_ssao_only: false,
         //     ..Default::default()
         // });
-        // flow.add::<EnvironmentMappingNode>();
+        // // flow.add::<EnvironmentMappingNode>();
         // flow.add_initialized(PbrNode {
         //     node_cfg: PbrNodeConfig::SSAO | PbrNodeConfig::SHADOW_MAPPING,
         //     ..Default::default()
         // });
         flow.add::<PbrNode>();
-        flow.add_initialized(DepthOfFieldNode {
-            ..Default::default()
-        });
+        flow.add::<DepthOfFieldNode>();
+        flow.add::<TonemappingNode>();
         // flow.add::<DepthViewNode>();
         flow.add::<PresentNode>();
 

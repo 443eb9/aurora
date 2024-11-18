@@ -22,8 +22,8 @@ use aurora_core::{
 use glam::{EulerRot, Quat, UVec2, Vec2, Vec3};
 use naga_oil::compose::ShaderDefValue;
 use wgpu::{
-    Surface, Texture, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
-    TextureViewDescriptor,
+    Surface, SurfaceConfiguration, Texture, TextureDescriptor, TextureDimension, TextureFormat,
+    TextureUsages, TextureViewDescriptor,
 };
 use winit::{
     application::ApplicationHandler,
@@ -35,6 +35,8 @@ use winit::{
 };
 
 use crate::scene::{CameraConfig, ControllableCamera};
+
+const HDR_TARGET_FORMAT: TextureFormat = TextureFormat::Rgba16Float;
 
 pub struct Application<'a> {
     renderer: WgpuRenderer,
@@ -197,6 +199,7 @@ impl<'a> Application<'a> {
             Some(RenderTargets {
                 color_format: TextureFormat::Rgba8UnormSrgb,
                 surface: screenshot.create_view(&TextureViewDescriptor::default()),
+                surface_format: screenshot.format(),
                 depth_format: Some(TextureFormat::Depth32Float),
                 depth: Some(depth.create_view(&TextureViewDescriptor::default())),
                 swap_chain: &swap_chain,
@@ -233,7 +236,7 @@ impl<'a> Application<'a> {
                         mip_level_count: 1,
                         sample_count: 1,
                         dimension: TextureDimension::D2,
-                        format: frame.texture.format(),
+                        format: HDR_TARGET_FORMAT,
                         usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
                         view_formats: &[],
                     },
@@ -245,8 +248,9 @@ impl<'a> Application<'a> {
         self.scene.original.camera = camera.camera;
 
         let targets = target_override.unwrap_or_else(|| RenderTargets {
-            color_format: frame.texture.format(),
+            color_format: HDR_TARGET_FORMAT,
             surface: frame.texture.create_view(&Default::default()),
+            surface_format: frame.texture.format(),
             depth_format: Some(TextureFormat::Depth32Float),
             depth: Some(
                 self.depth_texture

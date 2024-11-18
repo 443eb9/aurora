@@ -32,6 +32,7 @@ pub struct RenderTargets<'a> {
     pub color_format: TextureFormat,
     pub swap_chain: &'a SwapChain,
     pub surface: TextureView,
+    pub surface_format: TextureFormat,
     pub depth_format: Option<TextureFormat>,
     pub depth: Option<TextureView>,
     pub size: UVec2,
