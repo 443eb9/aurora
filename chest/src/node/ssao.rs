@@ -9,7 +9,6 @@ use aurora_core::render::{
     },
 };
 use encase::ShaderType;
-use glam::UVec2;
 use naga_oil::compose::ShaderDefValue;
 use uuid::Uuid;
 use wgpu::{
@@ -25,7 +24,6 @@ use crate::node::{DEPTH_PREPASS_TEXTURE, NORMAL_PREPASS_TEXTURE};
 
 #[derive(ShaderType)]
 pub struct SsaoConfig {
-    pub texture_dim: UVec2,
     pub slices: u32,
     pub samples: u32,
     pub strength: f32,
@@ -55,7 +53,6 @@ pub struct Ssao {
 impl Default for SsaoConfig {
     fn default() -> Self {
         Self {
-            texture_dim: UVec2::ZERO,
             slices: 4,
             samples: 4,
             strength: 20.0,
@@ -456,18 +453,10 @@ impl RenderNode for SsaoNode {
     fn prepare(
         &mut self,
         GpuScene { assets, .. }: &mut GpuScene,
-        RenderContext {
-            device,
-            queue,
-            targets,
-            ..
-        }: RenderContext,
+        RenderContext { device, queue, .. }: RenderContext,
     ) {
         let mut bf_config = DynamicGpuBuffer::new(BufferUsages::UNIFORM);
-        bf_config.push(&SsaoConfig {
-            texture_dim: targets.size,
-            ..self.config
-        });
+        bf_config.push(&self.config);
         bf_config.write::<SsaoConfig>(device, queue);
 
         let compute_bind_group = device.create_bind_group(&BindGroupDescriptor {

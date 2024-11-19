@@ -18,25 +18,25 @@ impl Default for PbrRenderFlow {
         flow.add::<ImageFallbackNode>();
         flow.add::<DepthPrepassNode>();
         flow.add::<NormalPrepassNode>();
-        // flow.add_initialized(ShadowMappingNode {
-        //     node_cfg: ShadowMappingNodeConfig::RANDOMIZE,
-        //     ..Default::default()
-        // });
-        // flow.add_initialized(SsaoNode {
-        //     denoise: true,
-        //     debug_ssao_only: false,
-        //     ..Default::default()
-        // });
+        flow.add_initialized(ShadowMappingNode {
+            node_cfg: ShadowMappingNodeConfig::RANDOMIZE,
+            ..Default::default()
+        });
+        flow.add_initialized(SsaoNode {
+            denoise: true,
+            debug_ssao_only: false,
+            ..Default::default()
+        });
         // // flow.add::<EnvironmentMappingNode>();
-        // flow.add_initialized(PbrNode {
-        //     node_cfg: PbrNodeConfig::SSAO | PbrNodeConfig::SHADOW_MAPPING,
-        //     ..Default::default()
-        // });
-        flow.add::<PbrNode>();
+        flow.add_initialized(PbrNode {
+            node_cfg: PbrNodeConfig::SSAO | PbrNodeConfig::SHADOW_MAPPING,
+            ..Default::default()
+        });
+        // flow.add::<PbrNode>();
         flow.add::<DepthOfFieldNode>();
         flow.add::<TonemappingNode>();
         // flow.add::<DepthViewNode>();
-        flow.add::<PresentNode>();
+        // flow.add::<PresentNode>();
 
         // flow.config_node::<PbrNode>(PbrNodeConfig::ENVIRONMENT_MAPPING);
         // flow.add_extra_data::<EnvironmentMappingNode>(

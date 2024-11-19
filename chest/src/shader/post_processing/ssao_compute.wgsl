@@ -1,7 +1,6 @@
 #import aurora::{common_type::Camera, hash, math, math::PI}
 
 struct SsaoConfig {
-    texture_dim: vec2u,
     slices: u32,
     samples: u32,
     strength: f32,
@@ -47,10 +46,10 @@ fn view_space_depth(uv: vec2f) -> f32 {
 @compute
 fn main(@builtin(global_invocation_id) id: vec3u) {
     let texel = id.xy;
-    if any(id.xy >= config.texture_dim) {
+    if any(id.xy >= textureDimensions(depth)) {
         return;
     }
-    let tex_sizef = vec2f(config.texture_dim);
+    let tex_sizef = vec2f(textureDimensions(depth));
     let uv = vec2f(texel) / tex_sizef;
 
     // Convert all data into view space.

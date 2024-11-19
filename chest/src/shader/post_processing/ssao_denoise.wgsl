@@ -1,7 +1,6 @@
 #import aurora::math
 
 struct SsaoConfig {
-    texture_dim: vec2u,
     slices: u32,
     samples: u32,
     strength: f32,
@@ -18,10 +17,10 @@ struct SsaoConfig {
 @compute
 fn main(@builtin(global_invocation_id) id: vec3u) {
     let texel = id.xy;
-    if any(texel >= config.texture_dim) {
+    if any(texel >= textureDimensions(noisy_ao)) {
         return;
     }
-    let uv = vec2f(texel) / vec2f(config.texture_dim);
+    let uv = vec2f(texel) / vec2f(textureDimensions(noisy_ao));
 
     let center = textureLoad(noisy_ao, vec2i(texel), 0).r;
     var sum = 0.0;

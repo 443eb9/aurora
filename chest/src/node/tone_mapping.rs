@@ -182,7 +182,7 @@ impl RenderNode for TonemappingNode {
             entries: &[
                 BindGroupEntry {
                     binding: 0,
-                    resource: BindingResource::TextureView(post_process.src),
+                    resource: BindingResource::TextureView(post_process.dst),
                 },
                 BindGroupEntry {
                     binding: 1,
