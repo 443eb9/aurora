@@ -82,7 +82,7 @@ impl RenderNode for EnvironmentMappingNode {
                     binding: 0,
                     visibility: ShaderStages::FRAGMENT,
                     ty: BindingType::Texture {
-                        sample_type: TextureSampleType::Float { filterable: false },
+                        sample_type: TextureSampleType::Float { filterable: true },
                         view_dimension: TextureViewDimension::Cube,
                         multisampled: false,
                     },

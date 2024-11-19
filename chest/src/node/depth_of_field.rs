@@ -7,10 +7,11 @@ use encase::ShaderType;
 use wgpu::{
     BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor,
     BindGroupLayoutEntry, BindingResource, BindingType, BufferBindingType, BufferUsages, Color,
-    ColorTargetState, ColorWrites, FragmentState, LoadOp, Operations, PipelineLayoutDescriptor,
-    RenderPassColorAttachment, RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor,
-    Sampler, SamplerBindingType, SamplerDescriptor, ShaderStages, StoreOp, Texture,
-    TextureDescriptor, TextureSampleType, TextureView, TextureViewDimension, VertexState,
+    ColorTargetState, ColorWrites, FilterMode, FragmentState, LoadOp, Operations,
+    PipelineLayoutDescriptor, RenderPassColorAttachment, RenderPassDescriptor, RenderPipeline,
+    RenderPipelineDescriptor, Sampler, SamplerBindingType, SamplerDescriptor, ShaderStages,
+    StoreOp, Texture, TextureDescriptor, TextureSampleType, TextureView, TextureViewDimension,
+    VertexState,
 };
 
 use crate::node::DEPTH_PREPASS_TEXTURE;
@@ -269,7 +270,7 @@ impl RenderNode for DepthOfFieldNode {
                 binding: 1,
                 visibility: ShaderStages::FRAGMENT,
                 ty: BindingType::Texture {
-                    sample_type: TextureSampleType::Float { filterable: false },
+                    sample_type: TextureSampleType::Float { filterable: true },
                     view_dimension: TextureViewDimension::D2,
                     multisampled: false,
                 },
@@ -279,7 +280,7 @@ impl RenderNode for DepthOfFieldNode {
             BindGroupLayoutEntry {
                 binding: 2,
                 visibility: ShaderStages::FRAGMENT,
-                ty: BindingType::Sampler(SamplerBindingType::NonFiltering),
+                ty: BindingType::Sampler(SamplerBindingType::Filtering),
                 count: None,
             },
             // Config
@@ -300,7 +301,7 @@ impl RenderNode for DepthOfFieldNode {
                 binding: 4,
                 visibility: ShaderStages::FRAGMENT,
                 ty: BindingType::Texture {
-                    sample_type: TextureSampleType::Float { filterable: false },
+                    sample_type: TextureSampleType::Float { filterable: true },
                     view_dimension: TextureViewDimension::D2,
                     multisampled: false,
                 },
@@ -349,9 +350,9 @@ impl RenderNode for DepthOfFieldNode {
 
         let sampler = device.create_sampler(&SamplerDescriptor {
             label: Some("dof_sampler"),
-            // mag_filter: FilterMode::Linear,
-            // min_filter: FilterMode::Linear,
-            // mipmap_filter: FilterMode::Linear,
+            mag_filter: FilterMode::Linear,
+            min_filter: FilterMode::Linear,
+            mipmap_filter: FilterMode::Linear,
             ..Default::default()
         });
 
@@ -483,7 +484,7 @@ impl RenderNode for DepthOfFieldNode {
                     data,
                     DofPass::HexagonRhomboid,
                     &[Some(RenderPassColorAttachment {
-                        view: post_process.src,
+                        view: post_process.dst,
                         resolve_target: None,
                         ops: Operations {
                             load: LoadOp::Clear(Color::TRANSPARENT),

@@ -75,7 +75,7 @@ impl RenderNode for TonemappingNode {
                     binding: 0,
                     visibility: ShaderStages::FRAGMENT,
                     ty: BindingType::Texture {
-                        sample_type: TextureSampleType::Float { filterable: false },
+                        sample_type: TextureSampleType::Float { filterable: true },
                         view_dimension: TextureViewDimension::D2,
                         multisampled: false,
                     },
@@ -96,7 +96,7 @@ impl RenderNode for TonemappingNode {
                 BindGroupLayoutEntry {
                     binding: 2,
                     visibility: ShaderStages::FRAGMENT,
-                    ty: BindingType::Sampler(SamplerBindingType::NonFiltering),
+                    ty: BindingType::Sampler(SamplerBindingType::Filtering),
                     count: None,
                 },
                 // LUT Sampler
@@ -150,6 +150,9 @@ impl RenderNode for TonemappingNode {
 
         let color_sampler = device.create_sampler(&SamplerDescriptor {
             label: Some("color_sampler"),
+            mag_filter: FilterMode::Linear,
+            min_filter: FilterMode::Linear,
+            mipmap_filter: FilterMode::Linear,
             ..Default::default()
         });
 
@@ -182,7 +185,7 @@ impl RenderNode for TonemappingNode {
             entries: &[
                 BindGroupEntry {
                     binding: 0,
-                    resource: BindingResource::TextureView(post_process.dst),
+                    resource: BindingResource::TextureView(post_process.src),
                 },
                 BindGroupEntry {
                     binding: 1,
