@@ -20,13 +20,10 @@ fn tonemapping_tony_mc_mapface(stimulus: vec3f) -> vec3f {
 @fragment
 fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4f {
     let col = textureSample(color, color_sampler, in.uv).rgb;
-    let mapped =
 #ifdef REINHARD
-    tonemapping_reinhard(col);
-#else ifdef TONY_MAC_MAPFACE
-    tonemapping_tony_mc_mapface(col);
-#else
-    col;
+    let mapped = tonemapping_reinhard(col);
+#else ifdef TONY_MC_MAPFACE
+    let mapped = tonemapping_tony_mc_mapface(col);
 #endif
     return vec4f(mapped, 1.0);
 }

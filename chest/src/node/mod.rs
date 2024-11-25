@@ -1,4 +1,5 @@
 mod basic_triangle;
+mod bloom;
 mod depth_of_field;
 mod depth_prepass;
 mod depth_view;
@@ -10,6 +11,7 @@ mod ssao;
 mod tone_mapping;
 
 pub use basic_triangle::*;
+pub use bloom::*;
 pub use depth_of_field::*;
 pub use depth_prepass::*;
 pub use depth_view::*;

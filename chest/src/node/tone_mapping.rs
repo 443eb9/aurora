@@ -9,11 +9,10 @@ use aurora_derive::ShaderDefEnum;
 use naga_oil::compose::ShaderDefValue;
 use wgpu::{
     BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor,
-    BindGroupLayoutEntry, BindingResource, BindingType, Color, ColorTargetState, ColorWrites,
-    FilterMode, FragmentState, LoadOp, Operations, PipelineLayoutDescriptor,
-    RenderPassColorAttachment, RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor,
-    Sampler, SamplerBindingType, SamplerDescriptor, ShaderStages, StoreOp, Texture,
-    TextureSampleType, TextureViewDimension, VertexState,
+    BindGroupLayoutEntry, BindingResource, BindingType, ColorTargetState, ColorWrites, FilterMode,
+    FragmentState, PipelineLayoutDescriptor, RenderPassColorAttachment, RenderPassDescriptor,
+    RenderPipeline, RenderPipelineDescriptor, Sampler, SamplerBindingType, SamplerDescriptor,
+    ShaderStages, Texture, TextureSampleType, TextureViewDimension, VertexState,
 };
 
 use crate::texture::load_dds_texture;
@@ -33,18 +32,24 @@ pub struct TonemappingNodeData {
     pub lut: Texture,
 }
 
-#[derive(Default)]
 pub struct TonemappingNode {
     pub method: Option<TonemappingMethod>,
 
     pub data: Option<TonemappingNodeData>,
 }
 
+impl Default for TonemappingNode {
+    fn default() -> Self {
+        Self {
+            method: Some(Default::default()),
+            data: Default::default(),
+        }
+    }
+}
+
 impl RenderNode for TonemappingNode {
     fn require_shader_defs(&self, shader_defs: &mut HashMap<String, ShaderDefValue>) {
-        if let Some(method) = &self.method {
-            shader_defs.extend([method.to_def()]);
-        }
+        shader_defs.extend([self.method.as_ref().unwrap().to_def()]);
     }
 
     fn require_shaders(&self) -> Option<&'static [(&'static [&'static str], &'static str)]> {
@@ -179,6 +184,7 @@ impl RenderNode for TonemappingNode {
     ) {
         let data = self.data.as_ref().unwrap();
         let post_process = targets.swap_chain.start_post_process();
+
         let bind_group = device.create_bind_group(&BindGroupDescriptor {
             label: Some("tonemapping_bind_group"),
             layout: &data.layout,
@@ -213,10 +219,7 @@ impl RenderNode for TonemappingNode {
                 color_attachments: &[Some(RenderPassColorAttachment {
                     view: &targets.surface,
                     resolve_target: None,
-                    ops: Operations {
-                        load: LoadOp::Clear(Color::TRANSPARENT),
-                        store: StoreOp::Store,
-                    },
+                    ops: Default::default(),
                 })],
                 ..Default::default()
             });

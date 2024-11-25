@@ -1,5 +1,5 @@
 use aurora_chest::node::{
-    BasicTriangleNode, DepthOfFieldNode, DepthPrepassNode, EnvironmentMappingNode,
+    BasicTriangleNode, BloomNode, DepthOfFieldNode, DepthPrepassNode, EnvironmentMappingNode,
     NormalPrepassNode, PbrNode, PbrNodeConfig, ShadowMappingNode, ShadowMappingNodeConfig,
     SsaoNode, TonemappingNode, ENVIRONMENT_MAP_PATH_ATTR,
 };
@@ -14,29 +14,27 @@ pub struct PbrRenderFlow {
 impl Default for PbrRenderFlow {
     fn default() -> Self {
         let mut flow = RenderFlow::default();
-        flow.add::<GeneralNode>();
-        flow.add::<ImageFallbackNode>();
-        flow.add::<DepthPrepassNode>();
-        flow.add::<NormalPrepassNode>();
-        flow.add_initialized(ShadowMappingNode {
-            node_cfg: ShadowMappingNodeConfig::RANDOMIZE,
-            ..Default::default()
-        });
-        flow.add_initialized(SsaoNode {
-            denoise: true,
-            debug_ssao_only: false,
-            ..Default::default()
-        });
-        // // flow.add::<EnvironmentMappingNode>();
-        flow.add_initialized(PbrNode {
-            node_cfg: PbrNodeConfig::SSAO | PbrNodeConfig::SHADOW_MAPPING,
-            ..Default::default()
-        });
-        // flow.add::<PbrNode>();
-        flow.add::<DepthOfFieldNode>();
-        flow.add::<TonemappingNode>();
-        // flow.add::<DepthViewNode>();
-        // flow.add::<PresentNode>();
+        flow.add::<GeneralNode>()
+            .add::<ImageFallbackNode>()
+            .add::<DepthPrepassNode>()
+            .add::<NormalPrepassNode>()
+            // .add_initialized(ShadowMappingNode {
+            //     node_cfg: ShadowMappingNodeConfig::RANDOMIZE,
+            //     ..Default::default()
+            // })
+            // .add_initialized(SsaoNode {
+            //     denoise: true,
+            //     debug_ssao_only: false,
+            //     ..Default::default()
+            // })
+            // .add_initialized(PbrNode {
+            //     node_cfg: PbrNodeConfig::SSAO | PbrNodeConfig::SHADOW_MAPPING,
+            //     ..Default::default()
+            // })
+            .add::<PbrNode>()
+            .add::<BloomNode>()
+            // .add::<DepthOfFieldNode>()
+            .add::<TonemappingNode>();
 
         // flow.config_node::<PbrNode>(PbrNodeConfig::ENVIRONMENT_MAPPING);
         // flow.add_extra_data::<EnvironmentMappingNode>(

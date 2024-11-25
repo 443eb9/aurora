@@ -123,18 +123,13 @@ impl RenderFlow {
     }
 
     #[inline]
-    pub fn add<T: RenderNode + Default + 'static>(&mut self) {
-        self.flow.insert(
-            TypeId::of::<T>(),
-            PackedRenderNode {
-                node: Box::new(T::default()),
-                context: Default::default(),
-            },
-        );
+    pub fn add<T: RenderNode + Default + 'static>(&mut self) -> &mut Self {
+        self.add_initialized(T::default());
+        self
     }
 
     #[inline]
-    pub fn add_initialized<T: RenderNode>(&mut self, node: T) {
+    pub fn add_initialized<T: RenderNode>(&mut self, node: T) -> &mut Self {
         let mut before = Vec::new();
         let mut after = Vec::new();
 
@@ -162,6 +157,8 @@ impl RenderFlow {
             },
         );
         self.flow.extend(after);
+
+        self
     }
 
     #[inline]
@@ -224,7 +221,19 @@ impl RenderFlow {
         for PackedRenderNode { node, context } in self.flow.values_mut() {
             if let Some(shaders) = node.require_shaders() {
                 let mut compiled = Vec::with_capacity(shaders.len());
-                for (deps, main) in shaders {
+                let mut local_shader_defs = node.require_local_shader_defs();
+
+                for (index, (deps, main)) in shaders.into_iter().enumerate() {
+                    let shader_defs = match local_shader_defs.get_mut(index).and_then(|d| d.take())
+                    {
+                        Some(defs) => {
+                            let mut shader_defs = shader_defs.clone();
+                            shader_defs.extend(defs.clone());
+                            shader_defs
+                        }
+                        None => shader_defs.clone(),
+                    };
+
                     let mut composer = Composer::default();
                     for dep in deps.into_iter() {
                         composer
@@ -241,7 +250,7 @@ impl RenderFlow {
                     let module = composer
                         .make_naga_module(NagaModuleDescriptor {
                             source: &main,
-                            shader_defs: shader_defs.clone(),
+                            shader_defs,
                             ..Default::default()
                         })
                         .expect(&format!(
@@ -345,6 +354,11 @@ pub trait RenderNode: 'static {
 
     /// Add required shader defs.
     fn require_shader_defs(&self, _shader_defs: &mut HashMap<String, ShaderDefValue>) {}
+
+    /// Add required shader defs.
+    fn require_local_shader_defs(&self) -> Vec<Option<Vec<(String, ShaderDefValue)>>> {
+        Vec::new()
+    }
 
     /// Construct required shader, returns (dependencies, main_shader)
     fn require_shaders(&self) -> Option<&'static [(&'static [&'static str], &'static str)]> {

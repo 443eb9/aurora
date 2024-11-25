@@ -79,6 +79,13 @@ impl SwapChain {
         }
     }
 
+    pub fn clear(&mut self, device: &Device) {
+        self.main_texture_a.destroy();
+        self.main_texture_b.destroy();
+
+        std::mem::swap(self, &mut Self::new(device, &self.desc));
+    }
+
     pub fn desc(&self) -> &TextureDescriptor {
         &self.desc
     }

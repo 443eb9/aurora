@@ -71,7 +71,7 @@ fn G2_HeightCorrelated(roughness: f32, NdotL: f32, NdotV: f32) -> f32 {
     let r2 = roughness * roughness;
     let l = NdotV * sqrt(r2 + NdotL * (NdotL - r2 * NdotL));
     let v = NdotL * sqrt(r2 + NdotV * (NdotV - r2 * NdotV));
-    return 0.5 / (l + v);
+    return 0.5 / max(l + v, 0.001);
 }
 
 fn FD_Lambert(f_normal: vec3f, HdotL: f32) -> vec3f {
