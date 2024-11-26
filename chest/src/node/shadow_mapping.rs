@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use aurora_core::render::{
-    flow::{PipelineCreationContext, RenderContext, RenderNode},
+    flow::{RenderContext, RenderNode},
     helper::{CameraProjection, Transform},
     resource::{DynamicGpuBuffer, GpuCamera},
     scene::{
@@ -273,110 +273,17 @@ impl RenderNode for ShadowMappingNode {
         )])
     }
 
-    fn create_pipelines(
-        &mut self,
-        GpuScene { assets, .. }: &mut GpuScene,
-        PipelineCreationContext {
-            device,
-            targets,
-            shaders: shader,
-            meshes,
-            pipelines,
-            ..
-        }: PipelineCreationContext,
-    ) {
-        let light_view_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-            label: None,
-            entries: &[
-                BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: ShaderStages::VERTEX_FRAGMENT,
-                    ty: BindingType::Buffer {
-                        ty: BufferBindingType::Uniform,
-                        has_dynamic_offset: true,
-                        min_binding_size: Some(<GpuCamera as encase::ShaderType>::min_size()),
-                    },
-                    count: None,
-                },
-                BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: ShaderStages::VERTEX_FRAGMENT,
-                    ty: BindingType::Buffer {
-                        ty: BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: Some(
-                            <ShadowMappingConfig as encase::ShaderType>::min_size(),
-                        ),
-                    },
-                    count: None,
-                },
-            ],
-        });
-
-        let layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
-            label: Some("shadow_mapping_shader"),
-            bind_group_layouts: &[&light_view_layout],
-            push_constant_ranges: &[],
-        });
-
-        assets
-            .extra_layouts
-            .insert(SHADOW_MAPPING.light_view_layout, light_view_layout);
-
-        for mesh in meshes {
-            if pipelines.contains_key(&mesh.mesh.mesh) {
-                continue;
-            };
-
-            let instance = &assets.meshes[&mesh.mesh.mesh];
-            let pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
-                label: Some("shadow_mapping_pipeline"),
-                layout: Some(&layout),
-                cache: None,
-                vertex: VertexState {
-                    module: &shader[0],
-                    entry_point: "vertex",
-                    compilation_options: PipelineCompilationOptions::default(),
-                    buffers: &[VertexBufferLayout {
-                        array_stride: instance.vertex_stride(),
-                        step_mode: VertexStepMode::Vertex,
-                        attributes: &instance.vertex_attributes(),
-                    }],
-                },
-                fragment: Some(FragmentState {
-                    module: &shader[0],
-                    entry_point: "fragment",
-                    compilation_options: PipelineCompilationOptions::default(),
-                    targets: &[None],
-                }),
-                multisample: MultisampleState::default(),
-                depth_stencil: Some(DepthStencilState {
-                    format: targets.depth_format.unwrap(),
-                    depth_write_enabled: true,
-                    depth_compare: CompareFunction::LessEqual,
-                    stencil: StencilState::default(),
-                    bias: DepthBiasState::default(),
-                }),
-                primitive: PrimitiveState {
-                    cull_mode: match self.depth_biasing {
-                        DepthBiasing::NormalOffset => None,
-                        DepthBiasing::SingleSideRendering => Some(Face::Front),
-                    },
-                    unclipped_depth: true,
-                    ..Default::default()
-                },
-                multiview: None,
-            });
-            pipelines.insert(mesh.mesh.mesh, pipeline);
-        }
-    }
-
     fn build(
         &mut self,
         GpuScene {
             original, assets, ..
         }: &mut GpuScene,
-        RenderContext { device, queue, .. }: RenderContext,
+        RenderContext {
+            device,
+            queue,
+            node,
+            targets,
+        }: RenderContext,
     ) {
         let directional_shadow_map = device.create_texture(&TextureDescriptor {
             label: Some("directional_shadow_map"),
@@ -586,6 +493,91 @@ impl RenderNode for ShadowMappingNode {
         assets
             .extra_buffers
             .insert(SHADOW_MAPPING.config, bf_config);
+
+        let light_view_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+            label: None,
+            entries: &[
+                BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: ShaderStages::VERTEX_FRAGMENT,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Uniform,
+                        has_dynamic_offset: true,
+                        min_binding_size: Some(<GpuCamera as encase::ShaderType>::min_size()),
+                    },
+                    count: None,
+                },
+                BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: ShaderStages::VERTEX_FRAGMENT,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: Some(
+                            <ShadowMappingConfig as encase::ShaderType>::min_size(),
+                        ),
+                    },
+                    count: None,
+                },
+            ],
+        });
+
+        let layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
+            label: Some("shadow_mapping_shader"),
+            bind_group_layouts: &[&light_view_layout],
+            push_constant_ranges: &[],
+        });
+
+        assets
+            .extra_layouts
+            .insert(SHADOW_MAPPING.light_view_layout, light_view_layout);
+
+        for mesh in &node.meshes {
+            if node.pipelines.contains_key(&mesh.mesh.mesh) {
+                continue;
+            };
+
+            let instance = &assets.meshes[&mesh.mesh.mesh];
+            let pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
+                label: Some("shadow_mapping_pipeline"),
+                layout: Some(&layout),
+                cache: None,
+                vertex: VertexState {
+                    module: &node.shaders[0],
+                    entry_point: "vertex",
+                    compilation_options: PipelineCompilationOptions::default(),
+                    buffers: &[VertexBufferLayout {
+                        array_stride: instance.vertex_stride(),
+                        step_mode: VertexStepMode::Vertex,
+                        attributes: &instance.vertex_attributes(),
+                    }],
+                },
+                fragment: Some(FragmentState {
+                    module: &node.shaders[0],
+                    entry_point: "fragment",
+                    compilation_options: PipelineCompilationOptions::default(),
+                    targets: &[None],
+                }),
+                multisample: MultisampleState::default(),
+                depth_stencil: Some(DepthStencilState {
+                    format: targets.depth_format.unwrap(),
+                    depth_write_enabled: true,
+                    depth_compare: CompareFunction::LessEqual,
+                    stencil: StencilState::default(),
+                    bias: DepthBiasState::default(),
+                }),
+                primitive: PrimitiveState {
+                    cull_mode: match self.depth_biasing {
+                        DepthBiasing::NormalOffset => None,
+                        DepthBiasing::SingleSideRendering => Some(Face::Front),
+                    },
+                    unclipped_depth: true,
+                    ..Default::default()
+                },
+                multiview: None,
+            });
+            node.pipelines.insert(mesh.mesh.mesh, pipeline);
+        }
     }
 
     fn prepare(

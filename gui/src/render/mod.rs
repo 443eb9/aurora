@@ -1,7 +1,8 @@
 use aurora_chest::node::{
     BasicTriangleNode, BloomNode, DepthOfFieldNode, DepthPrepassNode, EnvironmentMappingNode,
-    LensFlareNode, NormalPrepassNode, PbrNode, PbrNodeConfig, ShadowMappingNode,
-    ShadowMappingNodeConfig, SsaoNode, TonemappingNode, ENVIRONMENT_MAP_PATH_ATTR,
+    LensFlareNode, MotionVectorPrepassNode, NormalPrepassNode, PbrNode, PbrNodeConfig,
+    ShadowMappingNode, ShadowMappingNodeConfig, SsaoNode, TonemappingNode,
+    ENVIRONMENT_MAP_PATH_ATTR,
 };
 use aurora_core::render::flow::{
     GeneralNode, ImageFallbackNode, PostProcessGeneralNode, PresentNode, RenderFlow,
@@ -18,6 +19,7 @@ impl Default for PbrRenderFlow {
             .add::<ImageFallbackNode>()
             .add::<DepthPrepassNode>()
             .add::<NormalPrepassNode>()
+            .add::<MotionVectorPrepassNode>()
             // .add_initialized(ShadowMappingNode {
             //     node_cfg: ShadowMappingNodeConfig::RANDOMIZE,
             //     ..Default::default()
@@ -34,7 +36,7 @@ impl Default for PbrRenderFlow {
             .add::<PbrNode>()
             // .add::<BloomNode>()
             // .add::<DepthOfFieldNode>()
-            .add::<LensFlareNode>()
+            // .add::<LensFlareNode>()
             .add::<TonemappingNode>();
 
         // flow.config_node::<PbrNode>(PbrNodeConfig::ENVIRONMENT_MAPPING);

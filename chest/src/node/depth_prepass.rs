@@ -1,5 +1,5 @@
 use aurora_core::render::{
-    flow::{PipelineCreationContext, RenderContext, RenderNode},
+    flow::{RenderContext, RenderNode},
     scene::{GpuScene, TextureId, TextureViewId},
 };
 use uuid::Uuid;
@@ -7,7 +7,8 @@ use wgpu::{
     CompareFunction, DepthStencilState, Extent3d, FragmentState, LoadOp, Operations,
     PipelineLayoutDescriptor, RenderPassDepthStencilAttachment, RenderPassDescriptor,
     RenderPipelineDescriptor, StoreOp, TextureDescriptor, TextureDimension, TextureFormat,
-    TextureUsages, TextureViewDescriptor, VertexBufferLayout, VertexState, VertexStepMode,
+    TextureUsages, TextureViewDescriptor, VertexBufferLayout, VertexFormat, VertexState,
+    VertexStepMode,
 };
 
 pub struct DepthPrepassTexture {
@@ -26,6 +27,15 @@ pub const DEPTH_PREPASS_FORMAT: TextureFormat = TextureFormat::Depth32Float;
 pub struct DepthPrepassNode;
 
 impl RenderNode for DepthPrepassNode {
+    fn restrict_mesh_format(&self) -> Option<&'static [VertexFormat]> {
+        Some(&[
+            VertexFormat::Float32x3,
+            VertexFormat::Float32x3,
+            VertexFormat::Float32x2,
+            VertexFormat::Float32x4,
+        ])
+    }
+
     fn require_shaders(&self) -> Option<&'static [(&'static [&'static str], &'static str)]> {
         Some(&[(
             &[
@@ -36,69 +46,14 @@ impl RenderNode for DepthPrepassNode {
         )])
     }
 
-    fn create_pipelines(
-        &mut self,
-        GpuScene { assets, .. }: &mut GpuScene,
-        PipelineCreationContext {
-            device,
-            shaders: shader,
-            meshes,
-            pipelines,
-            ..
-        }: PipelineCreationContext,
-    ) {
-        let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
-            label: Some("depth_prepass_pipeline_layout"),
-            bind_group_layouts: &[assets.common_layout.as_ref().unwrap()],
-            push_constant_ranges: &[],
-        });
-
-        for mesh in meshes {
-            if pipelines.contains_key(&mesh.mesh.mesh) {
-                continue;
-            }
-
-            let instance = &assets.meshes[&mesh.mesh.mesh];
-            let pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
-                label: Some("depth_prepass_pipeline"),
-                layout: Some(&pipeline_layout),
-                vertex: VertexState {
-                    module: &shader[0],
-                    entry_point: "vertex",
-                    compilation_options: Default::default(),
-                    buffers: &[VertexBufferLayout {
-                        array_stride: instance.vertex_stride(),
-                        step_mode: VertexStepMode::Vertex,
-                        attributes: &instance.vertex_attributes(),
-                    }],
-                },
-                fragment: Some(FragmentState {
-                    module: &shader[0],
-                    entry_point: "fragment",
-                    compilation_options: Default::default(),
-                    targets: &[None],
-                }),
-                primitive: Default::default(),
-                depth_stencil: Some(DepthStencilState {
-                    format: DEPTH_PREPASS_FORMAT,
-                    depth_write_enabled: true,
-                    depth_compare: CompareFunction::LessEqual,
-                    stencil: Default::default(),
-                    bias: Default::default(),
-                }),
-                multisample: Default::default(),
-                multiview: Default::default(),
-                cache: Default::default(),
-            });
-            pipelines.insert(mesh.mesh.mesh, pipeline);
-        }
-    }
-
     fn build(
         &mut self,
         GpuScene { assets, .. }: &mut GpuScene,
         RenderContext {
-            device, targets, ..
+            device,
+            targets,
+            node,
+            ..
         }: RenderContext,
     ) {
         let depth_texture = device.create_texture(&TextureDescriptor {
@@ -127,6 +82,52 @@ impl RenderNode for DepthPrepassNode {
         assets
             .texture_views
             .insert(DEPTH_PREPASS_TEXTURE.view, depth_texture_view);
+
+        let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
+            label: Some("depth_prepass_pipeline_layout"),
+            bind_group_layouts: &[assets.common_layout.as_ref().unwrap()],
+            push_constant_ranges: &[],
+        });
+
+        for mesh in &node.meshes {
+            if node.pipelines.contains_key(&mesh.mesh.mesh) {
+                continue;
+            }
+
+            let instance = &assets.meshes[&mesh.mesh.mesh];
+            let pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
+                label: Some("depth_prepass_pipeline"),
+                layout: Some(&pipeline_layout),
+                vertex: VertexState {
+                    module: &node.shaders[0],
+                    entry_point: "vertex",
+                    compilation_options: Default::default(),
+                    buffers: &[VertexBufferLayout {
+                        array_stride: instance.vertex_stride(),
+                        step_mode: VertexStepMode::Vertex,
+                        attributes: &instance.vertex_attributes(),
+                    }],
+                },
+                fragment: Some(FragmentState {
+                    module: &node.shaders[0],
+                    entry_point: "fragment",
+                    compilation_options: Default::default(),
+                    targets: &[None],
+                }),
+                primitive: Default::default(),
+                depth_stencil: Some(DepthStencilState {
+                    format: DEPTH_PREPASS_FORMAT,
+                    depth_write_enabled: true,
+                    depth_compare: CompareFunction::LessEqual,
+                    stencil: Default::default(),
+                    bias: Default::default(),
+                }),
+                multisample: Default::default(),
+                multiview: Default::default(),
+                cache: Default::default(),
+            });
+            node.pipelines.insert(mesh.mesh.mesh, pipeline);
+        }
     }
 
     fn draw(

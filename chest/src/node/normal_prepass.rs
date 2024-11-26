@@ -1,5 +1,5 @@
 use aurora_core::render::{
-    flow::{PipelineCreationContext, RenderContext, RenderNode},
+    flow::{RenderContext, RenderNode},
     resource::GpuCamera,
     scene::{GpuScene, TextureId, TextureViewId},
 };
@@ -52,92 +52,14 @@ impl RenderNode for NormalPrepassNode {
         ])
     }
 
-    fn create_pipelines(
-        &mut self,
-        GpuScene { assets, .. }: &mut GpuScene,
-        PipelineCreationContext {
-            device,
-            shaders: shader,
-            meshes,
-            pipelines,
-            targets,
-            ..
-        }: PipelineCreationContext,
-    ) {
-        let layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-            label: Some("normal_prepass_layout"),
-            entries: &[BindGroupLayoutEntry {
-                binding: 0,
-                visibility: ShaderStages::VERTEX,
-                ty: BindingType::Buffer {
-                    ty: BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: Some(GpuCamera::min_size()),
-                },
-                count: None,
-            }],
-        });
-
-        let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
-            label: Some("normal_prepass_pipeline_layout"),
-            bind_group_layouts: &[&layout],
-            push_constant_ranges: &[],
-        });
-
-        for mesh in meshes {
-            if pipelines.contains_key(&mesh.mesh.mesh) {
-                continue;
-            }
-
-            let instance = &assets.meshes[&mesh.mesh.mesh];
-            pipelines.insert(
-                mesh.mesh.mesh,
-                device.create_render_pipeline(&RenderPipelineDescriptor {
-                    label: Some("normal_prepass_pipeline"),
-                    layout: Some(&pipeline_layout),
-                    vertex: VertexState {
-                        module: &shader[0],
-                        entry_point: "vertex",
-                        compilation_options: Default::default(),
-                        buffers: &[VertexBufferLayout {
-                            array_stride: instance.vertex_stride(),
-                            step_mode: VertexStepMode::Vertex,
-                            attributes: &instance.vertex_attributes(),
-                        }],
-                    },
-                    fragment: Some(FragmentState {
-                        module: &shader[0],
-                        entry_point: "fragment",
-                        compilation_options: Default::default(),
-                        targets: &[Some(ColorTargetState {
-                            format: NORMAL_PREPASS_FORMAT,
-                            blend: None,
-                            write_mask: ColorWrites::all(),
-                        })],
-                    }),
-                    primitive: Default::default(),
-                    depth_stencil: Some(DepthStencilState {
-                        format: targets.depth_format.unwrap(),
-                        depth_write_enabled: true,
-                        depth_compare: CompareFunction::LessEqual,
-                        stencil: Default::default(),
-                        bias: DepthBiasState::default(),
-                    }),
-                    multisample: Default::default(),
-                    multiview: None,
-                    cache: None,
-                }),
-            );
-        }
-
-        self.layout = Some(layout);
-    }
-
     fn build(
         &mut self,
         GpuScene { assets, .. }: &mut GpuScene,
         RenderContext {
-            device, targets, ..
+            device,
+            targets,
+            node,
+            ..
         }: RenderContext,
     ) {
         let normal_texture = device.create_texture(&TextureDescriptor {
@@ -166,6 +88,73 @@ impl RenderNode for NormalPrepassNode {
         assets
             .texture_views
             .insert(NORMAL_PREPASS_TEXTURE.view, normal_texture_view);
+        let layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+            label: Some("normal_prepass_layout"),
+            entries: &[BindGroupLayoutEntry {
+                binding: 0,
+                visibility: ShaderStages::VERTEX,
+                ty: BindingType::Buffer {
+                    ty: BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: Some(GpuCamera::min_size()),
+                },
+                count: None,
+            }],
+        });
+
+        let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
+            label: Some("normal_prepass_pipeline_layout"),
+            bind_group_layouts: &[&layout],
+            push_constant_ranges: &[],
+        });
+
+        for mesh in &node.meshes {
+            if node.pipelines.contains_key(&mesh.mesh.mesh) {
+                continue;
+            }
+
+            let instance = &assets.meshes[&mesh.mesh.mesh];
+            node.pipelines.insert(
+                mesh.mesh.mesh,
+                device.create_render_pipeline(&RenderPipelineDescriptor {
+                    label: Some("normal_prepass_pipeline"),
+                    layout: Some(&pipeline_layout),
+                    vertex: VertexState {
+                        module: &node.shaders[0],
+                        entry_point: "vertex",
+                        compilation_options: Default::default(),
+                        buffers: &[VertexBufferLayout {
+                            array_stride: instance.vertex_stride(),
+                            step_mode: VertexStepMode::Vertex,
+                            attributes: &instance.vertex_attributes(),
+                        }],
+                    },
+                    fragment: Some(FragmentState {
+                        module: &node.shaders[0],
+                        entry_point: "fragment",
+                        compilation_options: Default::default(),
+                        targets: &[Some(ColorTargetState {
+                            format: NORMAL_PREPASS_FORMAT,
+                            blend: None,
+                            write_mask: ColorWrites::all(),
+                        })],
+                    }),
+                    primitive: Default::default(),
+                    depth_stencil: Some(DepthStencilState {
+                        format: targets.depth_format.unwrap(),
+                        depth_write_enabled: true,
+                        depth_compare: CompareFunction::LessEqual,
+                        stencil: Default::default(),
+                        bias: DepthBiasState::default(),
+                    }),
+                    multisample: Default::default(),
+                    multiview: None,
+                    cache: None,
+                }),
+            );
+        }
+
+        self.layout = Some(layout);
     }
 
     fn prepare(

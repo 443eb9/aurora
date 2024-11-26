@@ -5,7 +5,7 @@ use std::{
 
 use aurora_core::{
     render::{
-        flow::{PipelineCreationContext, RenderContext, RenderNode},
+        flow::{RenderContext, RenderNode},
         mesh::CreateBindGroupLayout,
         resource::DynamicGpuBuffer,
         scene::{GpuScene, MaterialTypeId, TextureId},
@@ -70,10 +70,7 @@ impl RenderNode for PbrNode {
     }
 
     fn require_shader_defs(&self, shader_defs: &mut HashMap<String, ShaderDefValue>) {
-        shader_defs.extend([
-            self.diffuse.to_def(),
-            self.specular.to_def(),
-        ]);
+        shader_defs.extend([self.diffuse.to_def(), self.specular.to_def()]);
 
         let mut bind_groups = 3;
         if self.node_cfg.contains(PbrNodeConfig::SHADOW_MAPPING) {
@@ -111,17 +108,23 @@ impl RenderNode for PbrNode {
         )])
     }
 
-    fn create_pipelines(
+    fn build(
         &mut self,
         GpuScene { assets, .. }: &mut GpuScene,
-        PipelineCreationContext {
+        RenderContext {
             device,
+            queue,
+            node,
             targets,
-            shaders: shader,
-            meshes,
-            pipelines,
-        }: PipelineCreationContext,
+            ..
+        }: RenderContext,
     ) {
+        assets.textures.insert(
+            TONY_MC_MAPFACE_LUT,
+            texture::load_dds_texture(device, queue, "chest/assets/luts/tony_mc_mapface.dds"),
+        );
+        self.mat_uuid = MaterialTypeId(TypeId::of::<PbrMaterial>().to_uuid());
+
         PbrMaterial::create_layout(device, assets);
 
         let (l_camera, l_lights, l_material) = (
@@ -149,14 +152,14 @@ impl RenderNode for PbrNode {
             push_constant_ranges: &[],
         });
 
-        for mesh in meshes {
+        for mesh in &node.meshes {
             let instance = &assets.meshes[&mesh.mesh.mesh];
             let pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
                 label: Some("pbr_pipeline"),
                 layout: Some(&layout),
                 cache: None,
                 vertex: VertexState {
-                    module: &shader[0],
+                    module: &node.shaders[0],
                     entry_point: "vertex",
                     compilation_options: PipelineCompilationOptions::default(),
                     buffers: &[VertexBufferLayout {
@@ -167,7 +170,7 @@ impl RenderNode for PbrNode {
                 },
                 multisample: MultisampleState::default(),
                 fragment: Some(FragmentState {
-                    module: &shader[0],
+                    module: &node.shaders[0],
                     entry_point: "fragment",
                     compilation_options: PipelineCompilationOptions::default(),
                     targets: &[Some(ColorTargetState {
@@ -189,16 +192,8 @@ impl RenderNode for PbrNode {
                 },
                 multiview: None,
             });
-            pipelines.insert(mesh.mesh.mesh, pipeline);
+            node.pipelines.insert(mesh.mesh.mesh, pipeline);
         }
-    }
-
-    fn build(&mut self, scene: &mut GpuScene, RenderContext { device, queue, .. }: RenderContext) {
-        scene.assets.textures.insert(
-            TONY_MC_MAPFACE_LUT,
-            texture::load_dds_texture(device, queue, "chest/assets/luts/tony_mc_mapface.dds"),
-        );
-        self.mat_uuid = MaterialTypeId(TypeId::of::<PbrMaterial>().to_uuid());
     }
 
     fn prepare(

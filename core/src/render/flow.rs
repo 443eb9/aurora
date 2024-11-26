@@ -92,14 +92,6 @@ pub struct RenderContext<'a> {
     pub targets: &'a RenderTargets<'a>,
 }
 
-pub struct PipelineCreationContext<'a> {
-    pub device: &'a Device,
-    pub targets: &'a RenderTargets<'a>,
-    pub shaders: &'a Vec<ShaderModule>,
-    pub meshes: &'a Vec<RenderMesh>,
-    pub pipelines: &'a mut HashMap<MeshInstanceId, RenderPipeline>,
-}
-
 #[derive(Default)]
 pub struct RenderFlow {
     flow: IndexMap<TypeId, PackedRenderNode>,
@@ -270,17 +262,6 @@ impl RenderFlow {
                 context.shaders = compiled;
             }
 
-            node.create_pipelines(
-                scene,
-                PipelineCreationContext {
-                    device: &renderer.device,
-                    targets,
-                    shaders: &context.shaders,
-                    meshes: &context.meshes,
-                    pipelines: &mut context.pipelines,
-                },
-            );
-
             node.build(
                 scene,
                 RenderContext {
@@ -364,9 +345,6 @@ pub trait RenderNode: 'static {
     fn require_shaders(&self) -> Option<&'static [(&'static [&'static str], &'static str)]> {
         None
     }
-
-    /// Create pipeline for meshes.
-    fn create_pipelines(&mut self, _scene: &mut GpuScene, _context: PipelineCreationContext) {}
 
     /// Build the node.
     fn build(&mut self, _scene: &mut GpuScene, _context: RenderContext) {}
