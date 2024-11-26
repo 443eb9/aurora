@@ -89,9 +89,8 @@ impl<'a> Application<'a> {
             // "gui/assets/gltf_test.glb",
             // "gui/assets/suzanne.glb",
             // "gui/assets/ao_test.glb",
-            // "gui/assets/depth_of_field_test.glb",
-            "gui/assets/bloom_test.glb",
-            // "gui/assets/sponza.glb",
+            "gui/assets/depth_of_field_test.glb",
+            // "gui/assets/bloom_test.glb",
             // "gui/assets/spheres_roughness_no_tex.glb",
             // "gui/assets/stanford_bunny.glb",
             // "gui/assets/cascade_test.glb",
@@ -284,7 +283,7 @@ impl<'a> Application<'a> {
     }
 
     pub fn resize(&mut self, dim: UVec2) {
-        if dim == UVec2::ZERO {
+        if dim.x <= 1 || dim.y <= 1 {
             return;
         }
 
@@ -304,6 +303,8 @@ impl<'a> Application<'a> {
                 | TextureUsages::TEXTURE_BINDING
                 | TextureUsages::COPY_SRC,
         );
+        self.post_process_chain = None;
+        self.redraw(None, true);
     }
 }
 

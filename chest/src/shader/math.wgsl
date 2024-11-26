@@ -6,7 +6,15 @@ fn sin_between(x: vec3f, y: vec3f) -> f32 {
     return length(cross(x, y)) / (length(x) * length(y));
 }
 
+fn sin_between_2d(x: vec2f, y: vec2f) -> f32 {
+    return length(cross(x, y)) / (length(x) * length(y));
+}
+
 fn cos_between(x: vec3f, y: vec3f) -> f32 {
+    return dot(x, y) / (length(x) * length(y));
+}
+
+fn cos_between_2d(x: vec2f, y: vec2f) -> f32 {
     return dot(x, y) / (length(x) * length(y));
 }
 
@@ -59,4 +67,12 @@ fn hilbert_curve_noise(index: u32) -> vec2f {
 fn clip_depth_to_view(depth: f32, inv_proj: mat4x4f) -> f32 {
     let t = inv_proj * vec4f(0.0, 0.0, depth, 1.0);
     return -t.z / t.w;
+}
+
+fn linear_to_srgb(color: vec3f) -> vec3f {
+    return pow(color, vec3f(1.0 / 2.2));
+}
+
+fn luminance(c: vec3f) -> f32 {
+    return c.r * 0.2126 + c.g * 0.7152 + c.b * 0.0722;
 }

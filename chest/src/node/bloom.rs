@@ -55,7 +55,7 @@ impl Default for BloomNodeConfig {
             scatter: 0.8,
             eliminate_firefly: true,
             threshold: 0.8,
-            soft_threshold: 0.1,
+            soft_threshold: 0.9,
         }
     }
 }
@@ -99,11 +99,17 @@ impl RenderNode for BloomNode {
         Some(&[
             (&[], include_str!("../shader/fullscreen.wgsl")),
             (
-                &[include_str!("../shader/fullscreen.wgsl")],
+                &[
+                    include_str!("../shader/math.wgsl"),
+                    include_str!("../shader/fullscreen.wgsl"),
+                ],
                 include_str!("../shader/post_processing/bloom.wgsl"),
             ),
             (
-                &[include_str!("../shader/fullscreen.wgsl")],
+                &[
+                    include_str!("../shader/math.wgsl"),
+                    include_str!("../shader/fullscreen.wgsl"),
+                ],
                 include_str!("../shader/post_processing/bloom.wgsl"),
             ),
         ])

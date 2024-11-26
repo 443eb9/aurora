@@ -1,4 +1,7 @@
-#import aurora::fullscreen::FullscreenVertexOutput
+#import aurora::{
+    fullscreen::FullscreenVertexOutput,
+    math,
+}
 
 struct BloomConfig {
     precomputed_filter: vec4f,
@@ -24,7 +27,7 @@ fn luminance(c: vec3f) -> f32 {
 }
 
 fn karis_average(c: vec3f) -> f32 {
-    let luma = luminance(pow(c, vec3f(1.0 / 2.2))) * 0.25;
+    let luma = math::luminance(math::linear_to_srgb(c)) * 0.25;
     return 1.0 / (1.0 + luma);
 }
 
