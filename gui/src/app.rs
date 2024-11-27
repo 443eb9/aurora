@@ -169,7 +169,7 @@ impl<'a> Application<'a> {
 
     pub fn handle_keyboard(&mut self, key: KeyCode, state: ElementState) {
         match key {
-            KeyCode::F12 => pollster::block_on(self.take_screenshot()),
+            KeyCode::F10 => pollster::block_on(self.take_screenshot()),
             _ => {}
         }
 
@@ -197,7 +197,7 @@ impl<'a> Application<'a> {
         let swap_chain = self.post_process_chain.take().unwrap();
         self.redraw(
             Some(RenderTargets {
-                color_format: TextureFormat::Rgba8UnormSrgb,
+                color_format: HDR_TARGET_FORMAT,
                 surface: screenshot.create_view(&TextureViewDescriptor::default()),
                 surface_format: screenshot.format(),
                 depth_format: Some(TextureFormat::Depth32Float),

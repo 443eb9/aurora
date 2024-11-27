@@ -86,6 +86,8 @@ pub async fn save_color_texture_as_image(
 
     out_staging_buffer.unmap();
 
+    let _ = std::fs::create_dir_all(&path);
+
     RgbaImage::from_raw(extent.width, extent.height, texture_data)
         .unwrap()
         .save(path)
