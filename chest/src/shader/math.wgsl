@@ -64,6 +64,13 @@ fn hilbert_curve_noise(index: u32) -> vec2f {
     return fract(0.5 + f32(index) * vec2<f32>(0.75487766624669276005, 0.5698402909980532659114));
 }
 
+// Bevy
+// https://blog.demofox.org/2022/01/01/interleaved-gradient-noise-a-different-kind-of-low-discrepancy-sequence
+fn interleaved_gradient_noise(pixel_coordinates: vec2<f32>, frame: u32) -> f32 {
+    let xy = pixel_coordinates + 5.588238 * f32(frame % 64u);
+    return fract(52.9829189 * fract(0.06711056 * xy.x + 0.00583715 * xy.y));
+}
+
 fn clip_depth_to_view(depth: f32, inv_proj: mat4x4f) -> f32 {
     let t = inv_proj * vec4f(0.0, 0.0, depth, 1.0);
     return -t.z / t.w;

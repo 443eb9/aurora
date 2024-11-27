@@ -95,4 +95,6 @@ pub struct GpuScene {
     pub original: Scene,
     pub assets: GpuAssets,
     pub static_meshes: Vec<StaticMesh>,
+    pub delta_time: f32,
+    pub frame_count: u32,
 }

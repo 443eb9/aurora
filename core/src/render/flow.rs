@@ -2,6 +2,7 @@ use std::{
     any::{type_name, TypeId},
     borrow::Cow,
     collections::HashMap,
+    time::Instant,
 };
 
 use encase::ShaderType;
@@ -357,8 +358,17 @@ pub trait RenderNode: 'static {
 }
 
 /// Prepares camera, lights and post process bind groups.
-#[derive(Default)]
-pub struct GeneralNode;
+pub struct GeneralNode {
+    pub last_update: Instant,
+}
+
+impl Default for GeneralNode {
+    fn default() -> Self {
+        Self {
+            last_update: Instant::now(),
+        }
+    }
+}
 
 impl RenderNode for GeneralNode {
     fn build(
@@ -449,12 +459,19 @@ impl RenderNode for GeneralNode {
 
     fn prepare(
         &mut self,
-        scene: &mut GpuScene,
+        GpuScene {
+            original,
+            assets,
+            delta_time,
+            frame_count,
+            ..
+        }: &mut GpuScene,
         RenderContext { device, queue, .. }: RenderContext,
     ) {
-        let GpuScene {
-            assets, original, ..
-        } = scene;
+        let now = Instant::now();
+        *delta_time = (now - self.last_update).as_secs_f32();
+        self.last_update = now;
+        *frame_count += 1;
 
         assets.directional_light_buffer.clear();
         assets.point_light_buffer.clear();

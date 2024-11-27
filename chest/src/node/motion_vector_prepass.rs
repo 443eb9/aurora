@@ -7,18 +7,18 @@ use encase::ShaderType;
 use glam::Mat4;
 use uuid::Uuid;
 use wgpu::{
-    BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor,
+    BindGroupDescriptor, BindGroupEntry, BindGroupLayout, BindGroupLayoutDescriptor,
     BindGroupLayoutEntry, BindingType, BufferBindingType, BufferUsages, ColorTargetState,
-    ColorWrites, CompareFunction, DepthStencilState, Extent3d, Features, FragmentState, LoadOp,
-    Operations, PipelineLayoutDescriptor, RenderPassColorAttachment,
-    RenderPassDepthStencilAttachment, RenderPassDescriptor, RenderPipelineDescriptor, ShaderStages,
-    StoreOp, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages, VertexBufferLayout,
-    VertexFormat, VertexState, VertexStepMode,
+    ColorWrites, CompareFunction, DepthStencilState, Extent3d, FragmentState, LoadOp, Operations,
+    PipelineLayoutDescriptor, RenderPassColorAttachment, RenderPassDepthStencilAttachment,
+    RenderPassDescriptor, RenderPipelineDescriptor, ShaderStages, StoreOp, TextureDescriptor,
+    TextureDimension, TextureFormat, TextureUsages, VertexBufferLayout, VertexFormat, VertexState,
+    VertexStepMode,
 };
 
 use crate::node::DEPTH_PREPASS_TEXTURE;
 
-pub const MOTION_VECTOR_PREPASS_FORMAT: TextureFormat = TextureFormat::Rg11b10Float;
+pub const MOTION_VECTOR_PREPASS_FORMAT: TextureFormat = TextureFormat::Rg16Float;
 
 pub struct MotionVectorTexture {
     pub texture: TextureId,
@@ -31,14 +31,14 @@ pub const MOTION_VECTOR_PREPASS_TEXTURE: MotionVectorTexture = MotionVectorTextu
 };
 
 #[derive(ShaderType)]
-pub struct MotionVectorPrepass {
+pub struct MotionVectorPrepassConfig {
     pub previous_view: Mat4,
 }
 
 pub struct MotionVectorPrepassNodeData {
     pub current_view: Mat4,
     pub previous_view: DynamicGpuBuffer,
-    pub bind_group: Option<BindGroup>,
+    pub layout: BindGroupLayout,
 }
 
 #[derive(Default)]
@@ -56,13 +56,12 @@ impl RenderNode for MotionVectorPrepassNode {
         ])
     }
 
-    fn require_renderer_features(&self, features: &mut Features) {
-        *features |= Features::RG11B10UFLOAT_RENDERABLE;
-    }
-
     fn require_shaders(&self) -> Option<&'static [(&'static [&'static str], &'static str)]> {
         Some(&[(
-            &[include_str!("../shader/common/common_type.wgsl")],
+            &[
+                include_str!("../shader/common/common_type.wgsl"),
+                include_str!("../shader/math.wgsl"),
+            ],
             include_str!("../shader/prepass/motion_vector_prepass.wgsl"),
         )])
     }
@@ -116,11 +115,11 @@ impl RenderNode for MotionVectorPrepassNode {
                 },
                 BindGroupLayoutEntry {
                     binding: 1,
-                    visibility: ShaderStages::VERTEX,
+                    visibility: ShaderStages::VERTEX_FRAGMENT,
                     ty: BindingType::Buffer {
                         ty: BufferBindingType::Uniform,
                         has_dynamic_offset: false,
-                        min_binding_size: Some(MotionVectorPrepass::min_size()),
+                        min_binding_size: Some(MotionVectorPrepassConfig::min_size()),
                     },
                     count: None,
                 },
@@ -131,6 +130,12 @@ impl RenderNode for MotionVectorPrepassNode {
             label: Some("motion_vector_prepass_pipeline_layout"),
             bind_group_layouts: &[&layout],
             ..Default::default()
+        });
+
+        self.data = Some(MotionVectorPrepassNodeData {
+            current_view: Default::default(),
+            previous_view: DynamicGpuBuffer::new(BufferUsages::UNIFORM),
+            layout,
         });
 
         for mesh in &node.meshes {
@@ -181,56 +186,44 @@ impl RenderNode for MotionVectorPrepassNode {
 
     fn prepare(
         &mut self,
-        GpuScene {
-            original, assets, ..
-        }: &mut GpuScene,
+        GpuScene { original, .. }: &mut GpuScene,
         RenderContext { device, queue, .. }: RenderContext,
     ) {
-        let current_view = original.camera.transform.compute_matrix();
-
-        if self.data.is_none() {
-            self.data = Some(MotionVectorPrepassNodeData {
-                current_view,
-                previous_view: DynamicGpuBuffer::new(BufferUsages::UNIFORM),
-                bind_group: None,
-            });
-        }
-
-        let MotionVectorPrepassNodeData {
+        let Some(MotionVectorPrepassNodeData {
             current_view,
             previous_view,
-            bind_group: maybe_bind_group,
-        } = self.data.as_mut().unwrap();
+            ..
+        }) = &mut self.data
+        else {
+            return;
+        };
 
         previous_view.clear();
-        previous_view.push(&current_view);
-        previous_view.write::<MotionVectorPrepass>(device, queue);
-
-        let layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-            label: Some("motion_vector_prepass_layout"),
-            entries: &[
-                BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: ShaderStages::VERTEX,
-                    ty: BindingType::Buffer {
-                        ty: BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: Some(GpuCamera::min_size()),
-                    },
-                    count: None,
-                },
-                BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: ShaderStages::VERTEX,
-                    ty: BindingType::Buffer {
-                        ty: BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: Some(MotionVectorPrepass::min_size()),
-                    },
-                    count: None,
-                },
-            ],
+        previous_view.push(&MotionVectorPrepassConfig {
+            previous_view: *current_view,
         });
+        previous_view.write::<MotionVectorPrepassConfig>(device, queue);
+        *current_view = original.camera.transform.compute_matrix().inverse();
+    }
+
+    fn draw(
+        &self,
+        GpuScene { assets, .. }: &mut GpuScene,
+        RenderContext {
+            device,
+            queue,
+            node,
+            ..
+        }: RenderContext,
+    ) {
+        let Some(MotionVectorPrepassNodeData {
+            previous_view,
+            layout,
+            ..
+        }) = &self.data
+        else {
+            return;
+        };
 
         let bind_group = device.create_bind_group(&BindGroupDescriptor {
             label: Some("motion_vector_prepass_bind_group"),
@@ -246,23 +239,6 @@ impl RenderNode for MotionVectorPrepassNode {
                 },
             ],
         });
-
-        maybe_bind_group.replace(bind_group);
-    }
-
-    fn draw(
-        &self,
-        GpuScene { assets, .. }: &mut GpuScene,
-        RenderContext {
-            device,
-            queue,
-            node,
-            ..
-        }: RenderContext,
-    ) {
-        let Some(MotionVectorPrepassNodeData { bind_group, .. }) = &self.data else {
-            return;
-        };
 
         let mut command_encoder = device.create_command_encoder(&Default::default());
 
@@ -285,7 +261,7 @@ impl RenderNode for MotionVectorPrepassNode {
                 ..Default::default()
             });
 
-            pass.set_bind_group(0, bind_group.as_ref().unwrap(), &[]);
+            pass.set_bind_group(0, &bind_group, &[]);
             for mesh in &node.meshes {
                 let (instance, pipeline) = (
                     &assets.gpu_meshes[&mesh.mesh.mesh],
