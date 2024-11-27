@@ -22,8 +22,7 @@ pub const LENS_FLARE_TEXTURE_FORMAT: TextureFormat = TextureFormat::Rgba16Float;
 
 #[derive(ShaderType)]
 pub struct LensFlareConfig {
-    pub steps: u32,
-    pub step_factor: f32,
+    pub spot_count: u32,
     pub center_falloff: f32,
     pub luminance_gain: f32,
     pub ca_strength: f32,
@@ -33,10 +32,9 @@ pub struct LensFlareConfig {
 impl Default for LensFlareConfig {
     fn default() -> Self {
         Self {
-            steps: 10,
-            step_factor: 2.0,
+            spot_count: 2,
             center_falloff: 3.0,
-            luminance_gain: 3.0,
+            luminance_gain: 2.0,
             ca_strength: 20.0,
             halo_radius: 0.4,
         }

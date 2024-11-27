@@ -5,8 +5,7 @@
 }
 
 struct LensFlareConfig {
-    steps: u32,
-    step_factor: f32,
+    spot_count: u32,
     center_falloff: f32,
     luminance_gain: f32,
     ca_strength: f32,
@@ -60,23 +59,22 @@ fn lens_flare(in: FullscreenVertexOutput) -> @location(0) vec4f {
     let dim = vec2f(textureDimensions(color));
     let texel = 1.0 / dim;
     let flipped_uv = 1.0 - in.uv;
-
+    let centered_uv = flipped_uv * 2.0 - 1.0;
     let dir = (vec2f(0.5) - flipped_uv) * texel;
-    let step_length = config.step_factor * dir;
 
     var col = vec3f(0.0);
-    for (var i = 0; i < i32(config.steps); i += 1) {
-        let sample_uv = flipped_uv + step_length * f32(i);
 
+    for (var spot = 1; spot <= i32(config.spot_count); spot += 1) {
+        let sample_uv = centered_uv / f32(spot) * 0.5 + 0.5;
 #ifdef CHROMATIC_ABERRATION
-        let pixel = chromatic_aberration(sample_uv, dir, vec3f(-config.ca_strength, 0.0, config.ca_strength));
+        let pixel = chromatic_aberration(sample_uv, dir / f32(spot), vec3f(-config.ca_strength, 0.0, config.ca_strength));
 #else // CHROMATIC_ABERRATION
         let pixel = textureSample(color, color_sampler, sample_uv).rgb;
 #endif // CHROMATIC_ABERRATION
 
-        let luminance = math::luminance(math::linear_to_srgb(pixel));
-        let weight = length(vec2f(0.5) - sample_uv) / length(vec2f(0.5));
-        col += pixel * pow(1.0 - weight, config.center_falloff) * pow(luminance, config.luminance_gain);
+        let falloff = length(vec2f(0.5) - sample_uv) / length(vec2f(0.5));
+        let luminance = saturate(math::luminance(math::linear_to_srgb(pixel)));
+        col += pixel * pow((1.0 - falloff), config.center_falloff) * vec3f(luminance);
     }
 
 #ifdef HALO

@@ -36,8 +36,8 @@ impl Default for PbrRenderFlow {
             .add::<PbrNode>()
             // .add::<BloomNode>()
             // .add::<DepthOfFieldNode>()
-            // .add::<LensFlareNode>()
-            .add::<MotionBlurNode>()
+            .add::<LensFlareNode>()
+            // .add::<MotionBlurNode>()
             .add::<TonemappingNode>();
 
         // flow.config_node::<PbrNode>(PbrNodeConfig::ENVIRONMENT_MAPPING);
