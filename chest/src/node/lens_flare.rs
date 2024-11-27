@@ -24,7 +24,8 @@ pub const LENS_FLARE_TEXTURE_FORMAT: TextureFormat = TextureFormat::Rgba16Float;
 pub struct LensFlareConfig {
     pub spot_count: u32,
     pub center_falloff: f32,
-    pub luminance_gain: f32,
+    pub lower_threshold: f32,
+    pub upper_threshold: f32,
     pub ca_strength: f32,
     pub halo_radius: f32,
 }
@@ -34,7 +35,8 @@ impl Default for LensFlareConfig {
         Self {
             spot_count: 2,
             center_falloff: 3.0,
-            luminance_gain: 2.0,
+            lower_threshold: 0.5,
+            upper_threshold: 1.5,
             ca_strength: 20.0,
             halo_radius: 0.4,
         }

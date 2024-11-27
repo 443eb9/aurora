@@ -7,7 +7,8 @@
 struct LensFlareConfig {
     spot_count: u32,
     center_falloff: f32,
-    luminance_gain: f32,
+    lower_threshold: f32,
+    upper_threshold: f32,
     ca_strength: f32,
     halo_radius: f32,
 }
@@ -73,7 +74,8 @@ fn lens_flare(in: FullscreenVertexOutput) -> @location(0) vec4f {
 #endif // CHROMATIC_ABERRATION
 
         let falloff = length(vec2f(0.5) - sample_uv) / length(vec2f(0.5));
-        let luminance = saturate(math::luminance(math::linear_to_srgb(pixel)));
+        var luminance = saturate(math::luminance(math::linear_to_srgb(pixel)));
+        luminance = smoothstep(config.lower_threshold, config.upper_threshold, luminance);
         col += pixel * pow((1.0 - falloff), config.center_falloff) * vec3f(luminance);
     }
 
