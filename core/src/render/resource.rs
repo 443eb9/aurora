@@ -220,15 +220,19 @@ impl Image {
                 data = bytemuck::cast_slice(img.as_raw()).to_owned();
             }
             DynamicImage::ImageRgb16(img) => {
-                width = img.width();
-                height = img.height();
-                fmt = TextureFormat::R16Unorm;
-                data = bytemuck::cast_slice(img.as_raw()).to_owned();
+                let i = DynamicImage::ImageRgb16(img).into_rgba16();
+                width = i.width();
+                height = i.height();
+                fmt = TextureFormat::Rgba16Unorm;
+
+                let raw_data = i.into_raw();
+
+                data = bytemuck::cast_slice(&raw_data).to_owned();
             }
             DynamicImage::ImageRgba16(img) => {
                 width = img.width();
                 height = img.height();
-                fmt = TextureFormat::R16Unorm;
+                fmt = TextureFormat::Rgba16Unorm;
                 data = bytemuck::cast_slice(img.as_raw()).to_owned();
             }
             DynamicImage::ImageRgb32F(img) => {
@@ -264,9 +268,31 @@ impl Image {
         }
     }
 
-    pub fn from_path(path: impl AsRef<Path>) -> ImageResult<Self> {
-        let img = image::open(path)?;
-        Ok(Self::from_dynamic(img, false))
+    pub fn from_path(
+        path: impl AsRef<Path>,
+        format_override: Option<ImageFormatOverride>,
+        is_srgb: bool,
+    ) -> ImageResult<Self> {
+        let img = image::open(path).map(|img| match format_override {
+            Some(fmt) => match fmt {
+                ImageFormatOverride::ImageLuma8 => DynamicImage::ImageLuma8(img.into_luma8()),
+                ImageFormatOverride::ImageLumaA8 => {
+                    DynamicImage::ImageLumaA8(img.into_luma_alpha8())
+                }
+                ImageFormatOverride::ImageRgb8 => DynamicImage::ImageRgb8(img.into_rgb8()),
+                ImageFormatOverride::ImageRgba8 => DynamicImage::ImageRgba8(img.into_rgba8()),
+                ImageFormatOverride::ImageLuma16 => DynamicImage::ImageLuma16(img.into_luma16()),
+                ImageFormatOverride::ImageLumaA16 => {
+                    DynamicImage::ImageLumaA16(img.into_luma_alpha16())
+                }
+                ImageFormatOverride::ImageRgb16 => DynamicImage::ImageRgb16(img.into_rgb16()),
+                ImageFormatOverride::ImageRgba16 => DynamicImage::ImageRgba16(img.into_rgba16()),
+                ImageFormatOverride::ImageRgb32F => DynamicImage::ImageRgb32F(img.into_rgb32f()),
+                ImageFormatOverride::ImageRgba32F => DynamicImage::ImageRgba32F(img.into_rgba32f()),
+            },
+            None => img,
+        })?;
+        Ok(Self::from_dynamic(img, is_srgb))
     }
 
     pub fn from_raw_parts(buffer: Vec<u8>, format: TextureFormat, width: u32, height: u32) -> Self {
@@ -392,6 +418,19 @@ impl Image {
         queue.submit([cmd.finish()]);
         cube_map
     }
+}
+
+pub enum ImageFormatOverride {
+    ImageLuma8,
+    ImageLumaA8,
+    ImageRgb8,
+    ImageRgba8,
+    ImageLuma16,
+    ImageLumaA16,
+    ImageRgb16,
+    ImageRgba16,
+    ImageRgb32F,
+    ImageRgba32F,
 }
 
 #[derive(Clone)]

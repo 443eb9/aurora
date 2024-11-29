@@ -1,8 +1,8 @@
 use aurora_chest::node::{
     BasicTriangleNode, BloomNode, DepthOfFieldNode, DepthPrepassNode, EnvironmentMappingNode,
     LensFlareNode, MotionBlurNode, MotionVectorPrepassNode, NormalPrepassNode, PbrNode,
-    PbrNodeConfig, ShadowMappingNode, ShadowMappingNodeConfig, SsaoNode, TonemappingNode,
-    ENVIRONMENT_MAP_PATH_ATTR,
+    PbrNodeConfig, ShadowMappingNode, ShadowMappingNodeConfig, SkyboxNode, SkyboxNodeConfig,
+    SsaoNode, TonemappingNode, ENVIRONMENT_MAP_PATH_ATTR,
 };
 use aurora_core::render::flow::{
     GeneralNode, ImageFallbackNode, PostProcessGeneralNode, PresentNode, RenderFlow,
@@ -33,15 +33,19 @@ impl Default for PbrRenderFlow {
             //     node_cfg: PbrNodeConfig::SSAO | PbrNodeConfig::SHADOW_MAPPING,
             //     ..Default::default()
             // })
+            .add_initialized(SkyboxNode {
+                node_config: SkyboxNodeConfig {
+                    skybox_path: "chest/assets/envmap/sunny_prairie_expanse_cube_map.hdr".into(),
+                },
+                data: None,
+            })
             .add::<PbrNode>()
             // .add::<BloomNode>()
             // .add::<DepthOfFieldNode>()
-            .add::<LensFlareNode>()
+            // .add::<LensFlareNode>()
             // .add::<MotionBlurNode>()
-            .add::<PresentNode>()
-            // .add::<TonemappingNode>()
-            //
-            ;
+            // .add::<PresentNode>()
+            .add::<TonemappingNode>();
 
         // flow.config_node::<PbrNode>(PbrNodeConfig::ENVIRONMENT_MAPPING);
         // flow.add_extra_data::<EnvironmentMappingNode>(

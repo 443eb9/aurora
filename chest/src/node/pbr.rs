@@ -287,7 +287,7 @@ impl RenderNode for PbrNode {
                     view: &targets.swap_chain.current_view(),
                     resolve_target: None,
                     ops: Operations {
-                        load: LoadOp::Clear(Color::TRANSPARENT),
+                        load: LoadOp::Load,
                         store: StoreOp::Store,
                     },
                 })],

@@ -20,7 +20,7 @@ use aurora_core::render::{
     resource::{GpuDirectionalLight, GpuPointLight, GpuSpotLight, Image},
     scene::{GpuScene, MaterialInstanceId, MeshInstanceId, TextureId},
 };
-use wgpu::{util::TextureDataOrder, Device, Queue};
+use wgpu::{Device, Queue};
 
 use crate::material::PbrMaterial;
 
@@ -236,7 +236,7 @@ fn load_textures(model: &Gltf, buffers: &Vec<Vec<u8>>) -> Vec<Image> {
                 let uri = percent_encoding::percent_decode_str(uri)
                     .decode_utf8()
                     .unwrap();
-                textures.push(Image::from_path(uri.as_ref()).unwrap());
+                textures.push(Image::from_path(uri.as_ref(), None, true).unwrap());
             }
         }
     }

@@ -331,7 +331,7 @@ impl RenderNode for LensFlareNode {
         config.push(&self.config);
         config.write::<LensFlareConfig>(device, queue);
 
-        let starburst_image = Image::from_path("chest/assets/starburst.png").unwrap();
+        let starburst_image = Image::from_path("chest/assets/starburst.png", None, true).unwrap();
         let starburst_texture = starburst_image.to_texture(
             device,
             queue,

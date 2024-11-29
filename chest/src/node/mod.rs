@@ -10,6 +10,7 @@ mod motion_vector_prepass;
 mod normal_prepass;
 mod pbr;
 mod shadow_mapping;
+mod skybox;
 mod ssao;
 mod tone_mapping;
 
@@ -25,5 +26,6 @@ pub use motion_vector_prepass::*;
 pub use normal_prepass::*;
 pub use pbr::*;
 pub use shadow_mapping::*;
+pub use skybox::*;
 pub use ssao::*;
 pub use tone_mapping::*;
