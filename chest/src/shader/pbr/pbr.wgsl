@@ -96,7 +96,7 @@ fn fragment(in: PbrVertexOutput) -> @location(0) vec4f {
     }
 
 #ifdef ENVIRONMENT_MAPPING
-    color += env_mapping::sample_env_map(reflect(-unlit.view, unlit.normal)) * unlit.base_color;
+    color += env_mapping::sample_irr_map(reflect(-unlit.view, unlit.normal)) * unlit.base_color;
 #endif // ENVIRONMENT_MAPPING
 
 #ifdef SSAO

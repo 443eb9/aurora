@@ -16,7 +16,7 @@ use aurora_core::{
 use naga_oil::compose::ShaderDefValue;
 use uuid::Uuid;
 use wgpu::{
-    BufferUsages, Color, ColorTargetState, ColorWrites, CommandEncoderDescriptor, CompareFunction,
+    BufferUsages, ColorTargetState, ColorWrites, CommandEncoderDescriptor, CompareFunction,
     DepthBiasState, DepthStencilState, Face, FragmentState, Limits, LoadOp, MultisampleState,
     Operations, PipelineCompilationOptions, PipelineLayoutDescriptor, PrimitiveState,
     RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor,
@@ -82,7 +82,13 @@ impl RenderNode for PbrNode {
         }
         if self.node_cfg.contains(PbrNodeConfig::SSAO) {
             shader_defs.insert("SSAO".to_string(), ShaderDefValue::UInt(bind_groups));
-            // bind_groups += 1;
+            bind_groups += 1;
+        }
+        if self.node_cfg.contains(PbrNodeConfig::ENVIRONMENT_MAPPING) {
+            shader_defs.insert(
+                "ENVIRONMENT_MAPPING".to_string(),
+                ShaderDefValue::UInt(bind_groups),
+            );
         }
     }
 
@@ -142,9 +148,10 @@ impl RenderNode for PbrNode {
             self.ssao_index = bind_group_layouts.len() as u32;
             bind_group_layouts.push(&assets.extra_layouts[&SSAO.ssao_layout]);
         }
-        // if config.contains(PbrNodeConfig::ENVIRONMENT_MAPPING) {
-        //     bind_group_layouts.push(&assets.extra_layouts[&ENV_MAPPING.env_mapping_layout]);
-        // }
+        if self.node_cfg.contains(PbrNodeConfig::ENVIRONMENT_MAPPING) {
+            self.env_mapping_index = bind_group_layouts.len() as u32;
+            bind_group_layouts.push(&assets.extra_layouts[&ENV_MAPPING.env_mapping_layout]);
+        }
 
         let layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
             label: Some("pbr_pipeline_layout"),

@@ -36,43 +36,6 @@ use crate::{
     WgpuRenderer,
 };
 
-pub enum NodeExtraData {
-    Int(i32),
-    UInt(u32),
-    Float(f32),
-    String(String),
-}
-
-impl From<i32> for NodeExtraData {
-    fn from(value: i32) -> Self {
-        Self::Int(value)
-    }
-}
-
-impl From<u32> for NodeExtraData {
-    fn from(value: u32) -> Self {
-        Self::UInt(value)
-    }
-}
-
-impl From<f32> for NodeExtraData {
-    fn from(value: f32) -> Self {
-        Self::Float(value)
-    }
-}
-
-impl From<String> for NodeExtraData {
-    fn from(value: String) -> Self {
-        Self::String(value)
-    }
-}
-
-impl From<&str> for NodeExtraData {
-    fn from(value: &str) -> Self {
-        Self::String(value.into())
-    }
-}
-
 struct PackedRenderNode {
     pub node: Box<dyn RenderNode>,
     pub context: NodeContext,
@@ -83,7 +46,6 @@ pub struct NodeContext {
     pub shaders: Vec<ShaderModule>,
     pub meshes: Vec<RenderMesh>,
     pub pipelines: HashMap<MeshInstanceId, RenderPipeline>,
-    pub extra_data: HashMap<&'static str, NodeExtraData>,
 }
 
 pub struct RenderContext<'a> {
@@ -167,13 +129,6 @@ impl RenderFlow {
         self.flow.values_mut().for_each(|node| {
             node.context.meshes = meshes.clone();
         });
-    }
-
-    #[inline]
-    pub fn add_extra_data<N: RenderNode>(&mut self, name: &'static str, value: NodeExtraData) {
-        if let Some(node) = self.flow.get_mut(&TypeId::of::<N>()) {
-            node.context.extra_data.insert(name, value);
-        }
     }
 
     #[inline]

@@ -89,7 +89,8 @@ impl<'a> Application<'a> {
             // "gui/assets/gltf_test.glb",
             // "gui/assets/suzanne.glb",
             // "gui/assets/ao_test.glb",
-            "gui/assets/depth_of_field_test.glb",
+            // "gui/assets/depth_of_field_test.glb",
+            "gui/assets/env_mapping.glb",
             // "gui/assets/bloom_test.glb",
             // "gui/assets/spheres_roughness_no_tex.glb",
             // "gui/assets/stanford_bunny.glb",
@@ -225,8 +226,11 @@ impl<'a> Application<'a> {
             return;
         };
 
-        let swap_chain = match &self.post_process_chain {
-            Some(sc) => sc,
+        let swap_chain = match &mut self.post_process_chain {
+            Some(sc) => {
+                sc.clear(&self.renderer.device);
+                sc
+            }
             None => {
                 self.post_process_chain.replace(SwapChain::new(
                     &self.renderer.device,

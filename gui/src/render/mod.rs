@@ -1,8 +1,8 @@
 use aurora_chest::node::{
     BasicTriangleNode, BloomNode, DepthOfFieldNode, DepthPrepassNode, EnvironmentMappingNode,
-    LensFlareNode, MotionBlurNode, MotionVectorPrepassNode, NormalPrepassNode, PbrNode,
-    PbrNodeConfig, ShadowMappingNode, ShadowMappingNodeConfig, SkyboxNode, SkyboxNodeConfig,
-    SsaoNode, TonemappingNode, ENVIRONMENT_MAP_PATH_ATTR,
+    EnvironmentMappingNodeConfig, LensFlareNode, MotionBlurNode, MotionVectorPrepassNode,
+    NormalPrepassNode, PbrNode, PbrNodeConfig, ShadowMappingNode, ShadowMappingNodeConfig,
+    SkyboxNode, SkyboxNodeConfig, SsaoNode, TonemappingNode, ENVIRONMENT_MAP_PATH_ATTR,
 };
 use aurora_core::render::flow::{
     GeneralNode, ImageFallbackNode, PostProcessGeneralNode, PresentNode, RenderFlow,
@@ -33,13 +33,25 @@ impl Default for PbrRenderFlow {
             //     node_cfg: PbrNodeConfig::SSAO | PbrNodeConfig::SHADOW_MAPPING,
             //     ..Default::default()
             // })
-            .add_initialized(SkyboxNode {
-                node_config: SkyboxNodeConfig {
-                    skybox_path: "chest/assets/envmap/sunny_prairie_expanse_cube_map.hdr".into(),
+            .add_initialized(EnvironmentMappingNode {
+                node_config: EnvironmentMappingNodeConfig {
+                    env_map_path: "chest/assets/envmap/sunny_prairie_expanse_cube_map.hdr".into(),
                 },
                 data: None,
+                config: Default::default(),
+                convolution_config: Default::default(),
             })
-            .add::<PbrNode>()
+            // .add_initialized(SkyboxNode {
+            //     node_config: SkyboxNodeConfig {
+            //         skybox_path: "chest/assets/envmap/sunny_prairie_expanse_cube_map.hdr".into(),
+            //     },
+            //     data: None,
+            // })
+            // .add::<PbrNode>()
+            .add_initialized(PbrNode {
+                node_cfg: PbrNodeConfig::ENVIRONMENT_MAPPING,
+                ..Default::default()
+            })
             // .add::<BloomNode>()
             // .add::<DepthOfFieldNode>()
             // .add::<LensFlareNode>()

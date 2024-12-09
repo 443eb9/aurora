@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use aurora_core::render::{
     flow::{RenderContext, RenderNode},
-    resource::{GpuCamera, Image, ImageFormatOverride},
+    resource::{GpuCamera, Image},
     scene::GpuScene,
 };
 use encase::ShaderType;
